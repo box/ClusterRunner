@@ -1,0 +1,59 @@
+<div class="section-nav">
+  <div class="left align-right">
+    {% if page.prev_section != null and page.prev_section != "_auto_" %}
+      <a href="/docs/{{ page.prev_section }}/" class="prev">Back</a>
+    {% else %}
+      {% assign is_current_page_found = false %}
+      {% assign is_prev_page_found = false %}
+      {% for section in site.data.docs reversed %}
+        {% for page_name in section.docs reversed %}
+
+          {% assign page_url = page_name | prepend:"/docs/" | append:"/" %}
+          {% if is_current_page_found %}
+            <a href="{{ page_url }}" class="prev">Back</a>
+            {% assign is_prev_page_found = true %}
+            {% break %}
+          {% elsif page_url == page.url %}
+            {% assign is_current_page_found = true %}
+          {% endif %}
+
+        {% endfor %}
+        {% if is_prev_page_found %}{% break %}{% endif %}
+      {% endfor %}
+
+      {% if is_prev_page_found == false %}
+        <span class="prev disabled">Back</span>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="right align-left">
+    {% if page.next_section != null and page.next_section != "_auto_" %}
+      <a href="/docs/{{ page.next_section }}/" class="next">Next</a>
+    {% else %}
+      {% assign is_current_page_found = false %}
+      {% assign is_next_page_found = false %}
+      {% for section in site.data.docs %}
+        {% for page_name in section.docs %}
+
+          {% assign page_url = page_name | prepend:"/docs/" | append:"/" %}
+          {% if is_current_page_found %}
+            <a href="{{ page_url }}" class="next">Next</a>
+            {% assign is_next_page_found = true %}
+            {% break %}
+          {% elsif page_url == page.url %}
+            {% assign is_current_page_found = true %}
+          {% endif %}
+
+        {% endfor %}
+        {% if is_next_page_found %}{% break %}{% endif %}
+      {% endfor %}
+
+      {% if is_next_page_found == false %}
+        <span class="next disabled">Next</span>
+      {% endif %}
+    {% endif %}
+  </div>
+  <div class="clear"></div>
+</div>
+

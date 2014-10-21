@@ -1,0 +1,13 @@
+markdown: kramdown
+highlighter: rouge
+relative_permalinks: false
+permalink: /news/:year/:month/:day/:title/
+
+gauges_id: ZZZ
+google_analytics_id: ZZZ
+
+repository: https://github.com/box/ClusterRunner 
+
+collections:
+  docs:
+    output: true

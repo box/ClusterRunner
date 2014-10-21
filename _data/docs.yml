@@ -1,0 +1,25 @@
+- title: Getting Started
+  docs:
+  - home
+  - features
+  - installation
+  - quickstart
+
+- title: Tutorials
+  docs:
+  - configuring-your-project
+  - ci-integration
+
+- title: Reference
+  docs:
+  - job-configuration
+  - service-configuration
+  - api-docs
+  - build-result-format
+
+- title: Contribute
+  docs:
+  - development-guide
+#  - architecture
+#  - testing
+
