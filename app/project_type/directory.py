@@ -11,7 +11,7 @@ class Directory(ProjectType):
     Example API call to invoke a directory-type build.
     {
         "type": "directory",
-        "project_directory": "examples/dumb directory job",
+        "project_directory": "examples/directory job",
     }
     """
     def __init__(self, project_directory, config=None, job_name=None, build_project_directory=None,
