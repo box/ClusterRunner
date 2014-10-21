@@ -34,7 +34,7 @@ You've just seen a ClusterMaster and ClusterSlave work together, and have run th
 
 <div class="note info">
     <p>If you'd like to see what work the "Simple" job is defined to do, open up 
-    <a href="">ClusterRunnerDemo/clusterrunner.yaml</a> and take a look.</p>
+    <a href="https://github.com/boxengservices/ClusterRunnerDemo">ClusterRunnerDemo/clusterrunner.yaml</a> and take a look.</p>
 </div>
 
 Using these basic principles you can begin to leverage the power of ClusterRunner.
