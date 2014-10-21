@@ -1,3 +1,5 @@
+[![Project Status](http://opensource.box.com/badges/active.svg)](http://opensource.box.com/badges)
+
 # ClusterRunner
 
 ClusterRunner makes it easy to execute test-suites across your infrastructure in the fastest and most efficient way possible.
