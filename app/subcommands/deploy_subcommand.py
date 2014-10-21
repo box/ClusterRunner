@@ -1,10 +1,12 @@
 import getpass
 import os
 from os.path import join
+import socket
 import sys
 from urllib.parse import urlparse
 
 from requests import RequestException
+from requests.exceptions import ConnectionError
 
 from app.client.build_runner import BuildRunner
 from app.deployment.deploy_target import DeployTarget
@@ -24,7 +26,7 @@ from app.util.url_builder import UrlBuilder
 class DeploySubcommand(Subcommand):
     _logger = log.get_logger(__name__)
     # Number of seconds to wait for all of the slave services to successfully register with the master service
-    _SLAVE_REGISTRY_TIMEOUT_SEC = 10
+    _SLAVE_REGISTRY_TIMEOUT_SEC = 5
 
     def run(self, log_level, master, master_port, slaves, slave_port, num_executors):
         """
@@ -113,7 +115,8 @@ class DeploySubcommand(Subcommand):
         """
         # We don't support 'clusterrunner deploy' from source yet. @TODO: support this feature
         if 'python' in current_executable:
-            raise RuntimeError('sys.executable is set to {}. Cannot deploy from source.'.format(current_executable))
+            self._logger.error('sys.executable is set to {}. Cannot deploy from source.'.format(current_executable))
+            raise SystemExit(1)
 
         tar_file_path = join(clusterrunner_bin_dir, 'clusterrunner.tgz')
 
@@ -147,19 +150,21 @@ class DeploySubcommand(Subcommand):
 
         # @TODO: Do this async/concurrently in order to improve runtime
         for host in hosts:
-            deploy_target = DeployTarget(host, username)
+            try:
+                deploy_target = DeployTarget(host, username)
+                if host == 'localhost' or host == local_hostname:
+                    # Do not want to overwrite the currently running executable.
+                    if current_executable != clusterrunner_executable_deploy_target:
+                        deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
 
-            if host == 'localhost' or host == local_hostname:
-                # Do not want to overwrite the currently running executable.
-                if current_executable != clusterrunner_executable_deploy_target:
+                    # Do not want to overwrite the currently used conf.
+                    if in_use_conf_path != clusterrunner_conf_deploy_target:
+                        deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
+                else:
                     deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
-
-                # Do not want to overwrite the currently used conf.
-                if in_use_conf_path != clusterrunner_conf_deploy_target:
                     deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
-            else:
-                deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
-                deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
+            except socket.gaierror:
+                self._logger.error('Failed to deploy to {}. Host is unreachable.'.format(host))
 
     def _start_services(self, master, master_port, slaves, slave_port, num_executors, username, clusterrunner_executable):
         """
@@ -180,23 +185,35 @@ class DeploySubcommand(Subcommand):
         :param clusterrunner_executable: where the clusterrunner executable on the remote hosts is expected to be
         :type clusterrunner_executable: str
         """
-        master_service = RemoteMasterService(master, username, clusterrunner_executable)
         self._logger.debug('Adding {} as a master service'.format(master))
+
+        try:
+            master_service = RemoteMasterService(master, username, clusterrunner_executable)
+            master_service.stop()
+        except socket.gaierror:
+            self._logger.error('Master host {} is unreachable, unable to instantiate service.'.format(master))
+            raise SystemExit(1)
+
         slave_services = []
 
         for slave in slaves:
             self._logger.debug('Adding {} as a slave service'.format(slave))
-            slave_services.append(RemoteSlaveService(slave, username, clusterrunner_executable))
+            try:
+                slave_service = RemoteSlaveService(slave, username, clusterrunner_executable)
+                slave_service.stop()
+                slave_services.append(slave_service)
+            except socket.gaierror:
+                self._logger.error('Slave host {} is unreachable, unable to instantiate service.'.format(slave))
 
-        for service in slave_services + [master_service]:
-            service.stop()
-
-        self._logger.debug('Starting master service on {}:{}'.format(master_service.host(), master_port))
+        self._logger.debug('Starting master service on {}:{}'.format(master_service.host, master_port))
         master_service.start_and_block_until_up(master_port)
         self._logger.debug('Starting slave services')
 
         for slave_service in slave_services:
-            slave_service.start(master, master_port, slave_port, num_executors)
+            try:
+                slave_service.start(master, master_port, slave_port, num_executors)
+            except:
+                self._logger.error('Failed to start slave service on {}.'.format(slave_service.host))
 
     def _validate_successful_deployment(self, master_service_url, slaves_to_validate):
         """
@@ -223,9 +240,15 @@ class DeploySubcommand(Subcommand):
                 poll_period=1,
                 exceptions_to_swallow=(RequestException, ConnectionError)
         ):
-            non_registered_slaves = self._non_registered_slaves(slave_api_url, slaves_to_validate, network)
-            raise RuntimeError('Slave registration timed out after {} sec, with slaves {} missing.'.format(
+            try:
+                non_registered_slaves = self._non_registered_slaves(slave_api_url, slaves_to_validate, network)
+            except ConnectionError:
+                self._logger.error('Error contacting {} on the master.'.format(slave_api_url))
+                raise SystemExit(1)
+
+            self._logger.error('Slave registration timed out after {} sec, with slaves {} missing.'.format(
                 self._SLAVE_REGISTRY_TIMEOUT_SEC, ','.join(non_registered_slaves)))
+            raise SystemExit(1)
 
     def _non_registered_slaves(self, slave_api_url, slaves_to_validate, network):
         """
