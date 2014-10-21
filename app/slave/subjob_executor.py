@@ -1,0 +1,130 @@
+import os
+import shutil
+import time
+
+from app.master.subjob import Subjob
+import app.util.fs as fs_util  # todo(joey): Rename util.py so we don't have package names conflicting with module names
+from app.util import log, util
+
+
+class SubjobExecutor(object):
+    """
+    This class represents a slave executor, responsible for executing subjobs on a slave.
+    """
+    def __init__(self, executor_id):
+        """
+        :type executor_id: int
+        """
+        self.id = executor_id
+        self._project_type = None
+        self._logger = log.get_logger(__name__)
+        self._current_build_id = None
+        self._current_subjob_id = None
+
+    def api_representation(self):
+        """
+        Gets a dict representing this resource that can be returned in an API response.
+        :rtype: dict [str, mixed]
+        """
+        return {
+            'id': self.id,
+            'current_build': self._current_build_id,
+            'current_subjob': self._current_subjob_id,
+        }
+
+    def configure_project_type(self, project_type_params):
+        """
+        Configure the project_type that this executor will use to execute subjobs. If there is alredy a previous
+        project_type configured, tear it down.
+
+        :type project_type_params: dict[str, str]
+        """
+        if self._project_type:
+            self._project_type.teardown_executor()
+
+        self._project_type = util.create_project_type(project_type_params)
+        self._project_type.setup_executor()
+
+    def run_job_config_setup(self):
+        self._project_type.run_job_config_setup()
+
+    def execute_subjob(self, build_id, subjob_id, subjob_artifact_dir, atomic_commands):
+        """
+        This is the method for executing a subjob. This performs the work required by executing the specified command,
+        then archives the results into a single file and returns the filename.
+
+        :type build_id: int
+        :type subjob_id: int
+        :type subjob_artifact_dir: str
+        :type atomic_commands: list[str]
+        :rtype: str
+        """
+        self._logger.info('Executing subjob (Build {}, Subjob {})...', build_id, subjob_id)
+
+        # Set the current task
+        self._current_build_id = build_id
+        self._current_subjob_id = subjob_id
+
+        # Maintain a list of atom artifact directories for compression and sending back to master
+        atom_artifact_dirs = []
+
+        # execute every atom and keep track of time elapsed for each
+        for atom_id, atomic_command in enumerate(atomic_commands):
+
+            atom_artifact_dir = os.path.join(subjob_artifact_dir,
+                                             Subjob.ATOM_DIR_FORMAT.format(subjob_id, atom_id))
+
+            # remove and recreate the atom artifact dir
+            shutil.rmtree(atom_artifact_dir, ignore_errors=True)
+            fs_util.create_dir(atom_artifact_dir)
+
+            atom_environment_vars = {
+                'ARTIFACT_DIR': atom_artifact_dir,
+                'ATOM_ID': atom_id,
+                'EXECUTOR_INDEX': self.id,
+            }
+
+            atom_artifact_dirs.append(atom_artifact_dir)
+
+            self._execute_atom_command(atomic_command, atom_environment_vars, atom_artifact_dir)
+
+        # Generate mapping of atom directories (for archiving) to paths in the archive file
+        targets_to_archive_paths = {atom_dir: os.path.basename(os.path.normpath(atom_dir))
+                                    for atom_dir in atom_artifact_dirs}
+
+        # zip file names must be unique for a build, so we append the subjob_id to the compressed file
+        tarfile_path = os.path.join(subjob_artifact_dir, 'results_{}.tar.gz'.format(subjob_id))
+        fs_util.compress_directories(targets_to_archive_paths, tarfile_path)
+
+        # Reset the current task
+        self._current_build_id = None
+        self._current_subjob_id = None
+
+        return tarfile_path
+
+    def _execute_atom_command(self, atomic_command, atom_environment_vars, atom_artifact_dir):
+        """
+        Run the main command for this atom. Output the command, console output and exit code to
+        files in the atom artifact directory.
+
+        :type atomic_command: str
+        :type atom_environment_vars: dict[str, str]
+        :type atom_artifact_dir: str
+        """
+        fs_util.create_dir(atom_artifact_dir)
+
+        start_time = time.time()
+        output, exit_code = self._project_type.execute_command_in_project(atomic_command, atom_environment_vars)
+        elapsed_time = time.time() - start_time
+
+        console_output_path = os.path.join(atom_artifact_dir, Subjob.OUTPUT_FILE)
+        fs_util.write_file(output, console_output_path)
+
+        exit_code_output_path = os.path.join(atom_artifact_dir, Subjob.EXIT_CODE_FILE)
+        fs_util.write_file(str(exit_code) + '\n', exit_code_output_path)
+
+        command_output_path = os.path.join(atom_artifact_dir, Subjob.COMMAND_FILE)
+        fs_util.write_file(str(atomic_command) + '\n', command_output_path)
+
+        time_output_path = os.path.join(atom_artifact_dir, Subjob.TIMING_FILE)
+        fs_util.write_file('{:.2f}\n'.format(elapsed_time), time_output_path)
