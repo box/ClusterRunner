@@ -1,0 +1,10 @@
+SampleJob:
+    setup_build:
+        - echo "run setup"
+    commands:
+        - sleep 1
+        - echo "Here is the artifact for $MY_MESSAGE." > $ARTIFACT_DIR/result.txt
+    atomizers:
+        - MY_MESSAGE: printf 'atom number %d\n' {1..10}
+    teardown_build:
+        - echo "run teardown"
