@@ -23,4 +23,4 @@ class RemoteSlaveService(RemoteService):
         slave_args = '--master-url {}:{}'.format(master_host, str(master_port))
         slave_args += ' --port {}'.format(str(slave_port))
         slave_args += ' --num-executors {}'.format(str(num_executors))
-        self._execute_ssh_command('nohup {} slave {} &'.format(self._executable_path, slave_args))
+        self._execute_ssh_command('nohup {} slave {} &'.format(self._executable_path, slave_args), async=True)

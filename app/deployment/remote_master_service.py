@@ -19,9 +19,10 @@ class RemoteMasterService(RemoteService):
         :param timeout_sec: number of seconds to wait for the master to respond before timing out
         :type timeout_sec: int
         """
-        self._execute_ssh_command('nohup {} master --port {} &'.format(self._executable_path, str(port)))
-        master_service_url = '{}:{}'.format(self._host, str(port))
+        self._execute_ssh_command('nohup {} master --port {} &'.format(self._executable_path, str(port)), async=True)
+        master_service_url = '{}:{}'.format(self.host, str(port))
         master_service = ServiceRunner(master_service_url)
 
         if not master_service.is_up(master_service_url, timeout=timeout_sec):
-            raise RuntimeError('Master service running on {} failed to start.'.format(master_service_url))
+            self._logger.error('Master service running on {} failed to start.'.format(master_service_url))
+            raise SystemExit(1)

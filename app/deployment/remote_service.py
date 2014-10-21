@@ -1,3 +1,4 @@
+from app.util.log import get_logger
 from app.util.shell.factory import ShellClientFactory
 
 
@@ -15,7 +16,8 @@ class RemoteService(object):
         :param executable_path: the path to the clusterrunner executable on the remote host
         :type executable_path: str
         """
-        self._host = host
+        self._logger = get_logger(__name__)
+        self.host = host
         self._username = username
         self._executable_path = executable_path
         self._shell_client = ShellClientFactory.create(host, username)
@@ -27,17 +29,17 @@ class RemoteService(object):
         """
         self._execute_ssh_command('{} stop'.format(self._executable_path))
 
-    def _execute_ssh_command(self, command):
+    def _execute_ssh_command(self, command, async=False):
         """
         Helper method for executing ssh commands.
 
         :param command: command to execute remotely
         :type command: str
+        :param async: async/non-blocking call?
+        :type async: bool
         """
         self._shell_client.connect()
-
-        # Run these commands asynchronously because they are services...
-        self._shell_client.exec_command(command, async=True)
+        self._shell_client.exec_command(command, async)
         self._shell_client.close()
 
     def host(self):
@@ -45,4 +47,4 @@ class RemoteService(object):
         :return:
         :rtype: str
         """
-        return self._host
+        return self.host
