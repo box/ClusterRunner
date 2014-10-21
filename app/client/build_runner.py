@@ -1,7 +1,8 @@
 import http.client
 import os
-import time
+import shutil
 import sys
+import time
 
 from app.master.build import BuildStatus, BuildResult
 import app.util.fs
@@ -135,6 +136,10 @@ class BuildRunner(object):
         download_artifacts_url = self._master_api.url('build', self._build_id, 'result')
         download_filepath = 'build_results/artifacts.tar.gz'
         download_dir, _ = os.path.split(download_filepath)
+
+        # remove any previous build artifacts
+        if os.path.exists(download_dir):
+            shutil.rmtree(download_dir)
 
         while time.time() <= timeout_time:
             response = self._network.get(download_artifacts_url)
