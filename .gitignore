@@ -1,0 +1,7 @@
+# Ignoring the static files built by Jekyll
+_site/*
+
+
+# IntelliJ files
+.idea/*
+*.iml
