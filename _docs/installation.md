@@ -14,13 +14,13 @@ Pick a set of instructions based on your operating system.
 **OS X**
 
 {% highlight bash %}
-~ $ mkdir -p ~/.clusterrunner/dist && cd ~/.clusterrunner && curl -L https://cloud.box.com/shared/static/pqln47ur9ektad5hxq4a.tgz > clusterrunner.tgz && tar -zxvf clusterrunner.tgz -C ./dist
+~ $ mkdir -p ~/.clusterrunner/dist && cd ~/.clusterrunner && curl -L https://cloud.box.com/shared/static/pqln47ur9ektad5hxq4a.tgz > clusterrunner.tgz && tar -zxvf clusterrunner.tgz -C ./dist && cp ./dist/conf/default_clusterrunner.conf clusterrunner.conf && chmod 600 clusterrunner.conf
 {% endhighlight %}
 
 **Linux**
 
 {% highlight bash %}
-~ $ mkdir -p ~/.clusterrunner/dist && cd ~/.clusterrunner && curl -L https://cloud.box.com/shared/static/2pl4pi6ykvrbb9d06t4m.tgz > clusterrunner.tgz && tar -zxvf clusterrunner.tgz -C ./dist
+~ $ mkdir -p ~/.clusterrunner/dist && cd ~/.clusterrunner && curl -L https://cloud.box.com/shared/static/2pl4pi6ykvrbb9d06t4m.tgz > clusterrunner.tgz && tar -zxvf clusterrunner.tgz -C ./dist && cp ./dist/conf/default_clusterrunner.conf clusterrunner.conf && chmod 600 clusterrunner.conf
 {% endhighlight %}
 
 ## Bash Alias
