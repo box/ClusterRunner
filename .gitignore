@@ -1,7 +1,10 @@
 # Ignoring the static files built by Jekyll
 _site/*
-
+.sass-cache/*
 
 # IntelliJ files
 .idea/*
 *.iml
+
+# Random stuff
+.DS_Store
