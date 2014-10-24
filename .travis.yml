@@ -2,9 +2,12 @@ language: python
 python:
   - "3.4"
 
+env:
+  - NOSE_ARGS="-v test/unit"
+  - NOSE_ARGS="-s -v test/functional" CR_VERBOSE=1
+
 # command to install dependencies
 install: "pip install -r requirements.txt"
 
 # command to run tests
-script: nosetests test/unit
-
+script: nosetests $NOSE_ARGS

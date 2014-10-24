@@ -17,7 +17,7 @@ BasicJob:
     commands:
         - echo $TOKEN > $ARTIFACT_DIR/result.txt
     atomizers:
-        - TOKEN: printf 'This is atom %d\\n' {0..4}
+        - TOKEN: seq 0 4 | xargs -I {} echo "This is atom {}"
 
 """,
     expected_to_fail=False,
@@ -39,10 +39,10 @@ BASIC_FAILING_JOB = FunctionalTestJobConfig(
 
 BasicFailingJob:
     commands:
-        - if [[ $TOKEN == *This\ is\ atom\ 3* ]]; then exit 1; fi
+        - if [ "$TOKEN" = "This is atom 3" ]; then exit 1; fi
         - echo $TOKEN > $ARTIFACT_DIR/result.txt
     atomizers:
-        - TOKEN: printf 'This is atom %d\\n' {0..4}
+        - TOKEN: seq 0 4 | xargs -I {} echo "This is atom {}"
 
 """,
     expected_to_fail=True,
