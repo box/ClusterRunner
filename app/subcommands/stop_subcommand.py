@@ -24,7 +24,7 @@ class StopSubcommand(Subcommand):
         :type log_level: str | None
         """
         log_level = log_level or Configuration['log_level']
-        log.configure_logging(log_level=log_level)
+        log.configure_logging(log_level=log_level, simplified_console_logs=True)
         self._kill_pid_in_file_if_exists(Configuration['slave_pid_file'])
         self._kill_pid_in_file_if_exists(Configuration['master_pid_file'])
 

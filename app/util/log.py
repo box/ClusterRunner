@@ -21,9 +21,9 @@ _LOG_FORMAT_STRING = (
 )
 
 # When logging to the console, just print the message
-_CONSOLE_FORMAT_STRING = '{record.message}'
+_SIMPLIFIED_LOG_FORMAT_STRING = '{record.message}'
 
-_LOG_LEVEL_COLORS = defaultdict(lambda: ('grey', []), {  # default to grey
+_LOG_COLORS = defaultdict(lambda: ('grey', []), {  # default to grey
     logbook.CRITICAL: ('magenta', ['bold']),
     logbook.ERROR: ('red', ['bold']),
     logbook.WARNING: ('yellow', ['bold']),
@@ -32,7 +32,7 @@ _LOG_LEVEL_COLORS = defaultdict(lambda: ('grey', []), {  # default to grey
     logbook.DEBUG: ('green', []),
 })
 
-_CONSOLE_COLORS = defaultdict(lambda: (None, []), {
+_SIMPLIFIED_LOG_COLORS = defaultdict(lambda: (None, []), {
     logbook.CRITICAL: ('magenta', ['bold']),
     logbook.ERROR: ('red', ['bold']),
     logbook.WARNING: ('yellow', ['bold']),
@@ -62,12 +62,16 @@ def get_logger(logger_name=None):
     return Logger(name_without_package)
 
 
-def configure_logging(log_level=None, log_file=None):
+def configure_logging(log_level=None, log_file=None, simplified_console_logs=False):
     """
     This should be called once as early as possible in app startup to configure logging handlers and formatting.
 
     :param log_level: The level at which to record log messages (DEBUG|INFO|NOTICE|WARNING|ERROR|CRITICAL)
     :type log_level: str
+    :param log_file: The file to write logs to, or None to disable logging to a file
+    :type log_file: str | None
+    :param simplified_console_logs: Whether or not to use the simplified logging format and coloring
+    :type simplified_console_logs: bool
     """
     # Set datetimes in log messages to be local timezone instead of UTC
     logbook.set_datetime_format('local')
@@ -80,12 +84,16 @@ def configure_logging(log_level=None, log_file=None):
     NullHandler().push_application()
 
     log_level = log_level or Configuration['log_level']
+    format_string, log_colors = _LOG_FORMAT_STRING, _LOG_COLORS
+    if simplified_console_logs:
+        format_string, log_colors = _SIMPLIFIED_LOG_FORMAT_STRING, _SIMPLIFIED_LOG_COLORS
 
     # handler for stdout
-    log_handler = _ColorizingConsoleStreamHandler(
+    log_handler = _ColorizingStreamHandler(
         stream=sys.stdout,
         level=log_level,
-        format_string=_CONSOLE_FORMAT_STRING,
+        format_string=format_string,
+        log_colors=log_colors,
         bubble=True,
     )
     log_handler.push_application()
@@ -99,6 +107,7 @@ def configure_logging(log_level=None, log_file=None):
             filename=log_file,
             level=log_level,
             format_string=_LOG_FORMAT_STRING,
+            log_colors=_LOG_COLORS,
             bubble=True,
             max_size=Configuration['max_log_file_size'],
             backup_count=Configuration['max_log_file_backups'],
@@ -109,24 +118,18 @@ def configure_logging(log_level=None, log_file=None):
         event_handler.push_application()
 
 
-class _ColorizingConsoleStreamHandler(StreamHandler):
-    """
-    Stream handler for console output: only colorizes 'bad' output
-    """
-    def format_and_encode(self, record):
-        output = super().format_and_encode(record)
-        color, attrs = _CONSOLE_COLORS[record.level]
-        return colored(output, color, attrs=attrs) if color else output
-
-
 class _ColorizingStreamHandler(StreamHandler):
     """
     This is a StreamHandler that colorizes its log messages.
     """
+    def __init__(self, log_colors, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._log_colors = log_colors
+
     def format_and_encode(self, record):
         output = super().format_and_encode(record)
-        color, attrs = _LOG_LEVEL_COLORS[record.level]
-        return colored(output, color, attrs=attrs)
+        color, attrs = self._log_colors[record.level]
+        return colored(output, color, attrs=attrs) if color else output
 
 
 class _ColorizingRotatingFileHandler(_ColorizingStreamHandler, RotatingFileHandler):

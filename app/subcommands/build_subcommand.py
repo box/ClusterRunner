@@ -28,7 +28,7 @@ class BuildSubcommand(Subcommand):
         :type request_params: dict
         """
         log_level = log_level or Configuration['log_level']
-        log.configure_logging(log_level=log_level)
+        log.configure_logging(log_level=log_level, simplified_console_logs=True)
         request_params['type'] = build_type or request_params.get('type') or 'directory'
 
         if remote_file:
