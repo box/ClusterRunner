@@ -31,7 +31,6 @@ class ProjectType(object):
         :rtype: JobConfig
         """
         config = ClusterRunnerConfig(self._get_config_contents())
-
         return config.get_job_config(self._job_name)
 
     def _get_config_contents(self):
