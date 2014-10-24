@@ -1,5 +1,7 @@
 from box.test.genty import genty, genty_dataset
+import sys
 
+from app.master.atomizer import Atomizer
 from app.master.cluster_runner_config import ClusterRunnerConfig, ConfigParseError, ConfigValidationError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -15,7 +17,7 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
             - sleep 1
         commands:
             - echo "Now I'm doing $THE_THING!";  # semicolons in this section
-            - echo "Semicolons are fun." > /tmp/all_my_hard_work.txt;
+            - echo "Semicolons are fun." > /tmp/my_hard_work.txt;
         atomizers:
             - THE_THING: printf 'something with a number %d\\n' {1..50}
     """
@@ -39,16 +41,6 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
             - echo "go"
         atomizers:
             - "export VARNAME='asdf'"
-    """
-
-    _REGEX_ATOMIZER = """
-    PHPUnit:
-        commands:
-            - echo "go"
-        atomizers:
-            - VAR_NAME:
-                path: /path/to/project
-                regex: "[s|S]imple regex"
     """
 
     _MINIMAL_CONFIG = """
@@ -86,22 +78,24 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
     """
 
     @genty_dataset(
-        ('name', 'Best Job Ever'),
-        ('max_executors', 21),
-        ('setup_build', 'echo "This is setup! Woo!" && sleep 1 '),
-        ('command', 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/all_my_hard_work.txt '),
-        ('atomizer',
-         'printf \'something with a number %d\\n\' {1..50} | xargs -I {} echo \'export THE_THING="\'{}\'"\' '),
+        name=('name', 'Best Job Ever'),
+        max_executors=('max_executors', 21),
+        setup_build=('setup_build', 'echo "This is setup! Woo!" && sleep 1 '),
+        command=('command', 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/my_hard_work.txt '),
+        atomizer=('atomizer', [{'THE_THING': 'printf \'something with a number %d\\n\' {1..50}'}])
     )
     def test_all_conf_properties_are_correctly_parsed(self, conf_method_name, expected_value):
         config = ClusterRunnerConfig(self._COMPLETE_VALID_CONFIG)
         job_config = config.get_job_config()
         actual_value = getattr(job_config, conf_method_name)
+        if isinstance(actual_value, Atomizer):
+            actual_value = actual_value._atomizer_dicts  # special case comparison for atomizer
+
         self.assertEqual(actual_value, expected_value,
                          'The output of {}() should match the expected value.'.format(conf_method_name))
 
     @genty_dataset(
-        ('max_executors', float('inf')),
+        ('max_executors', sys.maxsize),
         ('setup_build', None),
     )
     def test_undefined_conf_properties_return_default_values(self, conf_method_name, expected_value):
@@ -127,12 +121,12 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
         self.assertTrue(is_expected_valid, 'Config is not valid, but parsed without error')
 
     @genty_dataset(
-        _FREEFORM_ATOMIZER,
-        _REGEX_ATOMIZER
+        freeform_atomizer=(_FREEFORM_ATOMIZER,),
     )
-    def test_atomizer_types(self, config_contents):
+    def test_incorrect_atomizer_type_raises_exception(self, config_contents):
         config = ClusterRunnerConfig(config_contents)
-        config.get_job_config()
+        with self.assertRaises(ConfigValidationError):
+            config.get_job_config()
 
     def test_get_specific_job_config(self):
         config = ClusterRunnerConfig(self._MULTI_JOB_CONFIG)

@@ -3,6 +3,7 @@ import os
 import uuid
 
 from app.master.atom_grouper import AtomGrouper
+from app.master.atomizer import AtomizerError
 from app.master.build_request import BuildRequest
 from app.master.subjob import Subjob
 from app.master.time_based_atom_grouper import TimeBasedAtomGrouper
@@ -67,20 +68,18 @@ class SerialRequestHandler(object):
 
     def _compute_subjobs_for_build(self, build_id, job_config, project_type):
         """
+
         :type build_id: int
         :type job_config: JobConfig
         :param project_type: the docker, directory, or git repo project_type that this build is running in
         :type project_type: project_type.project_type.ProjectType
         :rtype: list[Subjob]
         """
-        atomizer_output, exit_code = project_type.execute_command_in_project(job_config.atomizer)
-        if exit_code != 0:
-            self._logger.error('Atomizer command failed with exit code {} and output: {}', exit_code, atomizer_output)
-            raise BuildProjectError('Atomizer command failed!')
-        atoms_list = atomizer_output.strip().splitlines()
+        try:
+            atoms_list = job_config.atomizer.atomize_in_project(project_type)
+        except AtomizerError as ex:
+            raise BuildProjectError('Build failed during atomization.') from ex
 
-        # Normalize atoms in atoms_list by appending a semicolon to the end if it is missing it
-        atoms_list = [atom.strip('; ') + ';' for atom in atoms_list]
         # Group the atoms together using some grouping strategy
         timing_file_path = project_type.timing_file_path(job_config.name)
         grouped_atoms = self._grouped_atoms(
