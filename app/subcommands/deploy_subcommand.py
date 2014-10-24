@@ -53,7 +53,11 @@ class DeploySubcommand(Subcommand):
         :param num_executors: the number of executors that will be run per slave
         :type num_executors: int | None
         """
-        log.configure_logging(log_level=log_level or Configuration['log_level'], log_file=Configuration['log_file'])
+        log.configure_logging(
+            log_level=log_level or Configuration['log_level'],
+            log_file=Configuration['log_file'],
+            simplified_console_logs=True,
+        )
         in_use_conf_path = Configuration['config_file']
         hostname = Configuration['hostname']
         current_executable = sys.executable
