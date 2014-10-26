@@ -1,8 +1,10 @@
 import http.client
+import re
 import tornado.escape
 import tornado.web
 
 from app.util import log
+from app.util.conf.configuration import Configuration
 from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util.network import ENCODED_BODY
 from app.web_framework.route_node import RouteNode
@@ -19,6 +21,10 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         AuthenticationError: http.client.UNAUTHORIZED,
         ItemNotFoundError: http.client.NOT_FOUND,
     }
+
+    def __init__(self, *args, **kwargs):
+        self._logger = log.get_logger(__name__)
+        super().__init__(*args, **kwargs)
 
     def initialize(self, route_node=None):
         """
@@ -80,11 +86,11 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         is always returned to the client. (Tornado's default is an HTML response.) This also contains logic to map some
         exception types to appropriate HTTP status codes. The default status code is 500 (generic server error).
 
-        :param ex: The exception that was caught.
+        :param ex: The exception that was caught
         :type ex: Exception
         """
         # _handle_request_exception() is called in the exception handler, so we can still use logger.exception.
-        log.get_logger(__name__).exception('Exception occurred during request to {}.', self.request.uri)
+        self._logger.exception('Exception occurred during request to {}.', self.request.uri)
         status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
         response = {'error': str(ex)}
 
@@ -94,3 +100,31 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
 
     def set_default_headers(self):
         self.set_header('Content-Type', 'application/json')
+
+        request_origin = self.request.headers.get('Origin')  # usually only set when making API request from a browser
+        if request_origin and self._is_request_origin_allowed(request_origin):
+            self.set_header('Access-Control-Allow-Origin', request_origin)
+
+    def _is_request_origin_allowed(self, request_origin):
+        """
+        Match the specified request_origin against the conf-specified regex for CORS allowed origins. If nothing has
+        been specified in the conf (which is the default setting) return False.
+
+        :param request_origin: The value of the 'Origin' header from the incoming API request
+        :type request_origin: str
+        :return: Whether or not we should allow the request from the given origin
+        :rtype: bool
+        """
+        if not request_origin:
+            return False
+
+        allowed_origins_regex = Configuration['cors_allowed_origins_regex']
+        if allowed_origins_regex is not None:
+            self._logger.debug('Matching request origin "{}" against cors_allowed_origins_regex conf value "{}".',
+                               request_origin, allowed_origins_regex)
+            if re.match(allowed_origins_regex, request_origin):
+                self._logger.debug('Origin "{}" allowed. Setting Access-Control-Allow-Origin header.', request_origin)
+                return True
+
+        self._logger.debug('Origin "{}" not allowed. Not setting Access-Control-Allow-Origin header.', request_origin)
+        return False
