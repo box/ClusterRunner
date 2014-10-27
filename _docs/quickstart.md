@@ -8,8 +8,9 @@ permalink: /docs/quickstart/
 
 Now that you've installed ClusterRunner it's time to get down to business.
 
-In this section we'll leverage the ClusterRunnerDemo project to show you how the pieces fit together.  After playing 
-with this demo you'll be ready hook ClusterRunner into your own projects and pipelines.
+In this section we'll leverage the [ClusterRunnerDemo](https://github.com/boxengservices/ClusterRunnerDemo) project to
+show you how the pieces fit together.  After playing with this demo you'll be ready hook ClusterRunner into your own
+projects and pipelines.
 
 ### Running tests on localhost
 The easiest way to try out ClusterRunner is on a single machine - with a master and slave running locally.
