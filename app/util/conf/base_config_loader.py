@@ -75,6 +75,9 @@ class BaseConfigLoader(object):
         conf.set('master_port', '43000')
         conf.set('slaves', ['localhost'])
 
+        # CORS support - a regex to match against allowed API request origins, or None to disable CORS
+        conf.set('cors_allowed_origins_regex', None)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory
@@ -118,6 +121,7 @@ class BaseConfigLoader(object):
             'master_port',
             'log_filename',
             'eventlog_filename',
+            'cors_allowed_origins_regex',
         ]
         try:
             config_parsed = ConfigFile(config_filename).read_config_from_disk()

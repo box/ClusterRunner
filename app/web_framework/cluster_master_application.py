@@ -242,8 +242,6 @@ class _SlaveDisconnectHandler(_ClusterMasterBaseHandler):
 
 class _EventlogHandler(_ClusterMasterBaseHandler):
     def get(self):
-        self.set_header('Access-Control-Allow-Origin', '*')  # todo: put value of this in user conf (moar security!)
-
         # all arguments are optional, so default to None
         since_timestamp = self.get_query_argument('since_timestamp', None)
         since_id = self.get_query_argument('since_id', None)
