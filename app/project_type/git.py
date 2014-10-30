@@ -139,8 +139,10 @@ class Git(ProjectType):
         # above) that if we were going to get prompted, we would have seen the prompts already.
         child.expect(pexpect.EOF, timeout=None)
         if child.exitstatus != 0:
-            raise RuntimeError('Git command failed.  Command: {}\nOutput: {}'.format(command,
-                                                                                     child.before.decode('utf-8')))
+            self._logger.warning(
+                'Git command exitted with a non-zero exit status of {}. Command: {}\nOutput: {}'.format(
+                    child.exitstatus, command, child.before.decode('utf-8')))
+            #raise RuntimeError('Git command failed.  Command: {}\nOutput: {}'.format(command, child.before.decode('utf-8')))
 
     def execute_command_in_project(self, *args, **kwargs):
         """
