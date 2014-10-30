@@ -4,9 +4,8 @@ import platform
 import sys
 import shutil
 
-from app.util import autoversioning
+from app.util import autoversioning, fs
 from app.util.conf.config_file import ConfigFile
-from app.util.fs import create_dir
 
 
 BASE_CONFIG_FILE_SECTION = 'general'
@@ -123,7 +122,7 @@ class BaseConfigLoader(object):
             config_parsed = ConfigFile(config_filename).read_config_from_disk()
         except FileNotFoundError:
             sample_filename = join(config.get('root_directory'), 'conf', 'default_clusterrunner.conf')
-            create_dir(config.get('base_directory'))
+            fs.create_dir(config.get('base_directory'))
             shutil.copy(sample_filename, config_filename)
             chmod(config_filename, ConfigFile.CONFIG_FILE_MODE)
             config_parsed = ConfigFile(config_filename).read_config_from_disk()

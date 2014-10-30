@@ -10,7 +10,7 @@ from app.master.slave import Slave
 from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import ItemNotFoundError, ItemNotReadyError
-from app.util.fs import create_dir
+from app.util import fs
 from app.util.log import get_logger
 from app.util.ordered_set_queue import OrderedSetQueue
 from app.util.safe_thread import SafeThread
@@ -53,7 +53,7 @@ class ClusterMaster(object):
         if os.path.exists(self._master_results_path):
             shutil.rmtree(self._master_results_path)
 
-        create_dir(self._master_results_path)
+        fs.create_dir(self._master_results_path)
 
     def _get_status(self):
         """

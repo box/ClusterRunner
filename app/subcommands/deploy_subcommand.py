@@ -14,11 +14,10 @@ from app.deployment.remote_master_service import RemoteMasterService
 from app.deployment.remote_slave_service import RemoteSlaveService
 from app.subcommands.subcommand import Subcommand
 from app.util.poll import wait_for
-from app.util import log
+from app.util import fs, log
 from app.util.conf.configuration import Configuration
 from app.util.conf.master_config_loader import MasterConfigLoader
 from app.util.conf.slave_config_loader import SlaveConfigLoader
-from app.util.fs import compress_directory
 from app.util.network import Network
 from app.util.url_builder import UrlBuilder
 
@@ -128,7 +127,7 @@ class DeploySubcommand(Subcommand):
             self._logger.info('Compressed tar file {} already exists, skipping compression.'.format(tar_file_path))
             return tar_file_path
 
-        compress_directory(clusterrunner_bin_dir, tar_file_path)
+        fs.compress_directory(clusterrunner_bin_dir, tar_file_path)
         return tar_file_path
 
     def _deploy_binaries_and_conf(self, hosts, local_hostname, username, current_executable, binaries_tar_path,

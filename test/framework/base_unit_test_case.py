@@ -17,6 +17,7 @@ class BaseUnitTestCase(TestCase):
     def setUp(self):
         super().setUp()
         self._set_up_safe_guards()
+
         # Reset singletons so that they get recreated for every test that uses them.
         Configuration.reset_singleton()
         UnhandledExceptionHandler.reset_singleton()
@@ -72,7 +73,12 @@ class BaseUnitTestCase(TestCase):
 
         patcher = patch(target, **kwargs)
 
-        mock = patcher.start()
+        try:
+            mock = patcher.start()
+        except TypeError as ex:
+            raise UnitTestPatchError('Could not patch "{}". Has this target already been patched either in this class '
+                                     '({}) or in BaseUnitTestCase?'.format(target, self.__class__.__name__)) from ex
+
         self.addCleanup(patcher.stop)
         return mock
 
@@ -104,24 +110,41 @@ class BaseUnitTestCase(TestCase):
         Test writers can apply their own patches by patching in their respective
         test classes setUp() before calling super().setUp().
         """
-        safeguard_packages = [
-            ('os.makedirs', 'filesystem side effects'),
-            ('app.util.fs.write_file', 'filesystem side effects')
-        ]
-        for package_name, reason in safeguard_packages:
-            try:
-                self._safe_guard(package_name, reason)
-            except TypeError:
-                # double patching throws a TypeError
-                pass
+        safeguarded_packages = {
+            'filesystem side effects': [
+                'os.chmod',
+                'os.makedirs',
+                'os.remove',
+                'os.rename',
+                'os.rmdir',
+                'shutil.rmtree',
+                'app.util.fs.extract_tar',
+                'app.util.fs.compress_directory',
+                'app.util.fs.compress_directories',
+                'app.util.fs.create_dir',
+                'app.util.fs.write_file',
+            ],
+            'launching child processes': [
+                # 'subprocess.Popen.__init__',  # todo: Fix tests that break when we uncomment this.
+            ]
+        }
+        for disabled_reason, patch_targets in safeguarded_packages.items():
+            for patch_target in patch_targets:
+                # Suppress UnitTestPatchError which happens if target has already been patched (no safeguard needed).
+                with suppress(UnitTestPatchError):
+                    self._safe_guard(patch_target, disabled_reason)
 
-    def _safe_guard(self, name, reason):
-        message = '{} is not permitted in a unit test because of {}'.format(
-            name,
-            reason
+    def _safe_guard(self, patch_target, disabled_reason):
+        message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(
+            patch_target,
+            disabled_reason
         )
-        self.patch(name, side_effect=[UnitTestError(message)])
+        self.patch(patch_target, side_effect=[UnitTestDisabledMethodError(message)])
 
 
-class UnitTestError(Exception):
+class UnitTestDisabledMethodError(Exception):
+    pass
+
+
+class UnitTestPatchError(Exception):
     pass

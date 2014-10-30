@@ -6,9 +6,9 @@ import os
 import sys
 import time
 
+from app.util import fs
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
-from app.util.fs import create_dir
 
 
 BUILD_REQUEST_QUEUED = 'BUILD_REQUEST_QUEUED'
@@ -43,7 +43,7 @@ def initialize(eventlog_file=None):
     if eventlog_file.upper() == 'STDOUT':
         event_handler = StreamHandler(sys.stdout)
     else:
-        create_dir(os.path.dirname(eventlog_file))
+        fs.create_dir(os.path.dirname(eventlog_file))
         previous_log_file_exists = os.path.exists(eventlog_file)
 
         event_handler = RotatingFileHandler(

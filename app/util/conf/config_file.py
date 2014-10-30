@@ -2,7 +2,7 @@ from configobj import ConfigObj
 import os
 import stat
 
-from app.util.fs import create_dir
+from app.util import fs
 
 
 class ConfigFile(object):
@@ -43,6 +43,6 @@ class ConfigFile(object):
         Write a data structure of parsed config values to disk in an INI-style format.
         :type config_parsed: ConfigObj
         """
-        create_dir(os.path.dirname(self._filename))
+        fs.create_dir(os.path.dirname(self._filename))
         config_parsed.write()
         os.chmod(self._filename, self.CONFIG_FILE_MODE)
