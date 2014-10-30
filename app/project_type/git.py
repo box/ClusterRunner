@@ -1,5 +1,6 @@
 import os
 import pexpect
+import signal
 from urllib.parse import urlparse
 
 from app.project_type.project_type import ProjectType
@@ -100,7 +101,7 @@ class Git(ProjectType):
     def _execute_in_repo_and_raise_on_failure(self, command, message):
         self._execute_and_raise_on_failure(command, message, self._repo_directory)
 
-    def _execute_git_remote_command(self, command, cwd=None, timeout=None):
+    def _execute_git_remote_command(self, command, cwd=None, timeout=10):
         """
         Execute git-related commands. This functionality is sequestered into its own method because an automated
         system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
@@ -108,20 +109,15 @@ class Git(ProjectType):
 
         :type command: str
         :type cwd: str|None
-        :param timeout: the number of seconds to wait before throwing an exception. If set to None, no timeout.
-        :type timeout: int|None
+        :param timeout: the number of seconds to wait for expected prompts before assuming there will be no prompt
+        :type timeout: int
         """
-        try:
-            child = pexpect.spawn(command, cwd=cwd, timeout=timeout)
-        except pexpect.TIMEOUT:
-            child.kill(0)
-            raise RuntimeError('Command [{}] timed out with output: {}'.format(command, "\n".join(child.readlines())))
+        child = pexpect.spawn(command, cwd=cwd)
 
         try:
-            prompt_index = child.expect(['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'])
-
-            if prompt_index is not None:
-                child.kill(0)
+            prompt_index = child.expect(
+                ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
+            child.kill(signal.SIGKILL)
 
             if prompt_index == 0 or prompt_index == 1:
                 raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
@@ -129,10 +125,19 @@ class Git(ProjectType):
             elif prompt_index == 2:
                 raise RuntimeError('Failed to retrieve from git remote due to a ssh known_hosts key prompt. '
                                    'Command: {}'.format(command))
-
         except pexpect.EOF:
             pass
-        child.expect(pexpect.EOF)
+        except pexpect.TIMEOUT:
+            self._logger.info('Command [{}] had no expected prompts after {} seconds.'.format(command, timeout))
+
+        # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
+        self._logger.debug("Output from command [{}] after {} seconds: {}".format(command, timeout, child.before))
+
+        # The timeout here is set to None because we do not want a timeout of any sort--In the case that command
+        # is a git clone, this call could potentially run for several minutes. We assume that by the time
+        # code has reached this line (when it has exceeded the timeout value specified in the child.expect call
+        # above) that if we were going to get prompted, we would have seen the prompts already.
+        child.expect(pexpect.EOF, timeout=None)
         if child.exitstatus != 0:
             raise RuntimeError('Git command failed.  Command: {}\nOutput: {}'.format(command,
                                                                                      child.before.decode('utf-8')))
