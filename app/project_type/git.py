@@ -138,11 +138,12 @@ class Git(ProjectType):
         # code has reached this line (when it has exceeded the timeout value specified in the child.expect call
         # above) that if we were going to get prompted, we would have seen the prompts already.
         child.expect(pexpect.EOF, timeout=None)
+        # This call is necessary for the child.exitstatus to be set properly. Otherwise, it can be set to None.
+        child.close()
+
         if child.exitstatus != 0:
-            self._logger.warning(
-                'Git command exitted with a non-zero exit status of {}. Command: {}\nOutput: {}'.format(
-                    child.exitstatus, command, child.before.decode('utf-8')))
-            #raise RuntimeError('Git command failed.  Command: {}\nOutput: {}'.format(command, child.before.decode('utf-8')))
+            raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
+                child.exitstatus, command, child.before.decode('utf-8')))
 
     def execute_command_in_project(self, *args, **kwargs):
         """
