@@ -2,12 +2,12 @@ from argparse import ArgumentParser
 from box.test.genty import genty, genty_dataset
 from unittest.mock import Mock, MagicMock
 
-import main
 from app.project_type.project_type import ProjectType
 from app.subcommands.build_subcommand import BuildSubcommand
-from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
+import main
+from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 @genty
@@ -20,7 +20,7 @@ class TestMain(BaseUnitTestCase):
     _PROJECT_DIRECTORY = 'workspace'
 
     def setUp(self):
-        self.patch('os.makedirs')
+        self.patch('app.util.fs.write_file')
         super().setUp()
         self.mock_tornado = self.patch('app.subcommands.service_subcommand.tornado')
         self.mock_ClusterMaster = self.patch('app.subcommands.master_subcommand.ClusterMaster')
@@ -33,28 +33,21 @@ class TestMain(BaseUnitTestCase):
         self.patch('main.SlaveConfigLoader')
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
         self.patch('app.subcommands.master_subcommand.analytics.initialize')
-        # self.patch('app.subcommands.service_subcommand.write_file')
 
     def test_master_args_correctly_create_cluster_master(self):
-        # arrange
         mock_cluster_master = self.mock_ClusterMaster.return_value  # get the mock for the ClusterMaster instance
 
-        # act
         main.main(['master'])
 
-        # assert
         self.mock_ClusterMaster.assert_called_once_with()  # assert on constructor params
         self.mock_ClusterMasterApplication.assert_called_once_with(mock_cluster_master)  # assert on constructor params
 
     def test_default_slave_args_correctly_create_cluster_slave(self):
-        # arrange
         self.mock_configuration_values({'num_executors': 1}, default_value='default_value')
         mock_cluster_slave = self.mock_ClusterSlave.return_value
 
-        # act
         main.main(['slave'])
 
-        # assert
         expected_cluster_slave_constructor_args = {
             'num_executors': 1,
             'port': Configuration['port'],

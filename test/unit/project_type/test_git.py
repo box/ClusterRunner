@@ -6,8 +6,8 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestGit(BaseUnitTestCase):
 
     def setUp(self):
+        self.patch('app.project_type.git.fs.create_dir')
         super().setUp()
-        self.patch('app.project_type.git.create_dir')
 
     def test_timing_file_path_happy_path(self):
         self.patch('os.symlink')

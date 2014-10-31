@@ -1,17 +1,17 @@
-import unittest
 from unittest.mock import MagicMock
 
-from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
 from app.master.slave import Slave
+from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 class TestClusterMaster(BaseUnitTestCase):
 
     def setUp(self):
-        self.patch('os.makedirs')
+        self.patch('app.util.fs.create_dir')
+        self.patch('shutil.rmtree')
         super().setUp()
         self.patch('app.master.build.app.util')  # stub out util functions since these often interact with the fs
 

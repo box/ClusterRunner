@@ -6,6 +6,7 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 class TestDeploySubcommand(BaseUnitTestCase):
     def setUp(self):
+        self.patch('app.subcommands.deploy_subcommand.fs.compress_directory')
         super().setUp()
 
     def test_binaries_tar_raises_exception_if_running_from_source(self):
@@ -15,7 +16,6 @@ class TestDeploySubcommand(BaseUnitTestCase):
 
     def test_binaries_doesnt_raise_exception_if_running_from_bin(self):
         self.patch('os.path.isfile').return_value = True
-        self.patch('app.subcommands.deploy_subcommand.compress_directory')
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._binaries_tar('clusterrunner', '~/.clusterrunner/dist')
 

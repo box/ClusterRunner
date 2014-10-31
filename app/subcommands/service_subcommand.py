@@ -4,7 +4,7 @@ import sys
 import tornado.ioloop
 
 from app.subcommands.subcommand import Subcommand
-from app.util.fs import write_file
+from app.util import fs
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
@@ -30,7 +30,7 @@ class ServiceSubcommand(Subcommand):
         return ioloop
 
     def _write_pid_file(self, filename):
-        write_file(str(os.getpid()), filename)
+        fs.write_file(str(os.getpid()), filename)
 
         def remove_pid_file():
             try:

@@ -3,9 +3,9 @@ import pexpect
 import signal
 from urllib.parse import urlparse
 
+from app.util import fs
 from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
-from app.util.fs import create_dir
 
 
 class Git(ProjectType):
@@ -63,9 +63,9 @@ class Git(ProjectType):
         )
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
-        create_dir(self._repo_directory, 0o700)
-        create_dir(self._timing_file_directory, 0o700)
-        create_dir(os.path.dirname(build_project_directory))
+        fs.create_dir(self._repo_directory, 0o700)
+        fs.create_dir(self._timing_file_directory, 0o700)
+        fs.create_dir(os.path.dirname(build_project_directory))
 
         # Create a symlink from the generated build project directory to the actual project directory.
         # This is done in order to switch between the master's and the slave's copies of the repo while not

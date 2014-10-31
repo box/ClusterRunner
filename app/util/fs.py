@@ -20,6 +20,7 @@ def create_dir(dir_path, mode=None):
     if mode is not None:
         os.chmod(dir_path, mode)
 
+
 def write_file(file_contents, file_path):
     """
     Write a string or byte string to a file.

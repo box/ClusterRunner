@@ -7,8 +7,8 @@ import os
 import sys
 from termcolor import colored
 
+from app.util import fs
 from app.util.conf.configuration import Configuration
-from app.util.fs import create_dir
 
 
 # This custom format string takes care of setting field widths to make logs more aligned and readable.
@@ -100,7 +100,7 @@ def configure_logging(log_level=None, log_file=None, simplified_console_logs=Fal
 
     # handler for log file
     if log_file:
-        create_dir(os.path.dirname(log_file))
+        fs.create_dir(os.path.dirname(log_file))
         previous_log_file_exists = os.path.exists(log_file)
 
         event_handler = _ColorizingRotatingFileHandler(
