@@ -19,6 +19,8 @@ class Git(ProjectType):
 
     CLONE_DEPTH = 50
 
+    # pylint: disable=redefined-builtin
+    # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
                  hash=None, config=None, job_name=None, remote_files=None):
         """

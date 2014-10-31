@@ -1,18 +1,19 @@
 
 # Install with "pip install -r requirements.txt"
 
+configobj==5.0.6
 coverage==3.7.1
 cx_Freeze==4.3.3
 Logbook==0.7.0
 nose==1.3.3
+paramiko==1.15.1
+pexpect==3.3
+psutil==2.1.2
+pylint==1.3.1
+PyYAML==3.11
 requests==2.3.0
 termcolor==1.1.0
 tornado==3.2.2
-PyYAML==3.11
-configobj==5.0.6
-psutil==2.1.2
-paramiko==1.15.1
-pexpect==3.3
 
 # Install genty from feature branch until Python 3 changes are merged
 git+https://github.com/box/genty.git@support_more_than_27

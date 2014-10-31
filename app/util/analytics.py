@@ -78,7 +78,7 @@ def record_event(tag, **event_data):
         event_data['__id__'] = _event_id_generator.increment()
         event_data['__tag__'] = tag
         event_data['__timestamp__'] = time.time()
-        _analytics_logger.event(json.dumps(event_data, sort_keys=True))
+        _analytics_logger.event(json.dumps(event_data, sort_keys=True))  # pylint: disable=no-member
         # todo(joey): cache most recent N events so get_events() doesn't always have to load file
 
 

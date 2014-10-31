@@ -158,7 +158,7 @@ class _BuildsHandler(_ClusterMasterBaseHandler):
 
     def get(self):
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master._all_builds_by_id.values()]
+            'builds': [build.api_representation() for build in self._cluster_master.builds()]
         }
         self.write(response)
 

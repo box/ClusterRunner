@@ -107,7 +107,7 @@ class UnhandledExceptionHandler(Singleton):
                     callback, args, kwargs = self._teardown_callback_stack.get()
                     try:
                         callback(*args, **kwargs)
-                    except:
+                    except:  # pylint: disable=bare-except
                         # Also catch any exception that occurs during a teardown callback and log it.
                         self._logger.exception('Teardown callback {} raised exception.', callback)
 

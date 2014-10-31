@@ -13,8 +13,6 @@ class ServiceRunError(Exception):
     """
     An exception to represent the case where a service could not be ran
     """
-    def __init__(self, url):
-        self.url = url
 
 
 class ServiceRunner(object):
@@ -102,7 +100,7 @@ class ServiceRunner(object):
             return
         Popen(cmd, stdout=DEVNULL, shell=True)
         if service_url is not None and not self.is_up(service_url, timeout=10):
-            raise ServiceRunError("Failed to run service on {}".format(service_url))
+            raise ServiceRunError("Failed to run service on {}.".format(service_url))
 
     def is_up(self, service_url, timeout=0.1):
         """

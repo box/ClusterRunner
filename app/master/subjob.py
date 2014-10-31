@@ -1,6 +1,5 @@
 import os
 
-from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
 

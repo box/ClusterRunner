@@ -41,10 +41,3 @@ class RemoteService(object):
         self._shell_client.connect()
         self._shell_client.exec_command(command, async)
         self._shell_client.close()
-
-    def host(self):
-        """
-        :return:
-        :rtype: str
-        """
-        return self.host

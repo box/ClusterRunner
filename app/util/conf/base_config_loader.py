@@ -13,6 +13,8 @@ BASE_CONFIG_FILE_SECTION = 'general'
 
 class BaseConfigLoader(object):
 
+    CONFIG_FILE_SECTION = ''  # Override value in subclasses to load additional config.
+
     def configure_defaults(self, conf):
         """
         This is the base configuration. All default configuration values belong here. These values may be overridden by
@@ -95,7 +97,7 @@ class BaseConfigLoader(object):
         :param config_filename:  str
         """
         self._load_section_from_config_file(config, config_filename, BASE_CONFIG_FILE_SECTION)
-        if hasattr(self, 'CONFIG_FILE_SECTION') and self.CONFIG_FILE_SECTION:
+        if self.CONFIG_FILE_SECTION:
             self._load_section_from_config_file(config, config_filename, self.CONFIG_FILE_SECTION)
 
     def _load_section_from_config_file(self, config, config_filename, section):

@@ -12,6 +12,9 @@ class ServiceSubcommand(Subcommand):
     """
     Base class for Master and Slave subcommands.
     """
+    def run(self):
+        raise NotImplementedError
+
     def _start_application(self, application, port):
         # Note: No significant application logic should be executed before this point. The call to application.listen()
         # will raise an exception if another process is using the same port. We rely on this exception to force us to

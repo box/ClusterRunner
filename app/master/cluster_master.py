@@ -17,15 +17,13 @@ from app.util.safe_thread import SafeThread
 
 
 class ClusterMaster(object):
-
-    API_VERSION = 'v1'
-
     """
     The ClusterRunner Master service: This is the main application class that the web framework/REST API sits on top of.
     """
+
+    API_VERSION = 'v1'
+
     def __init__(self):
-        """
-        """
         self._logger = get_logger(__name__)
 
         self._all_slaves_by_url = {}
@@ -74,18 +72,24 @@ class ClusterMaster(object):
             'slaves': slaves_representation,
         }
 
+    def builds(self):
+        """
+        Returns a list of all builds
+        :rtype: list[Build]
+        """
+        return self._all_builds_by_id.values()
+
     def active_builds(self):
         """
         Returns a list of incomplete builds
         :rtype: list[Build]
         """
-        all_builds = self._all_builds_by_id.values()
-        return [build for build in all_builds if not build.is_finished]
+        return [build for build in self.builds() if not build.is_finished]
 
     def add_idle_slave(self, slave):
         """
         Add a slave to the idle queue
-        :type slave: master.Slave
+        :type slave: Slave
         """
         build_id = slave.current_build_id
         slave.mark_as_idle()
@@ -245,7 +249,7 @@ class ClusterMaster(object):
                     self._logger.info('Build {} was successfully prepared and is now waiting for slaves.',
                                       build.build_id())
                     self._builds_waiting_for_slaves.put(build)
-            except Exception as ex:
+            except Exception as ex:  # pylint: disable=broad-except
                 build.mark_failed(str(ex))
                 self._logger.exception('Could not handle build request for build {}'.format(build.build_id()))
 
