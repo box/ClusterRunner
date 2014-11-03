@@ -13,7 +13,7 @@ install:
 
 # command to run tests
 script:
-  - export DO_PYLINT_CMD="pylint --rcfile=test/pylintrc app"
+  - export DO_PYLINT_CMD="pylint app"
   - export TEST_UNIT_CMD="nosetests -v test/unit"
   - export TEST_FUNC_CMD="nosetests -s -v test/functional"
   - export CR_VERBOSE=1
