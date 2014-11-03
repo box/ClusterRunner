@@ -7,7 +7,6 @@ from app.util import log
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util.network import ENCODED_BODY
-from app.web_framework.route_node import RouteNode
 
 
 class ClusterBaseHandler(tornado.web.RequestHandler):

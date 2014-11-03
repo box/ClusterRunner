@@ -42,5 +42,3 @@ class Configuration(Singleton, metaclass=_ConfigurationMetaclass):
 
     def get(self, name):
         return self.properties[name]
-
-

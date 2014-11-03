@@ -78,7 +78,7 @@ class ProjectType(object):
             self.run_job_config_setup()
 
     def _setup_build(self):
-        raise NotImplemented()
+        raise NotImplementedError
 
     def _execute_and_raise_on_failure(self, command, message, cwd=None):
         output, exit_code = self.execute_command_in_project(command, cwd=cwd)
@@ -130,14 +130,6 @@ class ProjectType(object):
         for executor in executors:
             executor.configure_project_type(project_type_params)
         self.run_job_config_setup()
-
-    def _retrieval_command(self):
-        """
-        A shell command to execute for getting the project_type to the local machine
-        :return: The shell command
-        :rtype: string
-        """
-        raise NotImplementedError
 
     def setup_executor(self):
         """
@@ -292,7 +284,7 @@ class ProjectType(object):
                 continue
             # extract the doc for this param from the docstring. note: this only grabs the first line, so we can add
             # "private" additional doc on following lines.
-            docstring_match = re.search('^\s*:param ' + argument_name + ': (.*)$', constructor_doc, re.MULTILINE)
+            docstring_match = re.search(r'^\s*:param ' + argument_name + ': (.*)$', constructor_doc, re.MULTILINE)
             help_string = docstring_match.group(1) if docstring_match else None
 
             # determine if argument is required. if it's not required, also get its default argument value.

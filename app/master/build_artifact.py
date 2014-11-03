@@ -79,14 +79,14 @@ class BuildArtifact(object):
 
         return self._failed_commands
 
-    def _is_atom_artifact_dir(self, dir):
+    def _is_atom_artifact_dir(self, dir_basename):
         """
-        :param dir: the basename of the directory
-        :type dir: str
+        :param dir_basename: the basename of the directory
+        :type dir_basename: str
         :return: true if the directory name is an artifact directory
         :rtype: bool
         """
-        return dir.startswith(BuildArtifact.ATOM_ARTIFACT_DIR_PREFIX)
+        return dir_basename.startswith(BuildArtifact.ATOM_ARTIFACT_DIR_PREFIX)
 
     def generate_failures_file(self):
         """

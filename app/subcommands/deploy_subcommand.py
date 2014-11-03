@@ -1,12 +1,10 @@
 import getpass
 import os
 from os.path import join
+import requests
 import socket
 import sys
 from urllib.parse import urlparse
-
-from requests import RequestException
-from requests.exceptions import ConnectionError
 
 from app.client.build_runner import BuildRunner
 from app.deployment.deploy_target import DeployTarget
@@ -215,7 +213,7 @@ class DeploySubcommand(Subcommand):
         for slave_service in slave_services:
             try:
                 slave_service.start(master, master_port, slave_port, num_executors)
-            except:
+            except:  # pylint: disable=bare-except
                 self._logger.error('Failed to start slave service on {}.'.format(slave_service.host))
 
     def _validate_successful_deployment(self, master_service_url, slaves_to_validate):
@@ -241,7 +239,7 @@ class DeploySubcommand(Subcommand):
                 boolean_predicate=all_slaves_registered,
                 timeout_seconds=self._SLAVE_REGISTRY_TIMEOUT_SEC,
                 poll_period=1,
-                exceptions_to_swallow=(RequestException, ConnectionError)
+                exceptions_to_swallow=(requests.RequestException, requests.ConnectionError)
         ):
             try:
                 non_registered_slaves = self._non_registered_slaves(slave_api_url, slaves_to_validate, network)

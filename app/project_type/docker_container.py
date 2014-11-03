@@ -231,5 +231,5 @@ class _DockerSession(object):
         """
         try:
             self.end()
-        except:
+        except:  # pylint: disable=bare-except
             pass

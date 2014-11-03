@@ -65,6 +65,6 @@ class BuildSubcommand(Subcommand):
         try:
             service_runner.run_master()
             service_runner.run_slave()
-        except ServiceRunError as e:
-            self._logger.error('Failed to run service on {}'.format(e.url))
+        except ServiceRunError as ex:
+            self._logger.error(str(ex))
             sys.exit(1)

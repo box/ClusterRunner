@@ -28,8 +28,6 @@ class TestBuild(BaseUnitTestCase):
 
         mock_project_type = self._create_mock_project_type()
         fake_setup_command = 'docker pull my:leg'
-        mock_project_type._retrieval_command.return_value = fake_setup_command
-
         mock_slave = self._create_mock_slave()
 
         # act

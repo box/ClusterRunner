@@ -121,7 +121,6 @@ class SerialRequestHandler(object):
                     atom_time_map = json.load(json_file)
                 except ValueError:
                     self._logger.warning('Failed to load timing data from file that exists {}', timing_file_path)
-                    pass
 
         if atom_time_map is not None and len(atom_time_map) > 0:
             atom_grouper = TimeBasedAtomGrouper(atoms, max_executors, atom_time_map, project_directory)

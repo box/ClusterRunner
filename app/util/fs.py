@@ -88,8 +88,8 @@ def compress_directories(target_dirs_to_archive_paths, tarfile_path):
     :return:
     """
     with tarfile.open(tarfile_path, 'w:gz') as tar:
-        for dir, archive_name in target_dirs_to_archive_paths.items():
+        for dir_path, archive_name in target_dirs_to_archive_paths.items():
             # Sanitize directory string
-            target_dir = os.path.normpath(dir)
+            target_dir = os.path.normpath(dir_path)
 
             tar.add(target_dir, arcname=archive_name)
