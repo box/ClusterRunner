@@ -51,4 +51,5 @@ class SlaveSubcommand(ServiceSubcommand):
         ioloop.add_callback(connect_slave_to_master)
 
         ioloop.start()  # this call blocks until the server is stopped
-        self._logger.info('Slave service was stopped. Goodbye.')
+        ioloop.close(all_fds=True)  # all_fds=True is necessary here to make sure connections don't hang
+        self._logger.notice('Slave server was stopped.')

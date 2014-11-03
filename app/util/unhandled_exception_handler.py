@@ -32,6 +32,7 @@ class UnhandledExceptionHandler(Singleton):
         # prevent the teardown handler from ever being registered!) Calling code should be organized so that this
         # singleton is only ever initialized on the main thread.
         signal.signal(signal.SIGTERM, self._application_teardown_signal_handler)
+        signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
 
     def add_teardown_callback(self, callback, *callback_args, **callback_kwargs):
         """
@@ -57,8 +58,9 @@ class UnhandledExceptionHandler(Singleton):
         """
         signal_names = {
             signal.SIGTERM: 'SIGTERM',
+            signal.SIGINT: 'SIGINT',
         }
-        self._logger.warning('{} signal received. Triggering teardown.', signal_names[sig])
+        self._logger.info('{} signal received. Triggering teardown.', signal_names[sig])
         raise AppTeardown
 
     def __enter__(self):
@@ -105,6 +107,7 @@ class UnhandledExceptionHandler(Singleton):
 
                 while not self._teardown_callback_stack.empty():
                     callback, args, kwargs = self._teardown_callback_stack.get()
+                    self._logger.debug('Executing teardown callback: {}', callback)
                     try:
                         callback(*args, **kwargs)
                     except:  # pylint: disable=bare-except
