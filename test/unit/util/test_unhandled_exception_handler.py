@@ -95,19 +95,19 @@ class TestUnhandledExceptionHandler(BaseUnitTestCase):
 
     def test_teardown_callbacks_are_executed_in_reverse_order_of_being_added(self):
         callback = MagicMock()
-        self.exception_handler.add_teardown_callback(callback, 'a')
-        self.exception_handler.add_teardown_callback(callback, 'b')
-        self.exception_handler.add_teardown_callback(callback, 'c')
+        self.exception_handler.add_teardown_callback(callback, 'first')
+        self.exception_handler.add_teardown_callback(callback, 'second')
+        self.exception_handler.add_teardown_callback(callback, 'third')
 
         with suppress(SystemExit):
             with self.exception_handler:
                 raise Exception
 
         expected_calls_in_reverse_order = [
-            call('c'),
-            call('b'),
-            call('a')]
-        self.assertListEqual(callback.mock_calls, expected_calls_in_reverse_order,
+            call('third'),
+            call('second'),
+            call('first')]
+        self.assertListEqual(callback.call_args_list, expected_calls_in_reverse_order,
                              'Teardown callbacks should be executed in reverse order of being added.')
 
     def test_initializing_singleton_on_non_main_thread_raises_exception(self):
