@@ -8,9 +8,9 @@ from app.web_framework.cluster_master_application import ClusterMasterApplicatio
 
 
 class MasterSubcommand(ServiceSubcommand):
-    thread_name = 'MasterTornadoThread'
+    _THREAD_NAME = 'MasterTornadoThread'
 
-    def run(self, port, log_level, eventlog_file):
+    def async_run(self, port, log_level, eventlog_file):
         """
         Run a ClusterRunner master service.
 

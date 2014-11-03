@@ -114,10 +114,17 @@ class UnhandledExceptionHandler(Singleton):
                 self._handled_exceptions.put(exc_value)
 
         if current_thread() is main_thread():
-            # The usage of this class on the main thread is a special case. Generally we won't be handling an exception
-            # directly (exc_value will be None) since all we do on the main thread is wait for the app_thread to join.
-            # However once the app_thread joins, there may have been exceptions on *other* threads that we want to
-            # reraise on the main thread.
+            # The usage of this class on the main thread is a special case since only exceptions raised on the main
+            # thread may affect the exit code of the overall application. Any unhandled exceptions raised on child
+            # threads will only interrupt execution on that particular thread.
+            #
+            # This main-thread-only code path serves to ensure that exceptions raised on child threads during a `with
+            # unhandled_exception_handler` block will also raise an exception on the main thread upon exit of the main
+            # thread's `with unhandled_exception_handler` block. This ensures we will set a failing exit code even if
+            # an exception is raised on a child thread.
+            #
+            # Note: this only works for child threads protected by the UnhandledExceptionHandler (e.g., an instance of
+            # a SafeThread).
             #
             # We check the self._handled_exceptions queue to see if there was an exception that we want to reraise. We
             # only care about the first exception on the queue -- it was the first caught exception so it "wins".
@@ -142,6 +149,6 @@ class UnhandledExceptionHandler(Singleton):
 class AppTeardown(BaseException):
     """
     Trigger application teardown. This works similarly to raising SystemExit, but unlike SystemExit this will not be
-    reraised on the main thread. Essentially, this would allow execution of main() in main.py to finish naturally
-    without being short-circuited after app_thread.join().
+    reraised on the main thread. Essentially, this would allow execution of main() in main.py to continue past the
+    `with unhandled_exception_handler` block.
     """
