@@ -8,37 +8,6 @@ class ShellClient(object):
     def __init__(self, host, user):
         self.host = host
         self.user = user
-        self.connected = False
-
-    def connect(self):
-        """
-        Initializes the shell connection with the host
-        :return:
-        """
-        if not self.connected:
-            self.connected = True
-            self._connect_client()
-        else:
-            raise ConnectionError('Connection to host {} as user {} is already open'.format(self.host, self.user))
-
-    def _connect_client(self):
-        """ Put subclass implementation here """
-        pass
-
-    def close(self):
-        """
-        Closes the shell connection with the host
-        :return:
-        """
-        if self.connected:
-            self.connected = False
-            self._close_client()
-        else:
-            raise ConnectionAbortedError('Connection to host {} as user {}'.format(self.host, self.user))
-
-    def _close_client(self):
-        """ Put subclass implementation here """
-        pass
 
     @classmethod
     def is_localhost(cls, host):
@@ -64,12 +33,6 @@ class ShellClient(object):
         :return:
         :rtype: Response
         """
-        if not self.connected:
-            raise ConnectionError(
-                'Connection to host {}  as user {} is closed, unable to exececute command {}'.format(
-                    self.host, self.user, command
-                )
-            )
         if async and error_on_failure:
             raise NotImplementedError('async command execution and raising errors on failure is not implemented')
         elif async:
@@ -112,15 +75,6 @@ class ShellClient(object):
         :type destination: str
         :return:
         """
-        if not self.connected:
-            raise ConnectionError(
-                'Connection to host {}  as user {} is closed, unable to copy {} to {}'.format(
-                    self.host,
-                    self.user,
-                    source,
-                    destination
-                )
-            )
         return self._copy_on_client(source, destination)
 
     def _copy_on_client(self, source, destination):

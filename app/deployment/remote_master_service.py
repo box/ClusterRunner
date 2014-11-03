@@ -19,7 +19,8 @@ class RemoteMasterService(RemoteService):
         :param timeout_sec: number of seconds to wait for the master to respond before timing out
         :type timeout_sec: int
         """
-        self._execute_ssh_command('nohup {} master --port {} &'.format(self._executable_path, str(port)), async=True)
+        self._shell_client.exec_command('nohup {} master --port {} &'.format(self._executable_path, str(port)),
+                                        async=True)
         master_service_url = '{}:{}'.format(self.host, str(port))
         master_service = ServiceRunner(master_service_url)
 
