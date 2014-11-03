@@ -8,9 +8,9 @@ from app.web_framework.cluster_slave_application import ClusterSlaveApplication
 
 
 class SlaveSubcommand(ServiceSubcommand):
-    thread_name = 'SlaveTornadoThread'
+    _THREAD_NAME = 'SlaveTornadoThread'
 
-    def run(self, port, master_url, num_executors, log_level, eventlog_file):
+    def async_run(self, port, master_url, num_executors, log_level, eventlog_file):
         """
         Run a ClusterRunner slave service.
 

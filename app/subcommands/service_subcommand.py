@@ -5,6 +5,7 @@ import tornado.ioloop
 
 from app.subcommands.subcommand import Subcommand
 from app.util import fs
+from app.util.safe_thread import SafeThread
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
@@ -12,7 +13,19 @@ class ServiceSubcommand(Subcommand):
     """
     Base class for Master and Slave subcommands.
     """
-    def run(self):
+    _THREAD_NAME = None
+
+    def run(self, *args, **kwargs):
+        app_thread = SafeThread(
+            name=self._THREAD_NAME,
+            target=self.async_run,
+            args=args,
+            kwargs=kwargs,
+        )
+        app_thread.start()
+        app_thread.join()
+
+    def async_run(self, *args, **kwargs):
         raise NotImplementedError
 
     def _start_application(self, application, port):

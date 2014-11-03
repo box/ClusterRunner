@@ -215,16 +215,9 @@ def main(args):
     _initialize_configuration(parsed_args.pop('subcommand'), parsed_args.pop('config_file'))
     subcommand_class = parsed_args.pop('subcommand_class')  # defined in _parse_args() by subparser.set_defaults()
 
-    app_thread = SafeThread(
-        name=subcommand_class.thread_name,
-        target=subcommand_class().run,
-        kwargs=parsed_args,
-    )
-
     unhandled_exception_handler = UnhandledExceptionHandler.singleton()
     with unhandled_exception_handler:
-        app_thread.start()
-        app_thread.join()
+        subcommand_class().run(**parsed_args)
 
 
 if __name__ == '__main__':
