@@ -23,8 +23,11 @@ class StopSubcommand(Subcommand):
         :param log_level: the log level at which to do application logging (or None for default log level)
         :type log_level: str | None
         """
-        log_level = log_level or Configuration['log_level']
-        log.configure_logging(log_level=log_level, simplified_console_logs=True)
+        log.configure_logging(
+            log_level=log_level or Configuration['log_level'],
+            log_file=Configuration['log_file'],
+            simplified_console_logs=True,
+        )
         self._kill_pid_in_file_if_exists(Configuration['slave_pid_file'])
         self._kill_pid_in_file_if_exists(Configuration['master_pid_file'])
 
