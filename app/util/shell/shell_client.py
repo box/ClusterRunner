@@ -77,11 +77,8 @@ class ShellClient(object):
         else:
             res = self._exec_command_on_client_blocking(command)
             if error_on_failure and not res.is_success():
-                error_message = 'command {} on host {} as user {} failed with exit code {}'.format(
-                    self.host,
-                    self.user,
-                    command,
-                    res.returncode
+                error_message = 'Command "{}" on host "{}" as user "{}" failed with exit code: {}.'.format(
+                    command, self.host, self.user, res.returncode
                 )
                 raise RuntimeError(error_message)
             else:
