@@ -17,9 +17,9 @@ from app.util.conf.config_file import ConfigFile
 from app.util.conf.deploy_config_loader import DeployConfigLoader
 from app.util.conf.master_config_loader import MasterConfigLoader
 from app.util.conf.slave_config_loader import SlaveConfigLoader
+from app.util.conf.stop_config_loader import StopConfigLoader
 from app.util.secret import Secret
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
-from app.util.safe_thread import SafeThread
 
 
 def _parse_args(args):
@@ -178,6 +178,7 @@ def _initialize_configuration(app_subcommand, config_filename):
         'slave': SlaveConfigLoader(),
         'build': MasterConfigLoader(),
         'deploy': DeployConfigLoader(),
+        'stop': StopConfigLoader(),
     }
     conf_loader = app_subcommand_conf_loaders.get(app_subcommand) or BaseConfigLoader()
     config = Configuration.singleton()
