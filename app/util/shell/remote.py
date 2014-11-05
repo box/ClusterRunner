@@ -39,7 +39,7 @@ class RemoteShellClient(ShellClient):
         # Avoid any ssh known_hosts prompts.
         command = 'scp -o StrictHostKeyChecking=no {} {}:{}'.format(source, self._host_string(), destination)
         self._logger.debug('SCP popen blocking [{}:{}]: {}'.format(self.user, self.host, command))
-        proc = Popen(command,shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
         output, error = proc.communicate()
         return Response(raw_output=output, raw_error=error, returncode=proc.returncode)
 
