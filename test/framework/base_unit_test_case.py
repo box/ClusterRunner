@@ -2,7 +2,7 @@ from contextlib import suppress
 import os
 import logbook
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, NonCallableMock, patch
 
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -13,10 +13,22 @@ from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 class BaseUnitTestCase(TestCase):
 
     _base_setup_called = False
+    # This allows test classes (e.g., TestNetwork) to disable network-related patches for testing the patched code.
+    _do_network_mocks = True
 
     def setUp(self):
         super().setUp()
-        self._set_up_safe_guards()
+        self._blacklist_methods_not_allowed_in_unit_tests()
+
+        # Stub out a few library dependencies that launch subprocesses.
+        self.patch('app.util.autoversioning.get_version').return_value = '0.0.0'
+        self.patch('app.util.conf.base_config_loader.platform.node')
+
+        if self._do_network_mocks:
+            # requests.Session() also makes some subprocess calls on instantiation.
+            self.patch('app.util.network.requests.Session')
+            # Stub out Network.are_hosts_same() call with a simple string comparison.
+            self.patch('app.util.network.Network.are_hosts_same', new=lambda host_a, host_b: host_a == host_b)
 
         # Reset singletons so that they get recreated for every test that uses them.
         Configuration.reset_singleton()
@@ -60,19 +72,24 @@ class BaseUnitTestCase(TestCase):
 
         :param target: The item (object, method, etc.) to replace with a mock. (See docs for unittest.mock.patch.)
         :type target: str
-
         :param kwargs: Additional arguments to be passed to unittest.mock.patch
         :type kwargs: dict
-
         :return: The mock object that target has been replaced with
         :rtype: MagicMock
         """
-        # default autospec to True unless 'new' is specified (they are incompatible arguments to patch())
+        # Default autospec to True unless 'new' is specified (they are incompatible arguments to patch())
         if 'new' not in kwargs:
             kwargs.setdefault('autospec', True)
 
         patcher = patch(target, **kwargs)
 
+        # Check to see if this target has already been patched. Usually if `target` has already been patched, the
+        # patcher.start() method will raise a TypeError anyway, but there are certain cases where this doesn't happen
+        # reliably (e.g., 'os.unlink') so this check is an attempt to make that detection reliable.
+        item_to_patch, _ = patcher.get_original()
+        if isinstance(item_to_patch, NonCallableMock):
+            raise UnitTestPatchError('Target "{}" is already a mock. Has this target already been patched either in '
+                                     'this class ({}) or in BaseUnitTestCase?'.format(target, self.__class__.__name__))
         try:
             mock = patcher.start()
         except TypeError as ex:
@@ -101,22 +118,22 @@ class BaseUnitTestCase(TestCase):
         patched_abspath.side_effect = fake_abspath
         return patched_abspath
 
-    def _set_up_safe_guards(self):
+    def _blacklist_methods_not_allowed_in_unit_tests(self):
         """
-        This method allows us to raise an exception if a member is invoked.
-        To safe guard a method, pass in the name to patch, and the reason
-        why we should safeguard it.
+        We maintain a list of specific methods that should never be called in unit tests for various reasons (e.g.,
+        they have filesystem side effects). Methods in this list will be patched out and will actually raise an
+        exception if called. This forces test writers to be conscious of what code is being exercised by their tests,
+        and helps them to find the right place to mock out dependencies.
 
-        Test writers can apply their own patches by patching in their respective
-        test classes setUp() before calling super().setUp().
+        If you encounter a UnitTestDisabledMethodError, examine the stack trace to find the appropriate place to mock.
+        To explicitly patch one of the methods in this list, do the patch in your test class's setUp() before calling
+        super().setUp().
         """
-        safeguarded_packages = {
+        blacklisted_methods = {
             'filesystem side effects': [
-                'os.chmod',
-                'os.makedirs',
-                'os.remove',
-                'os.rename',
-                'os.rmdir',
+                'os.chmod', 'os.chown',  'os.fchmod', 'os.fchown', 'os.fsync', 'os.ftruncate', 'os.lchown', 'os.link',
+                'os.lockf', 'os.mkdir', 'os.mkfifo', 'os.mknod', 'os.open', 'os.openpty', 'os.makedirs', 'os.remove',
+                'os.rename', 'os.replace', 'os.rmdir', 'os.symlink', 'os.unlink',
                 'shutil.rmtree',
                 'app.util.fs.extract_tar',
                 'app.util.fs.compress_directory',
@@ -124,21 +141,22 @@ class BaseUnitTestCase(TestCase):
                 'app.util.fs.create_dir',
                 'app.util.fs.write_file',
             ],
-            'launching child processes': [
-                # 'subprocess.Popen.__init__',  # todo: Fix tests that break when we uncomment this.
-            ]
+            'launching and interacting with child processes': [
+                'os.execv', 'os.execve', 'os.fork', 'os.forkpty', 'os.kill', 'os.killpg', 'os.pipe', 'os.system',
+                'subprocess.call',
+                'subprocess.check_call',
+                'subprocess.check_output',
+                'subprocess.Popen.__init__',
+            ],
         }
-        for disabled_reason, patch_targets in safeguarded_packages.items():
+        for disabled_reason, patch_targets in blacklisted_methods.items():
             for patch_target in patch_targets:
-                # Suppress UnitTestPatchError which happens if target has already been patched (no safeguard needed).
+                # Suppress UnitTestPatchError, which happens if target has already been patched (no safeguard needed).
                 with suppress(UnitTestPatchError):
-                    self._safe_guard(patch_target, disabled_reason)
+                    self._blackist_target(patch_target, disabled_reason)
 
-    def _safe_guard(self, patch_target, disabled_reason):
-        message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(
-            patch_target,
-            disabled_reason
-        )
+    def _blackist_target(self, patch_target, disabled_reason):
+        message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(patch_target, disabled_reason)
         self.patch(patch_target, side_effect=[UnitTestDisabledMethodError(message)])
 
 

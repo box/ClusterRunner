@@ -8,10 +8,10 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestStopSubcommand(BaseUnitTestCase):
 
     def setUp(self):
-        super().setUp()
         self.patch('os.remove')
-        self.patch('time.sleep')
         self.os_kill_patch = self.patch('os.kill')
+        super().setUp()
+        self.patch('time.sleep')
         self.os_path_exists_patch = self.patch('os.path.exists')
         self.psutil_pid_exists_patch = self.patch('psutil.pid_exists')
 

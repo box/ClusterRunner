@@ -5,6 +5,9 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 class TestNetwork(BaseUnitTestCase):
+
+    _do_network_mocks = False  # Disable network-related patches (in BaseUnitTestCase) so we can test the patched code.
+
     def test_rsa_key_returns_none_if_ssh_keyscan_error(self):
         self._patch_popen_call_to_ssh_keyscan(1, 'some_output', 'some_error"')
         rsa_key = Network.rsa_key('some_host_that_causes_it_to_fail')
