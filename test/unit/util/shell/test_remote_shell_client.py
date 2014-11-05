@@ -17,17 +17,6 @@ class TestRemoteShellClient(BaseUnitTestCase):
         super().setUp()
         self.mock_socket = self.patch('app.util.shell.shell_client.socket')
         self.mock_Popen = self.patch('app.util.shell.local_shell_client.Popen')
-        self.mock_SSHClient = self.patch('app.util.shell.remote_shell_client.SSHClient')
-        self.mock_AutoAddPolicy = self.patch('app.util.shell.remote_shell_client.AutoAddPolicy')
-
-    def test_connect(self):
-        client = RemoteShellClient(self._HOST, self._USER)
-        client.connect()
-
-    def test_close(self):
-        client = RemoteShellClient(self._HOST, self._USER)
-        client.connect()
-        client.close()
 
     @genty_dataset(
         normal_response=(False, Response(raw_output='\ncat'.encode(), raw_error='\ndog'.encode())),

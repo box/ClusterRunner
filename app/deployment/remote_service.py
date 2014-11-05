@@ -27,17 +27,5 @@ class RemoteService(object):
         Stop all clusterrunner services on this machine. This functionality is in the base class because it
         should be common across all possible subclasses.
         """
-        self._execute_ssh_command('{} stop'.format(self._executable_path))
+        self._shell_client.exec_command('{} stop'.format(self._executable_path), async=False)
 
-    def _execute_ssh_command(self, command, async=False):
-        """
-        Helper method for executing ssh commands.
-
-        :param command: command to execute remotely
-        :type command: str
-        :param async: async/non-blocking call?
-        :type async: bool
-        """
-        self._shell_client.connect()
-        self._shell_client.exec_command(command, async)
-        self._shell_client.close()

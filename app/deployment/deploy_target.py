@@ -33,16 +33,12 @@ class DeployTarget(object):
         :type dest_dir: str
         """
         parent_dest_dir = os.path.dirname(dest_dir)
-        self._shell_client.connect()
-
         self._shell_client.exec_command('rm -rf {0}; mkdir -p {0}'.format(dest_dir), error_on_failure=True)
         self._shell_client.copy(source_tar, '{}/clusterrunner.tgz'.format(parent_dest_dir))
         self._shell_client.exec_command(
             command='tar zxvf {}/clusterrunner.tgz -C {}'.format(parent_dest_dir, dest_dir),
             error_on_failure=True
         )
-
-        self._shell_client.close()
 
     def deploy_conf(self, source_path, dest_path):
         """
@@ -57,8 +53,6 @@ class DeployTarget(object):
         if not os.path.exists(source_path):
             raise RuntimeError('Expected configuration file to exist in {}, but does not.'.format(source_path))
 
-        self._shell_client.connect()
         self._shell_client.copy(source_path, dest_path)
         # Must set permissions of conf to '600' for security purposes.
         self._shell_client.exec_command('chmod 600 {}'.format(dest_path), error_on_failure=True)
-        self._shell_client.close()
