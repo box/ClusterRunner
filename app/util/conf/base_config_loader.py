@@ -162,7 +162,7 @@ class BaseConfigLoader(object):
             # The ConfigObj library converts comma delimited strings to lists.  In the case on a single element, we
             # need to do the conversion ourselves.
             if type(value) is not list:
-                value = list(value)
+                value = [value]
             config.set(key, value)
         else:  # Could be str or NoneType, we assume it should be a str
             # Hacky: If the value starts with ~, we assume it's a path that needs to be expanded
