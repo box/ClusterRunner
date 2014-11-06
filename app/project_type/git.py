@@ -116,21 +116,35 @@ class Git(ProjectType):
         """
         child = pexpect.spawn(command, cwd=cwd)
 
-        try:
-            prompt_index = child.expect(
-                ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
-            child.kill(signal.SIGKILL)
+        # Because it is possible to receive multiple prompts in any git remote operation, we have to call pexpect
+        # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
+        # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
+        # hang in such a scenario.
+        while True:
+            try:
+                prompt_index = child.expect(
+                    ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
 
-            if prompt_index == 0 or prompt_index == 1:
-                raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
-                                   'Command: {}'.format(command))
-            elif prompt_index == 2:
-                raise RuntimeError('Failed to retrieve from git remote due to a ssh known_hosts key prompt. '
-                                   'Command: {}'.format(command))
-        except pexpect.EOF:
-            pass
-        except pexpect.TIMEOUT:
-            self._logger.info('Command [{}] had no expected prompts after {} seconds.'.format(command, timeout))
+                # Prompt: User/Password
+                if prompt_index == 0 or prompt_index == 1:
+                    child.kill(signal.SIGKILL)
+                    raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
+                                       'Command: {}'.format(command))
+                # Prompt: ssh known_hosts check
+                elif prompt_index == 2:
+                    if Configuration['git_strict_host_key_checking']:
+                        child.kill(signal.SIGKILL)
+                        raise RuntimeError('Failed to retrieve from git remote due to failed known_hosts check. '
+                                           'Command: {}'.format(command))
+
+                    # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
+                    child.sendline('yes')
+                    self._logger.info('Automatically added a host to known_hosts in command: {}'.format(command))
+            except pexpect.EOF:
+                break
+            except pexpect.TIMEOUT:
+                self._logger.info('Command [{}] had no expected prompts after {} seconds.'.format(command, timeout))
+                break
 
         # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
         self._logger.debug("Output from command [{}] after {} seconds: {}".format(command, timeout, child.before))

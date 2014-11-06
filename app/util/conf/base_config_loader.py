@@ -76,6 +76,9 @@ class BaseConfigLoader(object):
         conf.set('master_port', '43000')
         conf.set('slaves', ['localhost'])
 
+        # Strict host key checking on git remote operations, disabled by default
+        conf.set('git_strict_host_key_checking', False)
+
         # CORS support - a regex to match against allowed API request origins, or None to disable CORS
         conf.set('cors_allowed_origins_regex', None)
 
@@ -122,6 +125,7 @@ class BaseConfigLoader(object):
             'master_port',
             'log_filename',
             'eventlog_filename',
+            'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
         ]
         try:
