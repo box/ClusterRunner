@@ -15,6 +15,7 @@
   - job-configuration
   - service-configuration
   - api-docs
+  - security
   - build-result-format
 
 - title: Contribute
