@@ -149,6 +149,29 @@ class TestMain(BaseUnitTestCase):
             self.assertTrue(has_argument_help_text,
                             'All arguments (including "{}") should have help text specified.'.format(argument_name))
 
+    @genty_dataset(
+        ['-V'], ['--version'], ['master'], ['slave', '-p', '12345'], ['build', '--master-url', 'shire.middle-earth.org']
+    )
+    def test_parse_args_accepts_valid_arguments(self, valid_arg_set):
+        try:
+            main._parse_args(valid_arg_set)  # Test succeeds if no exception is raised.
+        except SystemExit as ex:
+            if ex.code != 0:  # Test also succeeds if SystemExit is raised with "successful" exit code of 0.
+                raise
+
+    @genty_dataset(
+        no_args=([],),
+        prefix_of_valid_arg=(['slave', '--master', 'shire.middle-earth.org'],),
+        nonexistent_arg=(['hobbitses'],),
+    )
+    def test_parse_args_rejects_invalid_arguments(self, invalid_arg_set):
+        rgx_anything_but_zero = r'[^0]'
+        with self.assertRaisesRegex(
+                SystemExit, rgx_anything_but_zero,
+                msg='Executing _parse_args on a set of invalid args should raise SystemExit with a non-zero exit code.'
+        ):
+            main._parse_args(invalid_arg_set)
+
     def mock_cwd(self, current_dir=None):
         mock_os = self.patch('app.subcommands.build_subcommand.os')
         mock_os.getcwd.return_value = current_dir or self._PROJECT_DIRECTORY

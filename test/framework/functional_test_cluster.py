@@ -154,7 +154,7 @@ class FunctionalTestCluster(object):
                 'slave',
                 '--port', str(slave_port),
                 '--num-executors', str(num_executors_per_slave),
-                '--master', '{}:{}'.format(self.master.host, self.master.port),
+                '--master-url', '{}:{}'.format(self.master.host, self.master.port),
                 '--eventlog-file', slave_eventlog,
                 '--config-file', self._conf_file_path,
             ]
