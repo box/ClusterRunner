@@ -34,7 +34,7 @@ Currently we are on v1.
 Builds
 ------
 
-The build endpoint is located on the clusterrunner master.
+The build endpoint is located on the ClusterRunner master.
 
 **List all builds**
 
