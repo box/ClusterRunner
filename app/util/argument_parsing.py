@@ -28,6 +28,26 @@ class ClusterRunnerArgumentParser(argparse.ArgumentParser):
         target_arg_group = self._required_arg_group if is_required else self._optional_arg_group
         target_arg_group.add_argument(*args, **kwargs)
 
+    def _get_option_tuples(self, option_string):
+        """
+        This method is overridden explicitly to disable argparse prefix matching. Prefix matching is an undesired
+        default behavior as it creates the potential for unintended breaking changes just by adding a new command-line
+        argument.
+
+        For example, if a user uses the argument "--master" to specify a value for "--master-url", and later we add a
+        new argument named "--master-port", that change will break the user script that used "--master".
+
+        See: https://docs.python.org/3.4/library/argparse.html#argument-abbreviations-prefix-matching
+        """
+        # This if statement comes from the superclass implementation -- it precludes a code path in the superclass
+        # that is responsible for checking for argument prefixes. The return value of an empty list is the way that
+        # this method communicates no valid arguments were found.
+        chars = self.prefix_chars
+        if option_string[0] in chars and option_string[1] in chars:
+            return []
+
+        return super()._get_option_tuples(option_string)
+
 
 class ClusterRunnerHelpFormatter(argparse.HelpFormatter):
     def _get_help_string(self, action):
