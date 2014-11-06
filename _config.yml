@@ -3,7 +3,7 @@ highlighter: pygments
 relative_permalinks: false
 permalink: /news/:year/:month/:day/:title/
 
-gauges_id: ZZZ
+gauges_id: 545bcd628bfdf7282a00e57b
 google_analytics_id: UA-56493438-1
 
 repository: https://github.com/box/ClusterRunner 
