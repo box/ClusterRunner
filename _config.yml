@@ -4,7 +4,7 @@ relative_permalinks: false
 permalink: /news/:year/:month/:day/:title/
 
 gauges_id: ZZZ
-google_analytics_id: ZZZ
+google_analytics_id: UA-56493438-1
 
 repository: https://github.com/box/ClusterRunner 
 
