@@ -55,7 +55,7 @@ class ServiceRunner(object):
         :return:
         """
         self._logger.info('Running slave')
-        cmd = '{} slave --master {} '.format(
+        cmd = '{} slave --master-url {} '.format(
             self._main_executable,
             self._master_url)
         if port is not None:
