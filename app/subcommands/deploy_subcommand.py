@@ -2,7 +2,6 @@ import getpass
 import os
 from os.path import join
 import requests
-import socket
 import sys
 from urllib.parse import urlparse
 
@@ -55,42 +54,24 @@ class DeploySubcommand(Subcommand):
             log_file=Configuration['log_file'],
             simplified_console_logs=True,
         )
-        in_use_conf_path = Configuration['config_file']
-        hostname = Configuration['hostname']
+        conf_path = Configuration['config_file']
         current_executable = sys.executable
         username = getpass.getuser()
-        slave_config = self._get_loaded_config(in_use_conf_path, SlaveConfigLoader())
-        master_config = self._get_loaded_config(in_use_conf_path, MasterConfigLoader())
+        slave_config = self._get_loaded_config(conf_path, SlaveConfigLoader())
+        master_config = self._get_loaded_config(conf_path, MasterConfigLoader())
         master = master or slave_config.get('master_hostname')
-
-        if master == 'localhost':
-            master = hostname
-
         master_port = master_port or master_config.get('port')
         slaves = slaves or master_config.get('slaves')
-
-        if 'localhost' in slaves:
-            slaves.remove('localhost')
-            slaves.append(hostname)
-
         slave_port = slave_port or slave_config.get('port')
         num_executors = num_executors or slave_config.get('num_executors')
-        clusterrunner_dir = join(os.path.expanduser('~'), '.clusterrunner')
-        clusterrunner_executable_dir = join(clusterrunner_dir, 'dist')
+        clusterrunner_executable_dir = join(os.path.expanduser('~'), '.clusterrunner', 'dist')
         clusterrunner_executable = join(clusterrunner_executable_dir, 'clusterrunner')
 
         self._logger.info('Compressing binaries...')
         binaries_tar_path = self._binaries_tar(current_executable, Configuration['root_directory'])
 
         self._logger.info('Deploying binaries and confs on master and slaves...')
-        self._deploy_binaries_and_conf(
-            slaves + [master],
-            hostname,
-            username,
-            current_executable,
-            binaries_tar_path,
-            in_use_conf_path
-        )
+        self._deploy_binaries_and_conf(slaves + [master], username, current_executable, binaries_tar_path, conf_path)
 
         self._logger.info('Stopping and starting all clusterrunner services...')
         self._start_services(master, master_port, slaves, slave_port, num_executors, username, clusterrunner_executable)
@@ -128,14 +109,12 @@ class DeploySubcommand(Subcommand):
         fs.compress_directory(clusterrunner_bin_dir, tar_file_path)
         return tar_file_path
 
-    def _deploy_binaries_and_conf(self, hosts, local_hostname, username, current_executable, binaries_tar_path,
-                                  in_use_conf_path):
+    def _deploy_binaries_and_conf(self, hosts, username, current_executable, binaries_tar_path, in_use_conf_path):
         """
         Move binaries and conf to the appropriate hosts.
 
         :param hosts: hosts to deploy to
-        :str hosts: list[str]
-        :param local_hostname: current hostname
+        :type hosts: list[str]
         :param username: current username
         :param current_executable: path to the executable (ie: /usr/bin/python, ./clusterrunner, etc)
         :type current_executable: str
@@ -151,21 +130,18 @@ class DeploySubcommand(Subcommand):
 
         # @TODO: Do this async/concurrently in order to improve runtime
         for host in hosts:
-            try:
-                deploy_target = DeployTarget(host, username)
-                if host == 'localhost' or host == local_hostname:
-                    # Do not want to overwrite the currently running executable.
-                    if current_executable != clusterrunner_executable_deploy_target:
-                        deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
-
-                    # Do not want to overwrite the currently used conf.
-                    if in_use_conf_path != clusterrunner_conf_deploy_target:
-                        deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
-                else:
+            deploy_target = DeployTarget(host, username)
+            if Network.are_hosts_same(host, 'localhost'):
+                # Do not want to overwrite the currently running executable.
+                if current_executable != clusterrunner_executable_deploy_target:
                     deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
+
+                # Do not want to overwrite the currently used conf.
+                if in_use_conf_path != clusterrunner_conf_deploy_target:
                     deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
-            except socket.gaierror:
-                self._logger.error('Failed to deploy to {}. Host is unreachable.'.format(host))
+            else:
+                deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
+                deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
 
     def _start_services(self, master, master_port, slaves, slave_port, num_executors, username, clusterrunner_executable):
         """
@@ -186,25 +162,16 @@ class DeploySubcommand(Subcommand):
         :param clusterrunner_executable: where the clusterrunner executable on the remote hosts is expected to be
         :type clusterrunner_executable: str
         """
-        self._logger.debug('Adding {} as a master service'.format(master))
-
-        try:
-            master_service = RemoteMasterService(master, username, clusterrunner_executable)
-            master_service.stop()
-        except socket.gaierror:
-            self._logger.error('Master host {} is unreachable, unable to instantiate service.'.format(master))
-            raise SystemExit(1)
-
+        self._logger.debug('Stopping master service on {}...'.format(master))
+        master_service = RemoteMasterService(master, username, clusterrunner_executable)
+        master_service.stop()
         slave_services = []
 
         for slave in slaves:
-            self._logger.debug('Adding {} as a slave service'.format(slave))
-            try:
-                slave_service = RemoteSlaveService(slave, username, clusterrunner_executable)
-                slave_service.stop()
-                slave_services.append(slave_service)
-            except socket.gaierror:
-                self._logger.error('Slave host {} is unreachable, unable to instantiate service.'.format(slave))
+            self._logger.debug('Stopping slave service on {}...'.format(slave))
+            slave_service = RemoteSlaveService(slave, username, clusterrunner_executable)
+            slave_service.stop()
+            slave_services.append(slave_service)
 
         self._logger.debug('Starting master service on {}:{}'.format(master_service.host, master_port))
         master_service.start_and_block_until_up(master_port)
@@ -213,8 +180,8 @@ class DeploySubcommand(Subcommand):
         for slave_service in slave_services:
             try:
                 slave_service.start(master, master_port, slave_port, num_executors)
-            except:  # pylint: disable=bare-except
-                self._logger.error('Failed to start slave service on {}.'.format(slave_service.host))
+            except Exception as e:  # pylint: disable=broad-except
+                self._logger.error('Failed to start slave service on {} with message: {}'.format(slave_service.host, e))
 
     def _validate_successful_deployment(self, master_service_url, slaves_to_validate):
         """
@@ -233,7 +200,7 @@ class DeploySubcommand(Subcommand):
         network = Network()
 
         def all_slaves_registered():
-            return len(self._non_registered_slaves(slave_api_url, slaves_to_validate, network)) == 0
+            return len(self._registered_slave_hostnames(slave_api_url, network)) == len(slaves_to_validate)
 
         if not wait_for(
                 boolean_predicate=all_slaves_registered,
@@ -242,7 +209,8 @@ class DeploySubcommand(Subcommand):
                 exceptions_to_swallow=(requests.RequestException, requests.ConnectionError)
         ):
             try:
-                non_registered_slaves = self._non_registered_slaves(slave_api_url, slaves_to_validate, network)
+                registered_slaves = self._registered_slave_hostnames(slave_api_url, network)
+                non_registered_slaves = self._non_registered_slaves(registered_slaves, slaves_to_validate)
             except ConnectionError:
                 self._logger.error('Error contacting {} on the master.'.format(slave_api_url))
                 raise SystemExit(1)
@@ -251,17 +219,15 @@ class DeploySubcommand(Subcommand):
                 self._SLAVE_REGISTRY_TIMEOUT_SEC, ','.join(non_registered_slaves)))
             raise SystemExit(1)
 
-    def _non_registered_slaves(self, slave_api_url, slaves_to_validate, network):
+    def _registered_slave_hostnames(self, slave_api_url, network):
         """
-        Return list of slave hosts that have failed to register with the master service.
+        Return list of slave hosts that have registered with the master service.
 
         :param slave_api_url: url to the master's '/slave' endpoint
         :type slave_api_url: str
-        :param slaves_to_validate: list of slave hostnames to check for
-        :type slaves_to_validate: list[str]
         :param network: the Network instance (so that we don't have to reinstantiate it many times)
         :type network: Network
-        :return: list of slave hostnames that haven't registered with the master service yet
+        :return: the list of registered slave hostnames
         :rtype: list[str]
         """
         raw_network_response = network.get(slave_api_url)
@@ -280,10 +246,37 @@ class DeploySubcommand(Subcommand):
             if not slave_url.startswith('http'):
                 slave_url = 'http://{}'.format(slave_url)
 
-            # Must strip out the port and scheme for slave hostname string matching
+            # Must strip out the port and scheme
             registered_slave_hosts.append(urlparse(slave_url).hostname)
 
-        return [slave for slave in slaves_to_validate if slave not in registered_slave_hosts]
+        return registered_slave_hosts
+
+    def _non_registered_slaves(self, registered_slaves, slaves_to_validate):
+        """
+        Return list of slave hosts that have failed to register with the master service.
+
+        :param slaves_to_validate: list of slave hostnames to check for
+        :type slaves_to_validate: list[str]
+        :return: list of slave hostnames that haven't registered with the master service yet
+        :rtype: list[str]
+        """
+        registered_rsa_keys = []
+
+        for registered_slave in registered_slaves:
+            registered_rsa_keys.append(Network.rsa_key(registered_slave))
+
+        slaves_to_validate_rsa_key_host_pairs = {}
+
+        for slave_to_validate in slaves_to_validate:
+            slaves_to_validate_rsa_key_host_pairs[Network.rsa_key(slave_to_validate)] = slave_to_validate
+
+        non_registered_slave_hosts = []
+
+        for rsa_key in slaves_to_validate_rsa_key_host_pairs:
+            if rsa_key not in registered_rsa_keys:
+                non_registered_slave_hosts.append(slaves_to_validate_rsa_key_host_pairs[rsa_key])
+
+        return non_registered_slave_hosts
 
     def _get_loaded_config(self, conf_file_path, conf_loader):
         """

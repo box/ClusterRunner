@@ -53,21 +53,6 @@ class TestShellClient(BaseUnitTestCase):
         with self.assertRaises(ConnectionError):
             client.copy('src', 'dest')
 
-    @genty_dataset(
-        on_localhost=('localhost', 'localhost', True),
-        negative_test=('redfield', 'localhost', False),
-        same_hostname=('redfield', 'redfield', True),
-        alias_localhost=('welkers-mbp', 'localhost', True)
-    )
-    def test_is_localhost(self, query_hostname, local_hostname, expected):
-        self.mock_gethostbyname_rvals({
-            'redfield': '89.24.141.211',
-            'kennedy': '173.78.183.223',
-            'localhost': '127.0.0.1',
-        })
-        self.mock_hostname_of_local_machine(local_hostname)
-        self.assertEqual(expected, ShellClient.is_localhost(query_hostname))
-
     def mock_gethostbyname_rvals(self, host_addr_map):
         """Maps hostname to ip addresses, and defaults to loopback address"""
         self.mock_socket.gethostbyname = lambda x: host_addr_map.get(x, '127.0.0.1')

@@ -119,12 +119,16 @@ class Network(object):
             are the same host.
         :rtype: bool
         """
-        host_a_rsa_key = Network._rsa_key(host_a)
+        # For efficiency's sake, skip the rsa key check if the host strings are identical
+        if host_a == host_b and host_a is not None:
+            return True
+
+        host_a_rsa_key = Network.rsa_key(host_a)
 
         if host_a_rsa_key is None:
             return False
 
-        host_b_rsa_key = Network._rsa_key(host_b)
+        host_b_rsa_key = Network.rsa_key(host_b)
 
         if host_b_rsa_key is None:
             return False
@@ -132,7 +136,7 @@ class Network(object):
         return host_a_rsa_key == host_b_rsa_key
 
     @staticmethod
-    def _rsa_key(host):
+    def rsa_key(host):
         """
         :param host: The RSA key for host that we want to retrieve
         :type host: str
@@ -143,7 +147,7 @@ class Network(object):
         output, error = proc.communicate()
 
         if proc.returncode != 0:
-            log.get_logger(__name__).error('Failed to get rsa string with error: {}'.format(error))
+            log.get_logger(__name__).error('Failed to get rsa string with output: {}, error: {}'.format(output, error))
             return None
 
         line = output.decode("utf-8")

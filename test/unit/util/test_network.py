@@ -7,12 +7,12 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestNetwork(BaseUnitTestCase):
     def test_rsa_key_returns_none_if_ssh_keyscan_error(self):
         self._patch_popen_call_to_ssh_keyscan(1, 'some_output', 'some_error"')
-        rsa_key = Network._rsa_key('some_host_that_causes_it_to_fail')
+        rsa_key = Network.rsa_key('some_host_that_causes_it_to_fail')
         self.assertIsNone(rsa_key)
 
     def test_rsa_key_returns_output_without_ssh_rsa_str(self):
         self._patch_popen_call_to_ssh_keyscan(0, b"a_host ssh-rsa thebytearray", None)
-        rsa_key = Network._rsa_key('a_host')
+        rsa_key = Network.rsa_key('a_host')
         self.assertEquals(rsa_key, 'thebytearray')
 
     def test_are_hosts_same_returns_false_if_rsa_key_is_none(self):
