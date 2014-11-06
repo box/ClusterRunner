@@ -27,7 +27,7 @@ ClusterRunner has been put to the test<sup><a href="#2">[2]</a></sup> here at Bo
 ## Architecture
 At the heart of ClusterRunner is the concept of "atomization," the idea of taking a single command, breaking it into many smaller commands, and then horizontally distributing those "atoms." Once ClusterRunner has individual atoms in hand, it begins to store and analyze metadata associated with those atoms (historical test times, overall suite runtime, overhead on test commands, etc.) to build an image of the best execution strategy for your tests now and in the future. The "ClusterMaster" handles these responsibilities, which are then distributed to the "ClusterSlaves" as visualized below:
 
-![test](/img/cr-blog-atomization.png)
+![test](/img/CR-blog-atomization.png)
 
 ClusterRunner's ability to manage a fleet of ClusterSlaves allows us to scale any test job dynamically as machine capacity changes. The value of this approach can be described in a simple use case: multiple requests are queued, jobs start and then scale even before the previous job is completely done. 
 
