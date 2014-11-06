@@ -113,6 +113,7 @@ class BaseUnitTestCase(TestCase):
         safeguarded_packages = {
             'filesystem side effects': [
                 'os.chmod',
+                'os.killpg',
                 'os.makedirs',
                 'os.remove',
                 'os.rename',

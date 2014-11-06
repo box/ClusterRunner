@@ -102,6 +102,13 @@ class SubjobExecutor(object):
 
         return tarfile_path
 
+    def kill(self):
+        """
+        Shutdown this executor. Kill any subprocesses the executor is currently executing.
+        """
+        if self._project_type:
+            self._project_type.kill_subprocesses()
+
     def _execute_atom_command(self, atomic_command, atom_environment_vars, atom_artifact_dir):
         """
         Run the main command for this atom. Output the command, console output and exit code to

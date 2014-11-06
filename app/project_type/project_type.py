@@ -2,11 +2,13 @@ from collections import OrderedDict, namedtuple
 import inspect
 import os
 import re
-from subprocess import PIPE, Popen, STDOUT
+import signal
+from subprocess import PIPE, Popen, TimeoutExpired
+from threading import Event
 
 from app.master.cluster_runner_config import ClusterRunnerConfig
+from app.util import log
 from app.util.conf.configuration import Configuration
-from app.util.log import get_logger
 
 
 class ProjectType(object):
@@ -19,11 +21,13 @@ class ProjectType(object):
         :param remote_files: key-value pairs of where the key is the output_file and the value is the url
         :type remote_files: dict[str, str] | None
         """
-        self._logger = get_logger(__name__)
         self.project_directory = ''
         self._config = config
         self._job_name = job_name
         self._remote_files = remote_files if remote_files else {}
+
+        self._logger = log.get_logger(__name__)
+        self._kill_event = Event()
 
     def job_config(self):
         """
@@ -177,9 +181,39 @@ class ProjectType(object):
         command = self.command_in_project('{} {}'.format(environment_setter, command))
         self._logger.debug('Executing command in project: {}', command)
 
-        pipe = Popen(command, shell=True, stdout=PIPE, stderr=STDOUT, **popen_kwargs)
+        pipe = Popen(
+            command,
+            shell=True,
+            stdout=PIPE,
+            stderr=PIPE,
+            start_new_session=True,  # Starts a new process group (so we can kill it without killing clusterrunner).
+            **popen_kwargs
+        )
 
-        output_raw, err_raw = pipe.communicate()
+        # Try waiting for the command to complete, but also periodically check an event flag to see if we should
+        # terminate the process prematurely.
+        output_raw, err_raw = None, None
+        command_completed = False
+        while not command_completed and not self._kill_event.is_set():
+            try:
+                output_raw, err_raw = pipe.communicate(timeout=1)  # pylint: disable=unexpected-keyword-arg
+                command_completed = True  # communicate() didn't timeout, so process has finished executing.
+            except TimeoutExpired:
+                continue
+
+        if not command_completed:
+            # We've been signaled to terminate subprocesses, so terminate them. But we still collect stdout and stderr.
+            # We must kill the entire process group since shell=True launches 'sh -c "cmd"' and just killing the pid
+            # will kill only "sh" and not its child processes.
+            self._logger.warning('Terminating PID: {}, Command: "{}"', pipe.pid, command)
+            try:
+                os.killpg(pipe.pid, signal.SIGTERM)
+            except (PermissionError, ProcessLookupError) as ex:  # os.killpg will raise if process has already ended
+                self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: {}.',
+                                     pipe.pid, type(ex).__name__, ex)
+
+            output_raw, err_raw = pipe.communicate()
+
         output = output_raw.decode('utf-8', errors='replace') if output_raw else ''
         err = err_raw.decode('utf-8', errors='replace') if err_raw else ''
         exit_code = pipe.returncode
@@ -192,8 +226,10 @@ class ProjectType(object):
             if len(err) > max_log_length:
                 logged_err = '{}... (total stderr length: {})'.format(err[:max_log_length], len(err))
 
-            self._logger.error(
-                'Command failed!\nCommand: {}\nExit code: {}\nStdout: {}\nStderr: {}\n',
+            # Note we are intentionally not logging at error or warning level here. Interpreting a non-zero return code
+            # as a failure is context-dependent, so we can't make that determination here.
+            self._logger.notice(
+                'Command exited with non-zero exit code.\nCommand: {}\nExit code: {}\nStdout: {}\nStderr: {}\n',
                 command, exit_code, logged_output, logged_err
             )
         return '\n'.join([output, err]), exit_code
@@ -234,6 +270,12 @@ class ProjectType(object):
 
         commands = ['export {}="{}";'.format(key, value) for key, value in environment_vars.items()]
         return ' '.join(commands)
+
+    def kill_subprocesses(self):
+        """
+        Signal the environment that any currently running subprocesses should be terminated.
+        """
+        self._kill_event.set()
 
     @classmethod
     def required_constructor_argument_names(cls):

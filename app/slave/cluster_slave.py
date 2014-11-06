@@ -138,6 +138,10 @@ class ClusterSlave(object):
         Called from teardown_build(). Do asynchronous teardown for the build so that we can make the call to
         teardown_build() non-blocking. Also take care of posting back to the master when teardown is complete.
         """
+        # Kill all executors' processes. This only has an effect if we are tearing down before a build completes.
+        for executor in self.executors.values():
+            executor.kill()
+
         if self._project_type:
             self._project_type.teardown_build()
             self._logger.info('Build teardown complete for build {}.', self._current_build_id)
