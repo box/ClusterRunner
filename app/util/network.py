@@ -1,7 +1,10 @@
 import json
 import requests
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE
+import subprocess
+from subprocess import PIPE
 
+from app.util import log
 from app.util.decorators import retry_on_exception
 from app.util.log import get_logger
 from app.util.secret import Secret
@@ -100,6 +103,51 @@ class Network(object):
             raise _RequestFailedError('Request to {} failed with status_code {} and response "{}"'.
                                       format(url, str(resp.status_code), resp.text))
         return resp
+
+    @staticmethod
+    def is_localhost(host):
+        """
+        Is the specified host the localhost?
+
+        The implementation is exception prone; however we do not want to raise an exception on a is_localhost check.
+        Consequently, in the case that we fail to determine with host is localhost or not, we return False as the
+        default value.
+
+        :param host: the hostname to check if is localhost
+        :type host: str
+        :return: return False if there was an error getting the fingerprint or during fingerprint encryption
+        :rtype: bool
+        """
+        host_rsa_key = Network._rsa_key(host)
+
+        if host_rsa_key is None:
+            return False
+
+        localhost_rsa_key = Network._rsa_key('localhost')
+
+        if localhost_rsa_key is None:
+            return False
+
+        return localhost_rsa_key == host_rsa_key
+
+    @staticmethod
+    def _rsa_key(host):
+        """
+        :param host: The RSA key for host that we want to retrieve
+        :type host: str
+        :return: the rsa key string, without the 'ssh-rsa' prefix. Returns None if failed ssh-keyscan fails.
+        :rtype: str|None
+        """
+        proc = subprocess.Popen('ssh-keyscan -t rsa {}'.format(host), shell=True, stdout=PIPE, stderr=PIPE)
+        output, error = proc.communicate()
+
+        if proc.returncode != 0:
+            log.get_logger(__name__).error('Failed to get rsa string with error: {}'.format(error))
+            return None
+
+        line = output.decode("utf-8")
+        # We want the string to the right of, and not including, the 'ssh-rsa' string.
+        return line.split('ssh-rsa', 1)[-1].strip()
 
 
 class _RequestFailedError(Exception):
