@@ -5,6 +5,7 @@ import re
 import signal
 from subprocess import PIPE, Popen, TimeoutExpired
 from threading import Event
+import time
 
 from app.master.cluster_runner_config import ClusterRunnerConfig
 from app.util import log
@@ -92,11 +93,14 @@ class ProjectType(object):
     def _execute_in_project_and_raise_on_failure(self, command, message):
         self._execute_and_raise_on_failure(command, message, self.project_directory)
 
-    def teardown_build(self):
+    def teardown_build(self, timeout=None):
         """
-        Teardown the build on the local machine.  Runs once per machine per build.
+        Teardown the build on the local machine. This should run once per slave per build.
+
+        :param timeout: A maximum number of seconds before the teardown command is terminated, or None for no timeout
+        :type timeout: int | None
         """
-        self.run_job_config_teardown()
+        self.run_job_config_teardown(timeout=timeout)
         self._logger.info('ProjectType teardown complete.')
         # TODO: run _teardown_executors for each executor if this is a Docker project_type, like _setup_executors above
 
@@ -112,13 +116,16 @@ class ProjectType(object):
                                                                                     output))
             self._logger.info('Job setup complete')
 
-    def run_job_config_teardown(self):
+    def run_job_config_teardown(self, timeout=None):
         """
-        Execute any teardown commands defined in the job config
+        Execute any teardown commands defined in the job config.
+
+        :param timeout: A maximum number of seconds before the teardown command is terminated, or None for no timeout
+        :type timeout: int | None
         """
         job_config = self.job_config()
         if job_config.teardown_build:
-            output, exit_code = self.execute_command_in_project(job_config.teardown_build)
+            output, exit_code = self.execute_command_in_project(job_config.teardown_build, timeout=timeout)
             if exit_code != 0:
                 raise RuntimeError('Job teardown failed, cmd: {} -- output: {}'.format(job_config.teardown_build,
                                                                                        output))
@@ -164,7 +171,7 @@ class ProjectType(object):
         """
         return command
 
-    def execute_command_in_project(self, command, extra_environment_vars=None, **popen_kwargs):
+    def execute_command_in_project(self, command, extra_environment_vars=None, timeout=None, **popen_kwargs):
         """
         Execute a command in the context of the project
 
@@ -172,6 +179,8 @@ class ProjectType(object):
         :type command: string
         :param extra_environment_vars: additional environment variables to set for command execution
         :type extra_environment_vars: dict[str, str]
+        :param timeout: A maximum number of seconds before the process is terminated, or None for no timeout
+        :type timeout: int | None
         :param popen_kwargs: additional keyword arguments to pass through to subprocess.Popen
         :type popen_kwargs: dict[str, mixed]
         :return: a tuple of (the string output from the command, the exit code of the command)
@@ -194,7 +203,8 @@ class ProjectType(object):
         # terminate the process prematurely.
         output_raw, err_raw = None, None
         command_completed = False
-        while not command_completed and not self._kill_event.is_set():
+        timeout_time = time.time() + (timeout or float('inf'))
+        while not command_completed and not self._kill_event.is_set() and time.time() < timeout_time:
             try:
                 output_raw, err_raw = pipe.communicate(timeout=1)  # pylint: disable=unexpected-keyword-arg
                 command_completed = True  # communicate() didn't timeout, so process has finished executing.

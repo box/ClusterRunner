@@ -19,6 +19,7 @@ class UnhandledExceptionHandler(Singleton):
     """
 
     HANDLED_EXCEPTION_EXIT_CODE = 1
+    EXCEPTION_DURING_TEARDOWN_EXIT_CODE = 2
 
     def __init__(self):
         super().__init__()
@@ -26,6 +27,7 @@ class UnhandledExceptionHandler(Singleton):
         self._teardown_callback_stack = LifoQueue()  # we execute callbacks in the reverse order that they were added
         self._logger = log.get_logger(__name__)
         self._handled_exceptions = Queue()
+        self._teardown_callback_raised_exception = False
 
         # Set up a handler to be called when process receives SIGTERM.
         # Note: this will raise if called on a non-main thread, but we should NOT work around that here. (That could
@@ -112,7 +114,8 @@ class UnhandledExceptionHandler(Singleton):
                         callback(*args, **kwargs)
                     except:  # pylint: disable=bare-except
                         # Also catch any exception that occurs during a teardown callback and log it.
-                        self._logger.exception('Teardown callback {} raised exception.', callback)
+                        self._teardown_callback_raised_exception = True
+                        self._logger.exception('Exception raised by teardown callback {}', callback)
 
                 self._handled_exceptions.put(exc_value)
 
@@ -144,6 +147,11 @@ class UnhandledExceptionHandler(Singleton):
                 # both inherit from BaseException.)
                 if isinstance(handled_exception, Exception):
                     raise SystemExit(self.HANDLED_EXCEPTION_EXIT_CODE)
+
+            # If an exception was raised while executing one of the teardown callbacks, also make sure to exit with a
+            # non-zero exit code.
+            if self._teardown_callback_raised_exception:
+                raise SystemExit(self.EXCEPTION_DURING_TEARDOWN_EXIT_CODE)
 
         # Returning True from this method tells Python not to re-raise the exc_value exception on the current thread.
         return True

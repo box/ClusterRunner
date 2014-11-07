@@ -158,6 +158,7 @@ class ClusterMaster(object):
         # that will happen during slave allocation.
         slave = self.slave(slave_id)
         slave.is_alive = False
+        # todo: Fail any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 
     def handle_request_for_new_build(self, build_params):

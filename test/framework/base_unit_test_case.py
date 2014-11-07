@@ -129,6 +129,15 @@ class BaseUnitTestCase(TestCase):
         patched_abspath.side_effect = fake_abspath
         return patched_abspath
 
+    def trigger_graceful_app_shutdown(self):
+        """
+        Helper method to easily trigger graceful shutdown. The side effect of this is that all teardown handlers that
+        are registered with UnhandledExceptionHandler will be executed. This method will raise a SystemExit if an
+        exception is raised in any of the teardown handlers.
+        """
+        with UnhandledExceptionHandler.singleton():
+            raise _TriggerGracefulShutdown
+
     def _blacklist_methods_not_allowed_in_unit_tests(self):
         """
         We maintain a list of specific methods that should never be called in unit tests for various reasons (e.g.,
@@ -175,3 +184,13 @@ class UnitTestDisabledMethodError(Exception):
 
 class UnitTestPatchError(Exception):
     pass
+
+
+class _TriggerGracefulShutdown(BaseException):
+    """
+    This is a dummy exception used only for triggering the graceful shutdown (running teardown callbacks registered
+    with UnhandledExceptionHandler) during a test. This inherits from BaseException to prevent UnhandledExceptionHandler
+    from raising a SystemExit.
+    """
+    def __init__(self):
+        super().__init__('This is a fake exception to trigger graceful app shutdown.')
