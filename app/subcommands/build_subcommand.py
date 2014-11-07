@@ -6,6 +6,7 @@ from app.client.service_runner import ServiceRunner, ServiceRunError
 from app.subcommands.subcommand import Subcommand
 from app.util import log
 from app.util.conf.configuration import Configuration
+from app.util.network import Network
 from app.util.secret import Secret
 
 
@@ -37,8 +38,9 @@ class BuildSubcommand(Subcommand):
         operational_master_url = master_url or '{}:{}'.format(Configuration['hostname'], Configuration['port'])
 
         # If running a single master, single slave--both on localhost--we need to launch services locally.
-        if master_url is None and Configuration['master_hostname'] == 'localhost'\
-                and len(Configuration['slaves']) == 1 and Configuration['slaves'][0] == 'localhost':
+        if master_url is None and Network.are_hosts_same(Configuration['master_hostname'], 'localhost') \
+                and len(Configuration['slaves']) == 1 \
+                and Network.are_hosts_same(Configuration['slaves'][0], 'localhost'):
             self._start_local_services(operational_master_url)
 
         if request_params['type'] == 'directory':

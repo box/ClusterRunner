@@ -1,6 +1,3 @@
-import socket
-
-
 class ShellClient(object):
     """
     Shell Client interface
@@ -8,18 +5,6 @@ class ShellClient(object):
     def __init__(self, host, user):
         self.host = host
         self.user = user
-
-    @classmethod
-    def is_localhost(cls, host):
-        """
-        :param host:
-        :return:
-        :rtype: bool
-        """
-        return (
-            'localhost' == host or
-            socket.gethostbyname(host) == socket.gethostbyname(socket.gethostname())
-        )
 
     def exec_command(self, command, async=False, error_on_failure=False):
         """
