@@ -162,9 +162,9 @@ class DeploySubcommand(Subcommand):
         :param clusterrunner_executable: where the clusterrunner executable on the remote hosts is expected to be
         :type clusterrunner_executable: str
         """
-        self._logger.debug('Stopping master service on {}...'.format(master))
-        master_service = RemoteMasterService(master, username, clusterrunner_executable)
-        master_service.stop()
+        # We want to stop slave services before the master service, as that is a more graceful shutdown and also
+        # reduces the risk of a race condition where the slave service sends a slave-shutdown request to the master
+        # after the new master service starts.
         slave_services = []
 
         for slave in slaves:
@@ -173,8 +173,13 @@ class DeploySubcommand(Subcommand):
             slave_service.stop()
             slave_services.append(slave_service)
 
+        self._logger.debug('Stopping master service on {}...'.format(master))
+        master_service = RemoteMasterService(master, username, clusterrunner_executable)
+        master_service.stop()
+
         self._logger.debug('Starting master service on {}:{}'.format(master_service.host, master_port))
         master_service.start_and_block_until_up(master_port)
+
         self._logger.debug('Starting slave services')
 
         for slave_service in slave_services:
