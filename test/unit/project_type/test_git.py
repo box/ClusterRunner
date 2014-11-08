@@ -8,10 +8,10 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestGit(BaseUnitTestCase):
 
     def setUp(self):
+        super().setUp()
         self.patch('app.project_type.git.fs.create_dir')
         self.patch('os.unlink')
         self.patch('os.symlink')
-        super().setUp()
         self.mock_pexpect_child = self.patch('pexpect.spawn').return_value
         self.mock_pexpect_child.before = 'None'
         self.mock_pexpect_child.exitstatus = 0
