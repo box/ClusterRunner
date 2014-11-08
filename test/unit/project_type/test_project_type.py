@@ -1,13 +1,20 @@
 from box.test.genty import genty, genty_dataset
-from unittest.mock import MagicMock
+from subprocess import TimeoutExpired
+from unittest.mock import MagicMock, ANY
 
 from app.master.job_config import JobConfig
 from app.project_type.project_type import ProjectType
+from app.util.safe_thread import SafeThread
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 @genty
 class TestProjectType(BaseUnitTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.mock_popen = self.patch('app.project_type.project_type.Popen').return_value
 
     def test_required_constructor_args_are_correctly_detected_without_defaults(self):
         actual_required_args = _FakeEnvWithoutDefaultArgs.required_constructor_argument_names()
@@ -55,9 +62,8 @@ class TestProjectType(BaseUnitTestCase):
 
     def test_execute_command_in_project_does_not_choke_on_weird_command_output(self):
         some_weird_output = b'\xbf\xe2\x98\x82'  # the byte \xbf is invalid unicode
-        mock_popen = self.patch('app.project_type.project_type.Popen').return_value
-        mock_popen.communicate.return_value = (some_weird_output, None)
-        mock_popen.returncode = (some_weird_output, None)
+        self.mock_popen.communicate.return_value = (some_weird_output, None)
+        self.mock_popen.returncode = (some_weird_output, None)
 
         project_type = ProjectType()
         project_type.execute_command_in_project('fake command')
@@ -68,7 +74,7 @@ class TestProjectType(BaseUnitTestCase):
         with_blacklist=(['earth'], ['earth'], False),
         with_blacklist_others_exist=(['wind', 'water'], ['earth'], True)
     )
-    def test_constructor_argument_info_with__blacklist(
+    def test_constructor_argument_info_with_blacklist(
             self,
             args_to_check,
             blacklist,
@@ -78,6 +84,53 @@ class TestProjectType(BaseUnitTestCase):
         for arg_name in args_to_check:
             self.assertEqual(arg_name in arg_mapping, expected)
 
+    def test_calling_kill_subprocesses_will_break_out_of_command_execution_wait_loop(self):
+
+        def fake_communicate(timeout=None):
+            # The fake implementation is that communicate() times out forever until os.killpg is called.
+            if mock_killpg.call_count == 0 and timeout is not None:
+                raise TimeoutExpired(None, timeout)
+            elif mock_killpg.call_count > 0:
+                return b'fake output', b'fake error'
+            self.fail('Popen.communicate() should not be called without a timeout before os.killpg has been called.')
+
+        mock_killpg = self.patch('os.killpg')
+        self.mock_popen.communicate.side_effect = fake_communicate
+        self.mock_popen.returncode = 1
+        self.mock_popen.pid = 55555
+        project_type = ProjectType()
+        command_thread = SafeThread(target=project_type.execute_command_in_project, args=('echo The power is yours!',))
+
+        # This calls execute_command_in_project() on one thread, and calls kill_subprocesses() on another. The
+        # kill_subprocesses() call should cause the first thread to exit.
+        command_thread.start()
+        project_type.kill_subprocesses()
+
+        # This *should* join immediately, but we specify a timeout just in case something goes wrong so that the test
+        # doesn't hang. A successful join implies success. We also use the UnhandledExceptionHandler so that exceptions
+        # propagate from the child thread to the test thread and fail the test.
+        with UnhandledExceptionHandler.singleton():
+            command_thread.join(timeout=10)
+            if command_thread.is_alive():
+                mock_killpg()  # Calling killpg() causes the command thread to end.
+                self.fail('project_type.kill_subprocesses should cause the command execution wait loop to exit.')
+
+        mock_killpg.assert_called_once_with(pgid=55555, sig=ANY)
+
+    def test_command_exiting_normally_will_break_out_of_command_execution_wait_loop(self):
+        mock_killpg = self.patch('os.killpg')
+        timeout_exc = TimeoutExpired(None, 1)
+
+        # Simulate Popen.communicate() timing out twice before command completes and returns output.
+        self.mock_popen.communicate.side_effect = [timeout_exc, timeout_exc, (b'fake_output', b'fake_error')]
+        self.mock_popen.returncode = 0
+        self.mock_popen.pid = 55555
+
+        project_type = ProjectType()
+        actual_return_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
+
+        self.assertEqual(mock_killpg.call_count, 0, 'os.killpg should not be called when command exits normally.')
+        self.assertEqual(actual_return_output, 'fake_output\nfake_error', 'Output should contain stdout and stderr.')
 
 
 class _FakeEnvWithoutDefaultArgs(ProjectType):

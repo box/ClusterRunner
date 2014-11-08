@@ -134,6 +134,13 @@ class Docker(ProjectType):
             "{}.timing.json".format(job_name)
         )
 
+    def kill_subprocesses(self):
+        """
+        Signal the environment that any currently running subprocesses should be terminated. This is a no-op for Docker
+        environments since we can just kill the entire container.
+        """
+        pass
+
     def _remove_file_system_unfriendly_characters(self, unescaped_path):
         """
         Escape the string unescaped_path to be POSIX directory format compliant.

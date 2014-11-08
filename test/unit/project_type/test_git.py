@@ -1,3 +1,4 @@
+from unittest.mock import ANY
 import pexpect
 
 from app.project_type.git import Git
@@ -36,10 +37,11 @@ class TestGit(BaseUnitTestCase):
         git_env.execute_command_in_project('some_command')
         project_type_popen_patch.assert_called_once_with(
             'export PROJECT_DIR="proj_dir"; some_command',
-            stderr=-2,
             cwd='proj_dir',
-            shell=True,
-            stdout=-1
+            shell=ANY,
+            stdout=ANY,
+            stderr=ANY,
+            start_new_session=ANY,
         )
 
     def test_execute_command_in_project_type_specifies_cwd_if_doesnt_exist(self):
@@ -54,10 +56,11 @@ class TestGit(BaseUnitTestCase):
         git_env.execute_command_in_project('some_command')
         project_type_popen_patch.assert_called_once_with(
             'export PROJECT_DIR="proj_dir"; some_command',
-            stderr=-2,
             cwd=None,
-            shell=True,
-            stdout=-1
+            shell=ANY,
+            stdout=ANY,
+            stderr=ANY,
+            start_new_session=ANY,
         )
 
     def test_execute_git_remote_command_auto_adds_known_host_if_prompted(self):
