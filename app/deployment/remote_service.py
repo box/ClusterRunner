@@ -27,5 +27,8 @@ class RemoteService(object):
         Stop all clusterrunner services on this machine. This functionality is in the base class because it
         should be common across all possible subclasses.
         """
-        self._shell_client.exec_command('{} stop'.format(self._executable_path), async=False)
+        response = self._shell_client.exec_command('{} stop'.format(self._executable_path), async=False)
 
+        if not response.is_success():
+            self._logger.error('clusterrunner stop failed on host {} with output: {}, error: {}'.format(
+                self.host, response.raw_output, response.raw_error))
