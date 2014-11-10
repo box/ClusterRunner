@@ -10,11 +10,12 @@ class TestGit(BaseUnitTestCase):
 
     def setUp(self):
         self.patch('app.project_type.git.fs.create_dir')
+        self.patch('os.unlink')
         self.patch('os.symlink')
+        super().setUp()
         self.mock_pexpect_child = self.patch('pexpect.spawn').return_value
         self.mock_pexpect_child.before = 'None'
         self.mock_pexpect_child.exitstatus = 0
-        super().setUp()
 
     def test_timing_file_path_happy_path(self):
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')

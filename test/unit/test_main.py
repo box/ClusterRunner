@@ -33,6 +33,7 @@ class TestMain(BaseUnitTestCase):
         self.patch('main.SlaveConfigLoader')
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
         self.patch('app.subcommands.master_subcommand.analytics.initialize')
+        self.patch('argparse._sys.stderr')  # Hack to prevent argparse from printing output during tests.
 
     def test_master_args_correctly_create_cluster_master(self):
         mock_cluster_master = self.mock_ClusterMaster.return_value  # get the mock for the ClusterMaster instance
