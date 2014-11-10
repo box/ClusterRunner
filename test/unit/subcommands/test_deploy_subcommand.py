@@ -23,7 +23,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
-            ['remote_host'], 'username', 'exec', '/path/to/exec', '/path/to/conf')
+            'remote_host', 'username', 'exec', '/path/to/exec', '/path/to/conf')
         self.assertTrue(mock_DeployTarget_instance.deploy_binary.called)
         self.assertTrue(mock_DeployTarget_instance.deploy_conf.called)
 
@@ -33,7 +33,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
-            ['localhost'], 'username', 'exec', '/path/to/exec', '/home/.clusterrunner/clusterrunner.conf')
+            'localhost', 'username', 'exec', '/path/to/exec', '/home/.clusterrunner/clusterrunner.conf')
         self.assertFalse(mock_DeployTarget_instance.deploy_conf.called)
 
     def test_deploy_binaries_and_conf_deploys_conf_if_localhost_with_diff_in_use_conf(self):
@@ -42,7 +42,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
-            ['localhost'],
+            'localhost',
             'username',
             'exec',
             '/path/to/exec',
@@ -56,7 +56,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
-            ['localhost'],
+            'localhost',
             'username',
             '/home/.clusterrunner/dist/clusterrunner_rime',
             '/home/.clusterrunner/clusterrunner.tgz',
@@ -70,7 +70,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
-            ['localhost'],
+            'localhost',
             'username',
             '/home/.clusterrunner/dist/clusterrunner',
             '/home/.clusterrunner/clusterrunner.tgz',
