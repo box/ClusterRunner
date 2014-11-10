@@ -9,7 +9,7 @@ class RemoteMasterService(RemoteService):
     This class serves to start the master service remotely.
     """
     # Number of seconds to wait for master service to respond after starting
-    _MASTER_SERVICE_TIMEOUT_SEC = 10
+    _MASTER_SERVICE_TIMEOUT_SEC = 45
     # The number of times to retry starting the master daemon
     _MASTER_SERVICE_START_RETRIES = 3
 
