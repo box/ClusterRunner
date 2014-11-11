@@ -1,4 +1,5 @@
 import getpass
+from multiprocessing.dummy import Pool
 import os
 from os.path import join
 import requests
@@ -71,7 +72,8 @@ class DeploySubcommand(Subcommand):
         binaries_tar_path = self._binaries_tar(current_executable, Configuration['root_directory'])
 
         self._logger.info('Deploying binaries and confs on master and slaves...')
-        self._deploy_binaries_and_conf(slaves + [master], username, current_executable, binaries_tar_path, conf_path)
+        arguments = [[host, username, current_executable, binaries_tar_path, conf_path] for host in slaves + [master]]
+        Pool().starmap(self._deploy_binaries_and_conf, arguments)
 
         self._logger.info('Stopping and starting all clusterrunner services...')
         self._start_services(master, master_port, slaves, slave_port, num_executors, username, clusterrunner_executable)
@@ -109,12 +111,12 @@ class DeploySubcommand(Subcommand):
         fs.compress_directory(clusterrunner_bin_dir, tar_file_path)
         return tar_file_path
 
-    def _deploy_binaries_and_conf(self, hosts, username, current_executable, binaries_tar_path, in_use_conf_path):
+    def _deploy_binaries_and_conf(self, host, username, current_executable, binaries_tar_path, in_use_conf_path):
         """
-        Move binaries and conf to the appropriate hosts.
+        Move binaries and conf to single host.
 
-        :param hosts: hosts to deploy to
-        :type hosts: list[str]
+        :param host: host to deploy to
+        :type host: str
         :param username: current username
         :param current_executable: path to the executable (ie: /usr/bin/python, ./clusterrunner, etc)
         :type current_executable: str
@@ -127,21 +129,19 @@ class DeploySubcommand(Subcommand):
         clusterrunner_executable_dir = join(clusterrunner_dir, 'dist')
         clusterrunner_executable_deploy_target = join(clusterrunner_executable_dir, 'clusterrunner')
         clusterrunner_conf_deploy_target = join(clusterrunner_dir, 'clusterrunner.conf')
+        deploy_target = DeployTarget(host, username)
 
-        # @TODO: Do this async/concurrently in order to improve runtime
-        for host in hosts:
-            deploy_target = DeployTarget(host, username)
-            if Network.are_hosts_same(host, 'localhost'):
-                # Do not want to overwrite the currently running executable.
-                if current_executable != clusterrunner_executable_deploy_target:
-                    deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
-
-                # Do not want to overwrite the currently used conf.
-                if in_use_conf_path != clusterrunner_conf_deploy_target:
-                    deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
-            else:
+        if Network.are_hosts_same(host, 'localhost'):
+            # Do not want to overwrite the currently running executable.
+            if current_executable != clusterrunner_executable_deploy_target:
                 deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
+
+            # Do not want to overwrite the currently used conf.
+            if in_use_conf_path != clusterrunner_conf_deploy_target:
                 deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
+        else:
+            deploy_target.deploy_binary(binaries_tar_path, clusterrunner_executable_dir)
+            deploy_target.deploy_conf(in_use_conf_path, clusterrunner_conf_deploy_target)
 
     def _start_services(self, master, master_port, slaves, slave_port, num_executors, username, clusterrunner_executable):
         """
@@ -165,13 +165,9 @@ class DeploySubcommand(Subcommand):
         # We want to stop slave services before the master service, as that is a more graceful shutdown and also
         # reduces the risk of a race condition where the slave service sends a slave-shutdown request to the master
         # after the new master service starts.
-        slave_services = []
-
-        for slave in slaves:
-            self._logger.debug('Stopping slave service on {}...'.format(slave))
-            slave_service = RemoteSlaveService(slave, username, clusterrunner_executable)
-            slave_service.stop()
-            slave_services.append(slave_service)
+        self._logger.debug('Stopping all slave services')
+        slave_services = [RemoteSlaveService(slave, username, clusterrunner_executable) for slave in slaves]
+        Pool().starmap(lambda slave_service: slave_service.stop(), slave_services)
 
         self._logger.debug('Stopping master service on {}...'.format(master))
         master_service = RemoteMasterService(master, username, clusterrunner_executable)
