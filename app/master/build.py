@@ -112,6 +112,8 @@ class Build(object):
         slave.setup(self.build_id(), project_type_params=self.build_request.build_parameters())
 
         for _ in range(slave.num_executors):
+            if self._num_allocated_executors >= self._max_executors:
+                break
             slave.claim_executor()
             self._num_allocated_executors += 1
             self.execute_next_subjob_on_slave(slave)
