@@ -20,8 +20,8 @@ class TestMain(BaseUnitTestCase):
     _PROJECT_DIRECTORY = 'workspace'
 
     def setUp(self):
-        self.patch('app.util.fs.write_file')
         super().setUp()
+        self.patch('app.util.fs.write_file')
         self.mock_tornado = self.patch('app.subcommands.service_subcommand.tornado')
         self.mock_ClusterMaster = self.patch('app.subcommands.master_subcommand.ClusterMaster')
         self.mock_ClusterSlave = self.patch('app.subcommands.slave_subcommand.ClusterSlave')

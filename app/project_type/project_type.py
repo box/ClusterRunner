@@ -207,7 +207,7 @@ class ProjectType(object):
             # will kill only "sh" and not its child processes.
             self._logger.warning('Terminating PID: {}, Command: "{}"', pipe.pid, command)
             try:
-                os.killpg(pipe.pid, signal.SIGTERM)
+                os.killpg(pgid=pipe.pid, sig=signal.SIGTERM)
             except (PermissionError, ProcessLookupError) as ex:  # os.killpg will raise if process has already ended
                 self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: {}.',
                                      pipe.pid, type(ex).__name__, ex)

@@ -18,6 +18,9 @@ class BaseUnitTestCase(TestCase):
 
     def setUp(self):
         super().setUp()
+        self.addCleanup(patch.stopall)
+
+        self._repatchable_items = {}
         self._blacklist_methods_not_allowed_in_unit_tests()
 
         # Stub out a few library dependencies that launch subprocesses.
@@ -64,7 +67,7 @@ class BaseUnitTestCase(TestCase):
             while True:
                 logbook.Handler.stack_manager.pop_application()
 
-    def patch(self, target, **kwargs):
+    def patch(self, target, allow_repatch=False, **kwargs):
         """
         Replaces the specified target with a mock. This is a convenience method on top of unittest.mock.patch.
         This defaults the 'autospec' parameter to True to verify that mock interfaces match the interface of the target.
@@ -72,6 +75,9 @@ class BaseUnitTestCase(TestCase):
 
         :param target: The item (object, method, etc.) to replace with a mock. (See docs for unittest.mock.patch.)
         :type target: str
+        :param allow_repatch: Whether or not the specified target can be patched again -- this is most useful for
+            blacklisted unit test methods: test writers must repatch any blacklisted methods in their test.
+        :type allow_repatch:
         :param kwargs: Additional arguments to be passed to unittest.mock.patch
         :type kwargs: dict
         :return: The mock object that target has been replaced with
@@ -82,12 +88,16 @@ class BaseUnitTestCase(TestCase):
             kwargs.setdefault('autospec', True)
 
         patcher = patch(target, **kwargs)
+        item_to_patch, _ = patcher.get_original()
+
+        # If the item to be patched is already patched and is repatchable, reset it so we can call patch on it again.
+        if item_to_patch in self._repatchable_items:
+            self._repatchable_items.pop(item_to_patch).stop()
 
         # Check to see if this target has already been patched. Usually if `target` has already been patched, the
         # patcher.start() method will raise a TypeError anyway, but there are certain cases where this doesn't happen
         # reliably (e.g., 'os.unlink') so this check is an attempt to make that detection reliable.
-        item_to_patch, _ = patcher.get_original()
-        if isinstance(item_to_patch, NonCallableMock):
+        elif isinstance(item_to_patch, NonCallableMock):
             raise UnitTestPatchError('Target "{}" is already a mock. Has this target already been patched either in '
                                      'this class ({}) or in BaseUnitTestCase?'.format(target, self.__class__.__name__))
         try:
@@ -95,8 +105,9 @@ class BaseUnitTestCase(TestCase):
         except TypeError as ex:
             raise UnitTestPatchError('Could not patch "{}". Has this target already been patched either in this class '
                                      '({}) or in BaseUnitTestCase?'.format(target, self.__class__.__name__)) from ex
+        if allow_repatch:
+            self._repatchable_items[mock] = patcher
 
-        self.addCleanup(patcher.stop)
         return mock
 
     def patch_abspath(self, abspath_target, cwd='/my_current_directory/'):
@@ -126,8 +137,6 @@ class BaseUnitTestCase(TestCase):
         and helps them to find the right place to mock out dependencies.
 
         If you encounter a UnitTestDisabledMethodError, examine the stack trace to find the appropriate place to mock.
-        To explicitly patch one of the methods in this list, do the patch in your test class's setUp() before calling
-        super().setUp().
         """
         blacklisted_methods = {
             'filesystem side effects': [
@@ -157,7 +166,7 @@ class BaseUnitTestCase(TestCase):
 
     def _blackist_target(self, patch_target, disabled_reason):
         message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(patch_target, disabled_reason)
-        self.patch(patch_target, side_effect=[UnitTestDisabledMethodError(message)])
+        self.patch(patch_target, allow_repatch=True, side_effect=[UnitTestDisabledMethodError(message)])
 
 
 class UnitTestDisabledMethodError(Exception):

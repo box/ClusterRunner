@@ -10,10 +10,9 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestClusterMaster(BaseUnitTestCase):
 
     def setUp(self):
+        super().setUp()
         self.patch('app.util.fs.create_dir')
         self.patch('shutil.rmtree')
-        super().setUp()
-        self.patch('app.master.build.app.util')  # stub out util functions since these often interact with the fs
 
     def test_add_idle_slave_marks_build_finished_when_slaves_are_done(self):
         master = ClusterMaster()
