@@ -167,7 +167,7 @@ class DeploySubcommand(Subcommand):
         # after the new master service starts.
         self._logger.debug('Stopping all slave services')
         slave_services = [RemoteSlaveService(slave, username, clusterrunner_executable) for slave in slaves]
-        Pool().starmap(lambda slave_service: slave_service.stop(), slave_services)
+        Pool().map(lambda slave_service: slave_service.stop(), slave_services)
 
         self._logger.debug('Stopping master service on {}...'.format(master))
         master_service = RemoteMasterService(master, username, clusterrunner_executable)
