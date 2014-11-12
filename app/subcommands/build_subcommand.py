@@ -41,7 +41,7 @@ class BuildSubcommand(Subcommand):
         if master_url is None and Network.are_hosts_same(Configuration['master_hostname'], 'localhost') \
                 and len(Configuration['slaves']) == 1 \
                 and Network.are_hosts_same(Configuration['slaves'][0], 'localhost'):
-            self._start_local_services(operational_master_url)
+            self._start_local_services_if_needed(operational_master_url)
 
         if request_params['type'] == 'directory':
             request_params['project_directory'] = request_params.get('project_directory') or os.getcwd()
@@ -51,19 +51,21 @@ class BuildSubcommand(Subcommand):
         if not runner.run():
             sys.exit(1)
 
-    def _start_local_services(self, master_url):
+    def _start_local_services_if_needed(self, master_url):
         """
         In the case that:
 
         - the master url is localhost
         - the slaves list is just localhost
 
-        Start a master and slave service instance locally.
+        Start a master and slave service instance locally, if the master is not already running.
 
         :param master_url: service url (with port number)
         :type master_url: str
         """
         service_runner = ServiceRunner(master_url)
+        if service_runner.is_master_up():
+            return
         try:
             service_runner.run_master()
             service_runner.run_slave()
