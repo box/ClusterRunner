@@ -115,7 +115,7 @@ class TestProjectType(BaseUnitTestCase):
                 mock_killpg()  # Calling killpg() causes the command thread to end.
                 self.fail('project_type.kill_subprocesses should cause the command execution wait loop to exit.')
 
-        mock_killpg.assert_called_once_with(pgid=55555, sig=ANY)
+        mock_killpg.assert_called_once_with(55555, ANY)  # Note: os.killpg does not accept keyword args.
 
     def test_command_exiting_normally_will_break_out_of_command_execution_wait_loop(self):
         mock_killpg = self.patch('os.killpg')
