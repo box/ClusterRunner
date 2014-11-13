@@ -9,6 +9,7 @@ from app.util import analytics, log, util
 from app.util.exceptions import BadRequestError
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
+from app.util.single_use_coin import SingleUseCoin
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from app.util.url_builder import UrlBuilder
 
@@ -47,6 +48,7 @@ class ClusterSlave(object):
 
         self._project_type = None  # this will be instantiated during build setup
         self._current_build_id = None
+        self._build_teardown_coin = None
 
     def api_representation(self):
         """
@@ -85,6 +87,7 @@ class ClusterSlave(object):
         self._logger.info('Executing setup for build {} (type: {}).', build_id, project_type_params.get('type'))
         self._setup_complete_event.clear()
         self._current_build_id = build_id
+        self._build_teardown_coin = SingleUseCoin()  # protects against build_teardown being executed multiple times
 
         # create an project_type instance for build-level operations
         self._project_type = util.create_project_type(project_type_params)
@@ -150,18 +153,23 @@ class ClusterSlave(object):
         :param timeout: A maximum time in seconds to allow the teardown process to run before killing
         :type timeout: int | None
         """
-        self._logger.info('Executing teardown for build {}.', self._current_build_id)
 
         # Kill all subjob executors' processes. This only has an effect if we are tearing down before a build completes.
         for executor in self.executors_by_id.values():
             executor.kill()
 
-        if self._project_type:
-            # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
-            self._project_type.teardown_build(timeout=timeout)
-            self._logger.info('Build teardown complete for build {}.', self._current_build_id)
-            self._current_build_id = None
-            self._project_type = None
+        if not self._project_type:
+            return  # There is no build to tear down! (Slave is idle.)
+
+        if not self._build_teardown_coin.spend():
+            raise BuildTeardownError('Build teardown process was requested more than once for the same build.')
+
+        self._logger.info('Executing teardown for build {}.', self._current_build_id)
+        # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
+        self._project_type.teardown_build(timeout=timeout)
+        self._logger.info('Build teardown complete for build {}.', self._current_build_id)
+        self._current_build_id = None
+        self._project_type = None
 
     def _send_master_idle_notification(self):
         if not self._is_master_responsive():
@@ -173,7 +181,8 @@ class ClusterSlave(object):
         idle_url = self._master_api.url('slave', self._slave_id, 'idle')
         response = self._network.post(idle_url)
         if response.status_code != http.client.OK:
-            raise RuntimeError('Could not post teardown completion to master <{}>'.format(idle_url))
+            raise RuntimeError('Error during post of idle notification to master <{}>. (Response code: {})'
+                               .format(idle_url, response.status_code))
 
     def _send_master_disconnect_notification(self):
         if not self._is_master_responsive():
@@ -293,3 +302,7 @@ class ClusterSlave(object):
     def kill(self):
         # TODO(dtran): Kill the threads and this server more gracefully
         sys.exit(0)
+
+
+class BuildTeardownError(Exception):
+    pass

@@ -15,12 +15,13 @@ class BaseUnitTestCase(TestCase):
     _base_setup_called = False
     # This allows test classes (e.g., TestNetwork) to disable network-related patches for testing the patched code.
     _do_network_mocks = True
+    _repatchable_items = {}
 
     def setUp(self):
         super().setUp()
         self.addCleanup(patch.stopall)
 
-        self._repatchable_items = {}
+        self._repatchable_items = {}  # Reset this at the start of each test.
         self._blacklist_methods_not_allowed_in_unit_tests()
 
         # Stub out a few library dependencies that launch subprocesses.
@@ -136,7 +137,7 @@ class BaseUnitTestCase(TestCase):
         exception is raised in any of the teardown handlers.
         """
         with UnhandledExceptionHandler.singleton():
-            raise _TriggerGracefulShutdown
+            raise _GracefulShutdownTrigger
 
     def _blacklist_methods_not_allowed_in_unit_tests(self):
         """
@@ -186,7 +187,7 @@ class UnitTestPatchError(Exception):
     pass
 
 
-class _TriggerGracefulShutdown(BaseException):
+class _GracefulShutdownTrigger(BaseException):
     """
     This is a dummy exception used only for triggering the graceful shutdown (running teardown callbacks registered
     with UnhandledExceptionHandler) during a test. This inherits from BaseException to prevent UnhandledExceptionHandler
