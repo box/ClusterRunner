@@ -120,6 +120,7 @@ class TestMain(BaseUnitTestCase):
 
     def test_single_machine_case_runs_master_and_slave(self):
         mock_service_runner = self.mock_ServiceRunner.return_value
+        mock_service_runner.is_master_up.return_value = False
         build_args = ['build']
 
         main.main(build_args)

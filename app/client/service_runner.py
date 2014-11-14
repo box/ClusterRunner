@@ -31,7 +31,7 @@ class ServiceRunner(object):
         :return:
         """
         self._logger.info('Running master on {}'.format(self._master_url))
-        if self.is_up(self._master_url):
+        if self.is_master_up():
             return
         cmd = '{} master --port {} &'.format(
             self._main_executable,
@@ -101,6 +101,13 @@ class ServiceRunner(object):
         Popen(cmd, stdout=DEVNULL, shell=True)
         if service_url is not None and not self.is_up(service_url, timeout=10):
             raise ServiceRunError("Failed to run service on {}.".format(service_url))
+
+    def is_master_up(self):
+        """
+        Checks if the master is up
+        :rtype: bool
+        """
+        return self.is_up(self._master_url)
 
     def is_up(self, service_url, timeout=0.1):
         """
