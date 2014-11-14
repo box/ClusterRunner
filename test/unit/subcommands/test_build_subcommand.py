@@ -14,6 +14,7 @@ class TestBuildSubcommand(BaseUnitTestCase):
         self.mock_ServiceRunner_instance = mock_ServiceRunner.return_value
         self.mock_ServiceRunner_instance.run_master.return_value = None
         self.mock_ServiceRunner_instance.run_slave.return_value = None
+        self.mock_ServiceRunner_instance.is_master_up.return_value = False
 
     def test_run_starts_services_locally_if_conditions_match(self):
         """
@@ -26,6 +27,13 @@ class TestBuildSubcommand(BaseUnitTestCase):
         build_subcommand.run(None, None)
         self.mock_ServiceRunner_instance.run_master.assert_called_with()
         self.mock_ServiceRunner_instance.run_slave.assert_called_with()
+
+    def test_run_doesnt_start_services_locally_if_master_is_already_up(self):
+        self.mock_ServiceRunner_instance.is_master_up.return_value = True
+        build_subcommand = BuildSubcommand()
+        build_subcommand.run(None, None)
+        self.assertFalse(self.mock_ServiceRunner_instance.run_master.called)
+        self.assertFalse(self.mock_ServiceRunner_instance.run_slave.called)
 
     def test_run_doesnt_start_services_locally_if_configured_master_hostname_isnt_localhost(self):
         Configuration['master_hostname'] = 'some_automation_host.pod.box.net:430000'
