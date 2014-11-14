@@ -38,6 +38,19 @@ class TestBuild(BaseUnitTestCase):
         # assert
         mock_slave.setup.assert_called_once_with(build.build_id(), project_type_params={'setup': fake_setup_command})
 
+    def test_allocate_slave_doesnt_use_more_than_max_executors(self):
+        subjobs = self._create_subjobs()
+
+        mock_project_type = self._create_mock_project_type()
+        fake_setup_command = 'mock command'
+        mock_slave = self._create_mock_slave()
+
+        build = Build(BuildRequest({'setup': fake_setup_command}))
+        build.prepare(subjobs, mock_project_type, self._create_job_config(1))
+        build.allocate_slave(mock_slave)
+
+        self.assertEqual(build._num_allocated_executors, build._max_executors)
+
     def test_build_status_returns_requested_after_build_creation(self):
         build = Build(BuildRequest({}))
         status = build._status()
