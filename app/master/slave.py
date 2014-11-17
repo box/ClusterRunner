@@ -1,5 +1,4 @@
-import app.master.cluster_master
-from app.util import analytics
+from app.util import analytics, log
 from app.util.counter import Counter
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
@@ -9,6 +8,7 @@ from app.util.url_builder import UrlBuilder
 
 class Slave(object):
 
+    API_VERSION = 'v1'
     _slave_id_counter = Counter()
 
     def __init__(self, slave_url, num_executors):
@@ -23,7 +23,8 @@ class Slave(object):
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
         self.is_alive = True
-        self._slave_api = UrlBuilder(slave_url, app.master.cluster_master.ClusterMaster.API_VERSION)
+        self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
+        self._logger = log.get_logger(__name__)
 
     def api_representation(self):
         return {
@@ -65,8 +66,11 @@ class Slave(object):
         """
         Tell the slave to run the build teardown
         """
-        teardown_url = self._slave_api.url('build', self.current_build_id, 'teardown')
-        self._network.post(teardown_url)
+        if self.is_alive:
+            teardown_url = self._slave_api.url('build', self.current_build_id, 'teardown')
+            self._network.post(teardown_url)
+        else:
+            self._logger.notice('Teardown request to slave {} was not sent since slave is disconnected.', self.url)
 
     def start_subjob(self, subjob):
         """

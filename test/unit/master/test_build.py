@@ -5,8 +5,6 @@ from app.project_type.project_type import ProjectType
 from app.master.build import Build, BuildStatus
 from app.master.build_request import BuildRequest
 from app.master.job_config import JobConfig
-# TODO(dtran): Fix circular import issues that require lines like this to exist (ClusterMaster imports Slave imports ClusterMaster...)
-import app.master.cluster_master
 from app.master.slave import Slave
 from app.master.subjob import Subjob
 from app.util import poll
