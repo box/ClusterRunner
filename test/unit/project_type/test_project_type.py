@@ -15,6 +15,7 @@ class TestProjectType(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.mock_popen = self.patch('app.project_type.project_type.Popen').return_value
+        self.mock_killpg = self.patch('os.killpg')
 
     def test_required_constructor_args_are_correctly_detected_without_defaults(self):
         actual_required_args = _FakeEnvWithoutDefaultArgs.required_constructor_argument_names()
@@ -58,7 +59,7 @@ class TestProjectType(BaseUnitTestCase):
 
         project_type.teardown_build()
 
-        project_type.execute_command_in_project.assert_called_with('teardown')
+        project_type.execute_command_in_project.assert_called_with('teardown', timeout=None)
 
     def test_execute_command_in_project_does_not_choke_on_weird_command_output(self):
         some_weird_output = b'\xbf\xe2\x98\x82'  # the byte \xbf is invalid unicode
@@ -85,19 +86,8 @@ class TestProjectType(BaseUnitTestCase):
             self.assertEqual(arg_name in arg_mapping, expected)
 
     def test_calling_kill_subprocesses_will_break_out_of_command_execution_wait_loop(self):
+        self._mock_out_popen_communicate()
 
-        def fake_communicate(timeout=None):
-            # The fake implementation is that communicate() times out forever until os.killpg is called.
-            if mock_killpg.call_count == 0 and timeout is not None:
-                raise TimeoutExpired(None, timeout)
-            elif mock_killpg.call_count > 0:
-                return b'fake output', b'fake error'
-            self.fail('Popen.communicate() should not be called without a timeout before os.killpg has been called.')
-
-        mock_killpg = self.patch('os.killpg')
-        self.mock_popen.communicate.side_effect = fake_communicate
-        self.mock_popen.returncode = 1
-        self.mock_popen.pid = 55555
         project_type = ProjectType()
         command_thread = SafeThread(target=project_type.execute_command_in_project, args=('echo The power is yours!',))
 
@@ -112,25 +102,70 @@ class TestProjectType(BaseUnitTestCase):
         with UnhandledExceptionHandler.singleton():
             command_thread.join(timeout=10)
             if command_thread.is_alive():
-                mock_killpg()  # Calling killpg() causes the command thread to end.
+                self.mock_killpg()  # Calling killpg() causes the command thread to end.
                 self.fail('project_type.kill_subprocesses should cause the command execution wait loop to exit.')
 
-        mock_killpg.assert_called_once_with(55555, ANY)  # Note: os.killpg does not accept keyword args.
+        self.mock_killpg.assert_called_once_with(55555, ANY)  # Note: os.killpg does not accept keyword args.
 
     def test_command_exiting_normally_will_break_out_of_command_execution_wait_loop(self):
-        mock_killpg = self.patch('os.killpg')
-        timeout_exc = TimeoutExpired(None, 1)
-
         # Simulate Popen.communicate() timing out twice before command completes and returns output.
+        timeout_exc = TimeoutExpired(None, 1)
         self.mock_popen.communicate.side_effect = [timeout_exc, timeout_exc, (b'fake_output', b'fake_error')]
         self.mock_popen.returncode = 0
         self.mock_popen.pid = 55555
 
         project_type = ProjectType()
-        actual_return_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
+        actual_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
 
-        self.assertEqual(mock_killpg.call_count, 0, 'os.killpg should not be called when command exits normally.')
-        self.assertEqual(actual_return_output, 'fake_output\nfake_error', 'Output should contain stdout and stderr.')
+        self.assertEqual(self.mock_killpg.call_count, 0, 'os.killpg should not be called when command exits normally.')
+        self.assertEqual(actual_output, 'fake_output\nfake_error', 'Output should contain stdout and stderr.')
+
+    def test_timing_out_will_break_out_of_command_execution_wait_loop_and_kill_subprocesses(self):
+        mock_time = self.patch('time.time')
+        mock_time.side_effect = [0.0, 100.0, 200.0, 300.0]  # time increases by 100 seconds with each loop
+        self._mock_out_popen_communicate()
+        project_type = ProjectType()
+
+        actual_output, actual_return_code = project_type.execute_command_in_project(
+            command='sleep 99',
+            timeout=250,
+        )
+
+        self.assertEqual(self.mock_killpg.call_count, 1, 'os.killpg should be called when execution times out.')
+        self.assertEqual(actual_output, 'fake output\nfake error', 'Output should contain stdout and stderr.')
+
+    @genty_dataset(
+        with_specified_timeout=(30,),
+        with_no_timeout=(None,),
+    )
+    def test_teardown_build_executes_teardown_command(self, expected_timeout):
+        project_type = ProjectType()
+        mock_execute = MagicMock(return_value=('fake output', 0))
+        project_type.execute_command_in_project = mock_execute
+        project_type.job_config = MagicMock()
+
+        if expected_timeout:
+            project_type.teardown_build(timeout=expected_timeout)
+        else:
+            project_type.teardown_build()
+
+        mock_execute.assert_called_once_with(ANY, timeout=expected_timeout)
+
+    def _mock_out_popen_communicate(self):
+        """
+        Replace the Popen.communicate() call with a fake implementation.
+        """
+        def fake_communicate(timeout=None):
+            # The fake implementation is that communicate() times out forever until os.killpg is called.
+            if self.mock_killpg.call_count == 0 and timeout is not None:
+                raise TimeoutExpired(None, timeout)
+            elif self.mock_killpg.call_count > 0:
+                return b'fake output', b'fake error'
+            self.fail('Popen.communicate() should not be called without a timeout before os.killpg has been called.')
+
+        self.mock_popen.communicate.side_effect = fake_communicate
+        self.mock_popen.returncode = 1
+        self.mock_popen.pid = 55555
 
 
 class _FakeEnvWithoutDefaultArgs(ProjectType):

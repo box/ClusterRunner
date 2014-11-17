@@ -115,14 +115,14 @@ class _SubjobHandler(_ClusterSlaveBaseHandler):
 class _ExecutorsHandler(_ClusterSlaveBaseHandler):
     def get(self):
         response = {
-            'executors': [executor.api_representation() for executor in self._cluster_slave.executors.values()]
+            'executors': [executor.api_representation() for executor in self._cluster_slave.executors_by_id.values()]
         }
         self.write(response)
 
 
 class _ExecutorHandler(_ClusterSlaveBaseHandler):
     def get(self, executor_id):
-        executor = self._cluster_slave.executors[int(executor_id)]
+        executor = self._cluster_slave.executors_by_id[int(executor_id)]
         response = {
             'executor': executor.api_representation()
         }

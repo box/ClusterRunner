@@ -38,7 +38,7 @@ class TestUnhandledExceptionHandler(BaseUnitTestCase):
 
         self.assertEqual(an_evil_callback.call_count, 1, 'A teardown callback should be executed once.')
         callback_exception_was_logged = self.log_handler.has_error(
-            AnyStringMatching('Teardown callback .* raised exception.')
+            AnyStringMatching('Exception raised by teardown callback.*')
         )
         self.assertTrue(callback_exception_was_logged, 'Exception handler should log teardown callback exceptions.')
 

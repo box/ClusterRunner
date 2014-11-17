@@ -34,11 +34,11 @@ class ClusterSlave(object):
         self._logger = log.get_logger(__name__)
 
         self._idle_executors = Queue(maxsize=num_executors)
-        self.executors = {}
+        self.executors_by_id = {}
         for executor_id in range(num_executors):
             executor = SubjobExecutor(executor_id)
             self._idle_executors.put(executor)
-            self.executors[executor_id] = executor
+            self.executors_by_id[executor_id] = executor
 
         self._setup_complete_event = Event()
         self._master_url = None
@@ -48,15 +48,12 @@ class ClusterSlave(object):
         self._project_type = None  # this will be instantiated during build setup
         self._current_build_id = None
 
-        UnhandledExceptionHandler.singleton().add_teardown_callback(self._async_teardown_build,
-                                                                    should_disconnect_from_master=True)
-
     def api_representation(self):
         """
         Gets a dict representing this resource which can be returned in an API response.
         :rtype: dict [str, mixed]
         """
-        executors_representation = [executor.api_representation() for executor in self.executors.values()]
+        executors_representation = [executor.api_representation() for executor in self.executors_by_id.values()]
         return {
             'connected': str(self._is_connected()),
             'master_url': self._master_url,
@@ -100,7 +97,11 @@ class ClusterSlave(object):
         # Collect all the executors to pass to project_type.setup_build(). This will create a new project_type for
         # each executor (for subjob-level operations).
         executors = list(self._idle_executors.queue)
-        SafeThread(target=self._async_setup_build, args=(executors, project_type_params)).start()
+        SafeThread(
+            target=self._async_setup_build,
+            name='Bld{}-Setup'.format(build_id),
+            args=(executors, project_type_params)
+        ).start()
 
     def _async_setup_build(self, executors, project_type_params):
         """
@@ -128,48 +129,71 @@ class ClusterSlave(object):
         if build_id is not None and build_id != self._current_build_id:
             raise BadRequestError('Tried to teardown build {}, '
                                   'but slave is running build {}!'.format(build_id, self._current_build_id))
+        SafeThread(
+            target=self._async_teardown_build,
+            name='Bld{}-Teardwn'.format(build_id)
+        ).start()
 
-        self._logger.info('Executing teardown for build {}.', self._current_build_id)
-
-        SafeThread(target=self._async_teardown_build).start()
-
-    def _async_teardown_build(self, should_disconnect_from_master=False):
+    def _async_teardown_build(self):
         """
         Called from teardown_build(). Do asynchronous teardown for the build so that we can make the call to
         teardown_build() non-blocking. Also take care of posting back to the master when teardown is complete.
         """
-        # Kill all executors' processes. This only has an effect if we are tearing down before a build completes.
-        for executor in self.executors.values():
+        self._do_build_teardown_and_reset()
+        self._send_master_idle_notification()
+
+    def _do_build_teardown_and_reset(self, timeout=None):
+        """
+        Kill any currently running subjobs. Run the teardown_build commands for the current build (with an optional
+        timeout). Clear attributes related to the currently running build.
+
+        :param timeout: A maximum time in seconds to allow the teardown process to run before killing
+        :type timeout: int | None
+        """
+        self._logger.info('Executing teardown for build {}.', self._current_build_id)
+
+        # Kill all subjob executors' processes. This only has an effect if we are tearing down before a build completes.
+        for executor in self.executors_by_id.values():
             executor.kill()
 
         if self._project_type:
-            self._project_type.teardown_build()
+            # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
+            self._project_type.teardown_build(timeout=timeout)
             self._logger.info('Build teardown complete for build {}.', self._current_build_id)
             self._current_build_id = None
             self._project_type = None
 
-        if not should_disconnect_from_master:
-            # report back to master that this slave is finished with teardown and ready for a new build
-            self._logger.info('Notifying master that this slave is ready for new builds.')
-            idle_url = self._master_api.url('slave', self._slave_id, 'idle')
-            response = self._network.post(idle_url)
-            if response.status_code != http.client.OK:
-                raise RuntimeError("Could not post teardown completion to master at {}".format(idle_url))
+    def _send_master_idle_notification(self):
+        if not self._is_master_responsive():
+            self._logger.notice('Could not post idle notification to master because master is unresponsive.')
+            return
 
-        elif self._is_master_responsive():
-            # report back to master that this slave is shutting down and should not receive new builds
-            self._logger.info('Notifying master to disconnect this slave.')
-            disconnect_url = self._master_api.url('slave', self._slave_id, 'disconnect')
-            response = self._network.post(disconnect_url)
-            if response.status_code != http.client.OK:
-                self._logger.error('Could not post disconnect notification to master at {}'.format(disconnect_url))
+        # Report back to master that this slave is finished with teardown and ready for a new build
+        self._logger.info('Notifying master that this slave is ready for new builds.')
+        idle_url = self._master_api.url('slave', self._slave_id, 'idle')
+        response = self._network.post(idle_url)
+        if response.status_code != http.client.OK:
+            raise RuntimeError('Could not post teardown completion to master <{}>'.format(idle_url))
+
+    def _send_master_disconnect_notification(self):
+        if not self._is_master_responsive():
+            self._logger.notice('Could not post disconnect notification to master because master is unresponsive.')
+            return
+
+        # Report back to master that this slave is shutting down and should not receive new builds
+        self._logger.info('Notifying master to disconnect this slave.')
+        disconnect_url = self._master_api.url('slave', self._slave_id, 'disconnect')
+        response = self._network.post(disconnect_url)
+        if response.status_code != http.client.OK:
+            self._logger.error('Disconnect notification to master <{}> failed with response code '
+                               '{}.'.format(disconnect_url, response.status_code))
 
     def connect_to_master(self, master_url=None):
         """
         Notify the master that this slave exists.
 
         :param master_url: The URL of the master service. If none specified, defaults to localhost:43000.
-        :type master_url: str
+        :type master_url: str | None
         """
         self._master_url = master_url or 'localhost:43000'
         self._master_api = UrlBuilder(self._master_url)
@@ -181,6 +205,11 @@ class ClusterSlave(object):
         response = self._network.post(connect_url, data)
         self._slave_id = int(response.json().get('slave_id'))
         self._logger.info('Slave {}:{} connected to master on {}.', self.host, self.port, self._master_url)
+
+        # We disconnect from the master before build_teardown so that the master stops sending subjobs. (Teardown
+        # callbacks are executed in the reverse order that they're added, so we add the build_teardown callback first.)
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self._do_build_teardown_and_reset, timeout=30)
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self._send_master_disconnect_notification)
 
     def _is_master_responsive(self):
         """
@@ -223,7 +252,7 @@ class ClusterSlave(object):
         SafeThread(
             target=self._execute_subjob,
             args=(build_id, subjob_id, executor, subjob_artifact_dir, atomic_commands),
-            name='Build{}-Sub{}'.format(build_id, subjob_id),
+            name='Bld{}-Sub{}'.format(build_id, subjob_id),
         ).start()
 
         self._logger.info('Slave ({}:{}) has received subjob. (Build {}, Subjob {})', self.host, self.port, build_id,
