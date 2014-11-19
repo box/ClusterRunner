@@ -35,7 +35,7 @@ class FunctionalTestCluster(object):
         self._slave_eventlog_names = []
         self._next_slave_port = self._SLAVE_START_PORT
 
-        clusterrunner_repo_dir = dirname(dirname(dirname(realpath(__file__))))
+        clusterrunner_repo_dir = dirname(dirname(dirname(dirname(realpath(__file__)))))
         self._app_executable = join(clusterrunner_repo_dir, 'main.py')
 
     def start_master(self):
