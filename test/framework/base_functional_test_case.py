@@ -9,6 +9,7 @@ from app.util import log
 from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
 from app.util.secret import Secret
+from test.framework.functional.fs_item import Directory
 from test.framework.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
 
 
@@ -128,39 +129,6 @@ class BaseFunctionalTestCase(TestCase):
         }
         self.assert_build_status_contains_expected_data(build_id, expected_failure_build_params)
 
-    def assert_atom_dir_file_contents_match_expected(self, build_id, subjob_id, atom_id, expected_atom_files_contents):
-        """
-        Assert that contents of files in the artifact directory for the specified atom match the expected contents.
-
-        :param build_id: The id of the build whose files to check
-        :type build_id: int
-        :param subjob_id: The id of the subjob whose files to check
-        :type subjob_id: int
-        :param atom_id: The id of the atom whose files to check
-        :type atom_id: int
-        :param expected_atom_files_contents: A mapping of filename to expected file contents string; the file with the
-            specified name is expected to be in the atom artifact directory for the specified atom.
-        :type expected_atom_files_contents: dict[str, str]
-        """
-        # Note that we construct the artifact file path manually instead of getting it from the config classes.
-        # This is intentional because the config classes are part of the system under test.
-        atom_artifact_dir_relpath = os.path.join('results', 'master', str(build_id),
-                                                 'artifact_{}_{}'.format(subjob_id, atom_id))
-        atom_artifact_dir_abspath = os.path.join(self.test_app_base_dir.name, atom_artifact_dir_relpath)
-        atom_artifact_dir_contents = os.listdir(atom_artifact_dir_abspath)
-
-        for filename, expected_file_contents in expected_atom_files_contents.items():
-            expected_atom_file_path = os.path.join(atom_artifact_dir_abspath, filename)
-            self.assertTrue(
-                os.path.isfile(expected_atom_file_path),
-                'A file named "{}" is expected to exist in the results directory at "{}". Actual contents of this '
-                'directory are: {}.'.format(filename, atom_artifact_dir_relpath, atom_artifact_dir_contents))
-            with open(expected_atom_file_path) as f:
-                actual_file_contents = f.read()
-            self.assertEqual(actual_file_contents, expected_file_contents,
-                             'The contents of the file named "{}" in the artifact directory "{}" should match the '
-                             'expected contents.'.format(filename, atom_artifact_dir_relpath))
-
     def assert_build_artifact_contents_match_expected(self, build_id, expected_build_artifact_contents):
         """
         Assert that artifact files for this build have the expected contents.
@@ -171,9 +139,8 @@ class BaseFunctionalTestCase(TestCase):
             string; the outer list corresponds to subjob ids, the inner list corresponds to atom ids, and the dict
             should be a mapping of filenames to expected file contents for the corresponding atom. See the configs in
             functional_test_job_configs.py for examples.
-        :type expected_build_artifact_contents: list[list[dict[str, str]]]
+        :type expected_build_artifact_contents: list[FSItem]
         """
-        for subjob_id, expected_subjob_files_contents in enumerate(expected_build_artifact_contents):
-            for atom_id, expected_atom_files_contents in enumerate(expected_subjob_files_contents):
-                self.assert_atom_dir_file_contents_match_expected(build_id, subjob_id, atom_id,
-                                                                  expected_atom_files_contents)
+        build_artifacts_dir = os.path.join(self.test_app_base_dir.name, 'results', 'master', str(build_id))
+        expected_build_artifacts = Directory(str(build_id), expected_build_artifact_contents)
+        expected_build_artifacts.assert_matches_path(build_artifacts_dir, allow_extra_items=False)
