@@ -7,7 +7,7 @@ import os
 import sys
 from termcolor import colored
 
-from app.util import fs
+from app.util import autoversioning, fs
 from app.util.conf.configuration import Configuration
 
 
@@ -112,10 +112,30 @@ def configure_logging(log_level=None, log_file=None, simplified_console_logs=Fal
             max_size=Configuration['max_log_file_size'],
             backup_count=Configuration['max_log_file_backups'],
         )
-        if previous_log_file_exists:
-            event_handler.perform_rollover()  # force starting a new log file on application startup
-
         event_handler.push_application()
+        if previous_log_file_exists:
+            # Force application to create a new log file on startup.
+            event_handler.perform_rollover(increment_logfile_counter=False)
+        else:
+            event_handler.log_application_summary()
+
+
+def application_summary(logfile_count):
+    """
+    Return a string summarizing general info about the application. This will be output at the start of every logfile.
+
+    :param logfile_count: The number of logfiles the application has created during its current execution
+    :type logfile_count: int
+    """
+    separator = '*' * 50
+    summary_lines = [
+        ' ClusterRunner',
+        '  * Version: {}'.format(autoversioning.get_version()),
+    ]
+    if logfile_count > 1:
+        summary_lines.append('  * Logfile count: {}'.format(logfile_count))
+
+    return '\n{0}\n{1}\n{0}\n'.format(separator, '\n'.join(summary_lines))
 
 
 class _ColorizingStreamHandler(StreamHandler):
@@ -136,3 +156,20 @@ class _ColorizingRotatingFileHandler(_ColorizingStreamHandler, RotatingFileHandl
     """
     This is a RotatingFileHandler that colorizes its log messages.
     """
+    _logfile_count = 1
+
+    def perform_rollover(self, increment_logfile_counter=True):
+        """
+        Adds a log message after every rollover (including app startup) that prints out general application data
+        including version info. This ensures we include some context at the beginning of each logfile.
+
+        :param increment_logfile_counter: Whether or not to increment the number of created logfiles (default: True)
+        :type increment_logfile_counter: bool
+        """
+        super().perform_rollover()
+        if increment_logfile_counter:
+            self._logfile_count += 1
+        self.log_application_summary()
+
+    def log_application_summary(self):
+        get_logger(__name__).debug(application_summary(self._logfile_count))

@@ -10,4 +10,4 @@ class StopConfigLoader(BaseConfigLoader):
         """
         super().configure_defaults(conf)
         conf.set('log_filename', 'clusterrunner_stop.log')
-        conf.set('log_level', 'DEBUG')
+        conf.set('log_level', 'INFO')
