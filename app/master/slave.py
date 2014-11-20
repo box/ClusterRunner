@@ -4,6 +4,7 @@ from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
+from app.util import util
 
 
 class Slave(object):
@@ -57,8 +58,9 @@ class Slave(object):
         :typeproject_type_paramss: dict
         """
         setup_url = self._slave_api.url('build', build_id, 'setup')
+        slave_project_type_params = util.project_type_params_for_slave(project_type_params)
         post_data = {
-            'project_type_params': project_type_params,
+            'project_type_params': slave_project_type_params,
         }
         self._network.post_with_digest(setup_url, post_data, Secret.get())
 
