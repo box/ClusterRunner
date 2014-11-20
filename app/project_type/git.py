@@ -159,7 +159,7 @@ class Git(ProjectType):
 
         if child.exitstatus != 0:
             raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
-                child.exitstatus, command, child.before.decode('utf-8')))
+                child.exitstatus, command, child.before.decode('utf-8', errors='replace')))
 
     def execute_command_in_project(self, *args, **kwargs):
         """
