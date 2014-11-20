@@ -45,7 +45,7 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         except ValueError as ex:
             raise BadRequestError('Invalid JSON in request body.') from ex
 
-    def get(self):
+    def get(self, *args, **kwargs):
         """
         Enable GET on all endpoints by default.  Subclasses can override this without calling super().get()
         """

@@ -4,9 +4,12 @@ import logbook
 from unittest import TestCase
 from unittest.mock import MagicMock, NonCallableMock, patch
 
-from app.util import log
+from app.master.build import Build
+from app.master.slave import Slave
+from app.util import analytics, log
 from app.util.conf.configuration import Configuration
 from app.util.conf.master_config_loader import MasterConfigLoader
+from app.util.counter import Counter
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
@@ -45,6 +48,11 @@ class BaseUnitTestCase(TestCase):
         MasterConfigLoader().configure_defaults(Configuration.singleton())
         MasterConfigLoader().configure_postload(Configuration.singleton())
         self.patch('app.util.conf.master_config_loader.MasterConfigLoader.load_from_config_file')
+
+        # Reset counters
+        Slave._slave_id_counter = Counter()
+        Build._build_id_counter = Counter()
+        analytics._event_id_generator = Counter()
 
         # Configure logging to go to stdout. This makes debugging easier by allowing us to see logs for failed tests.
         log.configure_logging('DEBUG')

@@ -95,7 +95,7 @@ class Slave(object):
 
         subjob_executor_id = response.json().get('executor_id')
         analytics.record_event(analytics.MASTER_TRIGGERED_SUBJOB, executor_id=subjob_executor_id,
-                               build_id=subjob.build_id(), subjob_id=subjob.subjob_id(), slave_url=self.url)
+                               build_id=subjob.build_id(), subjob_id=subjob.subjob_id(), slave_id=self.id)
 
     def num_executors_in_use(self):
         return self._num_executors_in_use.value()

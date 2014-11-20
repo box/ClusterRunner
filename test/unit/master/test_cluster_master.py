@@ -1,12 +1,15 @@
 from unittest.mock import MagicMock
+from box.test.genty import genty, genty_dataset
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
 from app.master.slave import Slave
+from app.util.exceptions import ItemNotFoundError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
+@genty
 class TestClusterMaster(BaseUnitTestCase):
 
     def setUp(self):
@@ -45,3 +48,40 @@ class TestClusterMaster(BaseUnitTestCase):
         build1.finish = MagicMock()
         master.add_idle_slave(slave1)
         self.assertFalse(build1.finish.called)
+
+    @genty_dataset(
+        slave_id_specified=({'slave_id': 400},),
+        slave_url_specified=({'slave_url': 'michelangelo.turtles.gov'},),
+    )
+    def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
+        master = ClusterMaster()
+        master.connect_new_slave('raphael.turtles.gov', 10)
+        master.connect_new_slave('leonardo.turtles.gov', 10)
+        master.connect_new_slave('donatello.turtles.gov', 10)
+
+        with self.assertRaises(ItemNotFoundError):
+            master.get_slave(**get_slave_kwargs)
+
+    @genty_dataset(
+        both_arguments_specified=({'slave_id': 1, 'slave_url': 'raphael.turtles.gov'},),
+        neither_argument_specified=({},),
+    )
+    def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
+        master = ClusterMaster()
+        master.connect_new_slave('raphael.turtles.gov', 10)
+
+        with self.assertRaises(ValueError):
+            master.get_slave(**get_slave_kwargs)
+
+    def test_get_slave_returns_expected_value_given_valid_arguments(self):
+        master = ClusterMaster()
+        master.connect_new_slave('raphael.turtles.gov', 10)
+        master.connect_new_slave('leonardo.turtles.gov', 10)
+        master.connect_new_slave('donatello.turtles.gov', 10)
+
+        actual_slave_by_id = master.get_slave(slave_id=2)
+        actual_slave_by_url = master.get_slave(slave_url='leonardo.turtles.gov')
+
+        self.assertEqual(2, actual_slave_by_id.id, 'Retrieved slave should have the same id as requested.')
+        self.assertEqual('leonardo.turtles.gov', actual_slave_by_url.url,
+                         'Retrieved slave should have the same url as requested.')
