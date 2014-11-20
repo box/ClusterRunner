@@ -117,3 +117,14 @@ class TestGit(BaseUnitTestCase):
         git._execute_git_remote_command = MagicMock()
         git._setup_build()
         git._execute_git_remote_command.assert_any_call('git clone  {} {}'.format(url, repo_path))
+
+    def test_cloning_with_shallow_on_does_issue_depth_param(self):
+        url = 'url'
+        repo_path = 'repo_path'
+        git = Git(url, shallow=True)
+        git._execute_and_raise_on_failure = Mock()
+        git._repo_directory = repo_path
+        git.execute_command_in_project = Mock(return_value=('', 1))
+        git._execute_git_remote_command = MagicMock()
+        git._setup_build()
+        git._execute_git_remote_command.assert_any_call('git clone --depth {} {} {}'.format(str(Git.CLONE_DEPTH), url, repo_path))
