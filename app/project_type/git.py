@@ -22,7 +22,7 @@ class Git(ProjectType):
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash=None, config=None, job_name=None, remote_files=None):
+                 hash=None, config=None, job_name=None, remote_files=None, shallow=False):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -45,12 +45,15 @@ class Git(ProjectType):
         :type job_name: list [str] | None
         :param remote_files: dictionary mapping of output file to URL
         :type remote_files: dict[str, str] | None
+        :param shallow: When cloning a repo, should the clone be shallow?
+        :type shallow: bool
         """
         super().__init__(config, job_name, remote_files)
         self._url = url
         self._remote = remote
         self._branch = branch
         self._hash = hash
+        self._shallow = shallow
 
         url_components = urlparse(url)
         url_full_path_parts = url_components.path.split('/')
@@ -88,7 +91,8 @@ class Git(ProjectType):
         """
         _, exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
         if exit_code != 0:  # This is not a git repo yet, we have to clone the project.
-            clone_command = 'git clone --depth {} {} {}'. format(str(self.CLONE_DEPTH), self._url, self._repo_directory)
+            depth_param = '--depth {}'.format(str(self.CLONE_DEPTH)) if self._shallow else ''
+            clone_command = 'git clone {} {} {}'. format(depth_param, self._url, self._repo_directory)
             self._execute_git_remote_command(clone_command)
 
         fetch_command = 'git fetch {} {}'.format(self._remote, self._branch)

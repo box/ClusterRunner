@@ -1,4 +1,4 @@
-from unittest.mock import ANY
+from unittest.mock import ANY, Mock, MagicMock
 import pexpect
 
 from app.project_type.git import Git
@@ -107,3 +107,13 @@ class TestGit(BaseUnitTestCase):
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
         self.assertRaises(RuntimeError, git._execute_git_remote_command, 'some_command')
 
+    def test_cloning_with_shallow_off_does_not_issue_depth_param(self):
+        url = 'url'
+        repo_path = 'repo_path'
+        git = Git(url, shallow=False)
+        git._execute_and_raise_on_failure = Mock()
+        git._repo_directory = repo_path
+        git.execute_command_in_project = Mock(return_value=('', 1))
+        git._execute_git_remote_command = MagicMock()
+        git._setup_build()
+        git._execute_git_remote_command.assert_any_call('git clone  {} {}'.format(url, repo_path))
