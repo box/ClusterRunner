@@ -109,14 +109,14 @@ class _SubjobHandler(_ClusterMasterBaseHandler):
 class _SubjobResultHandler(_ClusterMasterBaseHandler):
     def post(self, build_id, subjob_id):
         slave_url = self.decoded_body.get('slave')
+        slave = self._cluster_master.get_slave(slave_url=slave_url)
         file_payload = self.request.files.get('file')
         if not file_payload:
             raise RuntimeError('Result file not provided')
 
-        metric_data = self.decoded_body.get('metric_data') or {}
-        slave_executor_id = metric_data.get('executor_id')
+        slave_executor_id = self.decoded_body.get('metric_data', {}).get('executor_id')
         analytics.record_event(analytics.MASTER_RECEIVED_RESULT, executor_id=slave_executor_id, build_id=int(build_id),
-                               subjob_id=int(subjob_id), slave_url=slave_url)
+                               subjob_id=int(subjob_id), slave_id=slave.id)
 
         self._cluster_master.handle_result_reported_from_slave(
             slave_url, int(build_id), int(subjob_id), file_payload[0])
@@ -220,7 +220,7 @@ class _SlavesHandler(_ClusterMasterBaseHandler):
 
 class _SlaveHandler(_ClusterMasterBaseHandler):
     def get(self, slave_id):
-        slave = self._cluster_master.slave(int(slave_id))
+        slave = self._cluster_master.get_slave(int(slave_id))
         response = {
             'slave': slave.api_representation()
         }
@@ -229,7 +229,7 @@ class _SlaveHandler(_ClusterMasterBaseHandler):
 
 class _SlaveIdleHandler(_ClusterMasterBaseHandler):
     def post(self, slave_id):
-        slave = self._cluster_master.slave(int(slave_id))
+        slave = self._cluster_master.get_slave(int(slave_id))
         self._cluster_master.add_idle_slave(slave)
         self._write_status()
 

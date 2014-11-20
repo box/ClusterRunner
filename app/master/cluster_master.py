@@ -120,15 +120,28 @@ class ClusterMaster(object):
             slaves_by_slave_id[slave.id] = slave
         return slaves_by_slave_id
 
-    def slave(self, slave_id):
+    def get_slave(self, slave_id=None, slave_url=None):
         """
-        A connected slave.
-        :rtype slave_id: int
+        Get the instance of given slave by either the slave's id or url. Only one of slave_id or slave_url should be
+        specified.
+
+        :param slave_id: The id of the slave to return
+        :type slave_id: int
+        :param slave_url: The url of the slave to return
+        :type slave_url: str
+        :return: The instance of the slave
         :rtype: Slave
         """
-        for slave in self._all_slaves_by_url.values():
-            if slave.id == slave_id:
-                return slave
+        if (slave_id is None) == (slave_url is None):
+            raise ValueError('Only one of slave_id or slave_url should be specified to get_slave().')
+
+        if slave_id is not None:
+            for slave in self._all_slaves_by_url.values():
+                if slave.id == slave_id:
+                    return slave
+        else:
+            if slave_url in self._all_slaves_by_url:
+                return self._all_slaves_by_url[slave_url]
 
         raise ItemNotFoundError('Requested slave ({}) does not exist.'.format(slave_id))
 
@@ -140,7 +153,6 @@ class ClusterMaster(object):
         :return: The slave id of the new slave
         :rtype: int
         """
-
         slave = Slave(slave_url, num_executors)
         self._all_slaves_by_url[slave_url] = slave
         self.add_idle_slave(slave)
@@ -156,7 +168,7 @@ class ClusterMaster(object):
         """
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
-        slave = self.slave(slave_id)
+        slave = self.get_slave(slave_id)
         slave.is_alive = False
         # todo: Fail any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
