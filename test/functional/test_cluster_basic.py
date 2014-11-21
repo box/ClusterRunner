@@ -1,7 +1,7 @@
 from box.test.genty import genty, genty_dataset
 
-from test.framework.base_functional_test_case import BaseFunctionalTestCase
-from test.framework.functional_test_job_configs import BASIC_FAILING_JOB, BASIC_JOB
+from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
+from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB
 
 
 @genty

@@ -10,7 +10,7 @@ from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
 from app.util.secret import Secret
 from test.framework.functional.fs_item import Directory
-from test.framework.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
+from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
 
 
 class BaseFunctionalTestCase(TestCase):
@@ -44,7 +44,7 @@ class BaseFunctionalTestCase(TestCase):
         :rtype: str
         """
         # Copy default conf file to tmp location
-        repo_dir = path.dirname(path.dirname(path.dirname(path.realpath(__file__))))
+        repo_dir = path.dirname(path.dirname(path.dirname(path.dirname(path.realpath(__file__)))))
         self._conf_template_path = path.join(repo_dir, 'conf', 'default_clusterrunner.conf')
         test_conf_file_path = tempfile.NamedTemporaryFile().name
         shutil.copy(self._conf_template_path, test_conf_file_path)
