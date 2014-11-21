@@ -1,3 +1,13 @@
+from test.framework.functional.fs_item import File, Directory
+
+
+# These are the files that we expect to be present in every atom artifact directory.
+DEFAULT_ATOM_FILES = [
+    File('clusterrunner_command'),
+    File('clusterrunner_console_output'),
+    File('clusterrunner_exit_code'),
+    File('clusterrunner_time'),
+]
 
 
 class FunctionalTestJobConfig(object):
@@ -24,11 +34,12 @@ BasicJob:
     expected_num_subjobs=5,
     expected_num_atoms=5,
     expected_artifact_contents=[
-        [{'result.txt': 'This is atom 0\n'}],
-        [{'result.txt': 'This is atom 1\n'}],
-        [{'result.txt': 'This is atom 2\n'}],
-        [{'result.txt': 'This is atom 3\n'}],
-        [{'result.txt': 'This is atom 4\n'}],
+        Directory('artifact_0_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 0\n')]),
+        Directory('artifact_1_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 1\n')]),
+        Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
+        Directory('artifact_3_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 3\n')]),
+        Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
+        File('results.tar.gz'),
     ],
 )
 
@@ -49,10 +60,12 @@ BasicFailingJob:
     expected_num_subjobs=5,
     expected_num_atoms=5,
     expected_artifact_contents=[
-        [{'result.txt': 'This is atom 0\n'}],
-        [{'result.txt': 'This is atom 1\n'}],
-        [{'result.txt': 'This is atom 2\n'}],
-        [],
-        [{'result.txt': 'This is atom 4\n'}],
+        Directory('artifact_0_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 0\n')]),
+        Directory('artifact_1_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 1\n')]),
+        Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
+        Directory('artifact_3_0', DEFAULT_ATOM_FILES),
+        Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
+        File('results.tar.gz'),
+        File('failures.txt', contents='artifact_3_0'),
     ],
 )
