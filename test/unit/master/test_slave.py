@@ -40,7 +40,9 @@ class TestSlave(BaseUnitTestCase):
         Configuration['repo_directory'] = '{}/repos/master'.format(base_directory)
         slave = self._create_slave()
         slave._network.post_with_digest = Mock()
+
         slave.setup(1, {'type': 'git', 'url': 'http://{}'.format(remote_path)})
+
         slave._network.post_with_digest.assert_called_with('http://{}/v1/build/1/setup'.format(self._FAKE_SLAVE_URL),
                                                            {'project_type_params': {
                                                                'url': 'ssh://{}{}/repos/master/{}'.format(

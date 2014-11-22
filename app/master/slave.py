@@ -55,7 +55,7 @@ class Slave(object):
         :type build_id: int
 
         :param project_type_params: The parameters that define the project type this build will execute in
-        :typeproject_type_paramss: dict
+        :type project_type_params: dict
         """
         setup_url = self._slave_api.url('build', build_id, 'setup')
         slave_project_type_params = util.project_type_params_for_slave(project_type_params)

@@ -22,14 +22,20 @@ class Git(ProjectType):
     @classmethod
     def params_for_slave(cls, project_type_params):
         """
-        Produces a modified set of project type params for use on a slave machine.
+        Produces a modified set of project type params for use on a slave machine. If the master contains a full
+        copy of the repo (not a shallow clone), we modify the repo url so the slave clones or fetches from the master
+        directly. This should be faster than cloning/fetching from the original git remote.
         :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
             'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
             arguments for that ProjectType subclass.
         :type project_type_params: dict
         :return: A modified set of project type params
-        :rtype: dict [str, str]
+        :rtype: dict
         """
+        master_clone_is_shallow = project_type_params['shallow']
+        if master_clone_is_shallow:  # Exit early, we cannot clone from a shallow master repo
+            return project_type_params
+
         master_repo_path = cls.get_full_repo_directory(project_type_params['url'])
         master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], master_repo_path)
         project_type_params = project_type_params.copy()
@@ -40,7 +46,7 @@ class Git(ProjectType):
     def get_full_repo_directory(url):
         """
         Generates a directory to house the repo based on the origin url
-        :return: A path for the repo
+        :return: A path to clone the git repo in
         :rtype: str
         """
         url_components = urlparse(url)
@@ -54,8 +60,8 @@ class Git(ProjectType):
     def get_timing_file_directory(url):
         """
         Generates the path to store timing results in
-        :param url:
-        :return: A path
+        :param url: The remote 'origin' url for the git repo
+        :return: A path for storing timing files
         :rtype: str
         """
         url_components = urlparse(url)
