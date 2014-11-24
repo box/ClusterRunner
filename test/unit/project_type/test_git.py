@@ -148,3 +148,20 @@ class TestGit(BaseUnitTestCase):
         timings_path = Git.get_timing_file_directory(url)
 
         self.assertEqual(timings_path, '/home/cr_user/.clusterrunner/timing/scm.example.com/path/to/project')
+
+    def test_get_repo_directory_removes_colon_from_directory_if_exists(self):
+        Configuration['repo_directory'] = '/tmp/repos'
+        git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
+
+        repo_directory = git.get_full_repo_directory('ssh://source_control.cr.com:1234/master')
+
+        self.assertEqual(repo_directory, '/tmp/repos/source_control.cr.com1234/master')
+
+    def test_get_timing_file_directory_removes_colon_from_directory_if_exists(self):
+        Configuration['timings_directory'] = '/tmp/timings'
+        git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
+
+        repo_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/master')
+
+        self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
+
