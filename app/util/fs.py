@@ -93,3 +93,13 @@ def compress_directories(target_dirs_to_archive_paths, tarfile_path):
             target_dir = os.path.normpath(dir_path)
 
             tar.add(target_dir, arcname=archive_name)
+
+def remove_invalid_path_characters(path):
+    """
+    :param path: the path that may contain invalid characters
+    :type path: str
+    :return: the path with the invalid characters removed
+    :rtype: str
+    """
+    # For now, just replace colons.
+    return path.replace(':', '')

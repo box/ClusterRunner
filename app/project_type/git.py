@@ -55,7 +55,7 @@ class Git(ProjectType):
         repo_name = url_full_path_parts[-1].split('.')[0]
         url_folder_path_parts = url_full_path_parts[:-1]
         repo_directory = os.path.join(Configuration['repo_directory'], url_components.netloc, *url_folder_path_parts)
-        return os.path.join(repo_directory, repo_name)
+        return fs.remove_invalid_path_characters(os.path.join(repo_directory, repo_name))
 
     @staticmethod
     def get_timing_file_directory(url):
@@ -66,11 +66,12 @@ class Git(ProjectType):
         :rtype: str
         """
         url_components = urlparse(url)
-        return os.path.join(
+        timings_directory = os.path.join(
             Configuration['timings_directory'],
             url_components.netloc,
             url_components.path.strip('/')
         )
+        return fs.remove_invalid_path_characters(timings_directory)
 
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
@@ -107,7 +108,6 @@ class Git(ProjectType):
         self._branch = branch
         self._hash = hash
         self._shallow = shallow
-
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
 
@@ -128,7 +128,6 @@ class Git(ProjectType):
 
         os.symlink(actual_project_directory, build_project_directory)
         self.project_directory = build_project_directory
-
 
     def _setup_build(self):
         """
