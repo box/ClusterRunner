@@ -1,4 +1,4 @@
-from unittest.mock import ANY, Mock, MagicMock
+from unittest.mock import ANY, Mock, MagicMock, patch
 import pexpect
 
 from app.project_type.git import Git
@@ -107,32 +107,6 @@ class TestGit(BaseUnitTestCase):
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
         self.assertRaises(RuntimeError, git._execute_git_remote_command, 'some_command')
 
-    def test_cloning_with_shallow_off_does_not_issue_depth_param(self):
-        url = 'url'
-        repo_path = 'repo_path'
-        git = Git(url, shallow=False)
-        git._execute_and_raise_on_failure = Mock()
-        git._repo_directory = repo_path
-        git.execute_command_in_project = Mock(return_value=('', 1))
-        git._execute_git_remote_command = MagicMock()
-
-        git._setup_build()
-
-        git._execute_git_remote_command.assert_any_call('git clone  {} {}'.format(url, repo_path))
-
-    def test_cloning_with_shallow_on_does_issue_depth_param(self):
-        url = 'url'
-        repo_path = 'repo_path'
-        git = Git(url, shallow=True)
-        git._execute_and_raise_on_failure = Mock()
-        git._repo_directory = repo_path
-        git.execute_command_in_project = Mock(return_value=('', 1))
-        git._execute_git_remote_command = MagicMock()
-
-        git._setup_build()
-
-        git._execute_git_remote_command.assert_any_call('git clone --depth {} {} {}'.format(str(Git.CLONE_DEPTH), url, repo_path))
-
     def test_get_full_repo_directory(self):
         Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
         url = 'http://scm.example.com/path/to/project'
@@ -164,4 +138,23 @@ class TestGit(BaseUnitTestCase):
         repo_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/master')
 
         self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
+
+    @patch('shutil.rmtree')
+    @patch('app.project_type.git.fs')
+    def test_setup_build_when_existing_repo_is_shallow_deletes_repo(self, mock_fs, mock_rmtree):
+        url = 'url'
+        repo_path = 'repo_path'
+        git = Git(url)
+        git._execute_and_raise_on_failure = Mock()
+        git._repo_directory = repo_path
+        git.execute_command_in_project = Mock(side_effect=[('', 0), ('', 0)])
+        self.patch('os.path.exists').return_value = True
+        git._execute_git_remote_command = MagicMock()
+        mock_fs.create_dir.call_count = 0  # only measure calls made in _setup_build
+        mock_rmtree.call_count = 0
+
+        git._setup_build()
+
+        self.assertEqual(mock_fs.create_dir.call_count, 1)
+        self.assertEqual(mock_rmtree.call_count, 1)
 

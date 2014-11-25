@@ -1,6 +1,7 @@
 import os
 import pexpect
 import signal
+import shutil
 from urllib.parse import urlparse
 
 from app.util import fs
@@ -18,6 +19,7 @@ class Git(ProjectType):
     """
 
     CLONE_DEPTH = 50
+    DIRECTORY_PERMISSIONS = 0o700
 
     @classmethod
     def params_for_slave(cls, project_type_params):
@@ -112,8 +114,8 @@ class Git(ProjectType):
         self._timing_file_directory = self.get_timing_file_directory(self._url)
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
-        fs.create_dir(self._repo_directory, 0o700)
-        fs.create_dir(self._timing_file_directory, 0o700)
+        fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
+        fs.create_dir(self._timing_file_directory, self.DIRECTORY_PERMISSIONS)
         fs.create_dir(os.path.dirname(build_project_directory))
 
         # Create a symlink from the generated build project directory to the actual project directory.
@@ -133,10 +135,20 @@ class Git(ProjectType):
         """
         Clones the project if necessary, fetches from the remote repo and resets to the requested commit
         """
-        _, exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
-        if exit_code != 0:  # This is not a git repo yet, we have to clone the project.
-            depth_param = '--depth {}'.format(str(self.CLONE_DEPTH)) if self._shallow else ''
-            clone_command = 'git clone {} {} {}'. format(depth_param, self._url, self._repo_directory)
+        # For backward compatibility: If a shallow repo exists, delete it.  Shallow cloning is no longer supported,
+        # it causes failures when fetching refs that depend on commits which are excluded from the shallow clone.
+        _, shallow_exit_code = self.execute_command_in_project('[ -f {}/.git/shallow ]'.format(self._repo_directory))
+        existing_repo_is_shallow = shallow_exit_code == 0
+        if existing_repo_is_shallow:
+            if os.path.exists(self._repo_directory):
+                shutil.rmtree(self._repo_directory)
+                fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
+
+        # Clone the repo if it doesn't exist
+        _, git_exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
+        repo_exists = git_exit_code == 0
+        if not repo_exists:  # This is not a git repo yet, we have to clone the project.
+            clone_command = 'git clone {} {}'. format(self._url, self._repo_directory)
             self._execute_git_remote_command(clone_command)
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
