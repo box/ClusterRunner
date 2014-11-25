@@ -19,6 +19,7 @@ class BaseUnitTestCase(TestCase):
     # This allows test classes (e.g., TestNetwork) to disable network-related patches for testing the patched code.
     _do_network_mocks = True
     _repatchable_items = {}
+    _fake_hostname = 'fake_hostname'
 
     def setUp(self):
         super().setUp()
@@ -29,7 +30,7 @@ class BaseUnitTestCase(TestCase):
 
         # Stub out a few library dependencies that launch subprocesses.
         self.patch('app.util.autoversioning.get_version').return_value = '0.0.0'
-        self.patch('app.util.conf.base_config_loader.platform.node').return_value = 'fake_hostname'
+        self.patch('app.util.conf.base_config_loader.platform.node').return_value = self._fake_hostname
 
         if self._do_network_mocks:
             # requests.Session() also makes some subprocess calls on instantiation.

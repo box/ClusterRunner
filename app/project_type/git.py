@@ -19,6 +19,59 @@ class Git(ProjectType):
 
     CLONE_DEPTH = 50
 
+    @classmethod
+    def params_for_slave(cls, project_type_params):
+        """
+        Produces a modified set of project type params for use on a slave machine. If the master contains a full
+        copy of the repo (not a shallow clone), we modify the repo url so the slave clones or fetches from the master
+        directly. This should be faster than cloning/fetching from the original git remote.
+        :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
+            'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
+            arguments for that ProjectType subclass.
+        :type project_type_params: dict
+        :return: A modified set of project type params
+        :rtype: dict
+        """
+        master_clone_is_shallow = ('shallow' in project_type_params and
+                                   isinstance(project_type_params['shallow'], bool) and project_type_params['shallow'])
+        if master_clone_is_shallow:  # Exit early, we cannot clone from a shallow master repo
+            return project_type_params
+
+        master_repo_path = cls.get_full_repo_directory(project_type_params['url'])
+        master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], master_repo_path)
+        project_type_params = project_type_params.copy()
+        project_type_params['url'] = master_repo_url
+        return project_type_params
+
+    @staticmethod
+    def get_full_repo_directory(url):
+        """
+        Generates a directory to house the repo based on the origin url
+        :return: A path to clone the git repo in
+        :rtype: str
+        """
+        url_components = urlparse(url)
+        url_full_path_parts = url_components.path.split('/')
+        repo_name = url_full_path_parts[-1].split('.')[0]
+        url_folder_path_parts = url_full_path_parts[:-1]
+        repo_directory = os.path.join(Configuration['repo_directory'], url_components.netloc, *url_folder_path_parts)
+        return os.path.join(repo_directory, repo_name)
+
+    @staticmethod
+    def get_timing_file_directory(url):
+        """
+        Generates the path to store timing results in
+        :param url: The remote 'origin' url for the git repo
+        :return: A path for storing timing files
+        :rtype: str
+        """
+        url_components = urlparse(url)
+        return os.path.join(
+            Configuration['timings_directory'],
+            url_components.netloc,
+            url_components.path.strip('/')
+        )
+
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
@@ -55,17 +108,8 @@ class Git(ProjectType):
         self._hash = hash
         self._shallow = shallow
 
-        url_components = urlparse(url)
-        url_full_path_parts = url_components.path.split('/')
-        repo_name = url_full_path_parts[-1].split('.')[0]
-        url_folder_path_parts = url_full_path_parts[:-1]
-        repo_directory = os.path.join(Configuration['repo_directory'], url_components.netloc, *url_folder_path_parts)
-        self._repo_directory = os.path.join(repo_directory, repo_name)
-        self._timing_file_directory = os.path.join(
-            Configuration['timings_directory'],
-            url_components.netloc,
-            url_components.path.strip('/')
-        )
+        self._repo_directory = self.get_full_repo_directory(self._url)
+        self._timing_file_directory = self.get_timing_file_directory(self._url)
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
         fs.create_dir(self._repo_directory, 0o700)
@@ -84,6 +128,7 @@ class Git(ProjectType):
 
         os.symlink(actual_project_directory, build_project_directory)
         self.project_directory = build_project_directory
+
 
     def _setup_build(self):
         """

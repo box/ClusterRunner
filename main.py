@@ -157,12 +157,30 @@ def _add_project_type_subparsers(build_parser):
 
         env_args_info = project_type_class.constructor_arguments_info(blacklist=help_argument_blacklist)
         for arg_name, arg_info in env_args_info.items():
-            project_type_parser.add_argument(
-                '--' + arg_name.replace('_', '-'),  # example: constructor arg "job_name" --> cmd line arg "--job-name"
-                help=arg_info.help,
-                required=arg_info.required,
-                default=argparse.SUPPRESS,  # don't add argument to parsed_args unless a value was explicitly specified
-            )
+            fixed_arg_name = arg_name.replace('_', '-')
+            if isinstance(arg_info.default, bool):
+                project_type_parser.add_argument(
+                    '--' + fixed_arg_name,
+                    dest=arg_name,
+                    action='store_true',
+                    help=arg_info.help,
+                    default=argparse.SUPPRESS
+                )
+                project_type_parser.add_argument(
+                    '--no-' + fixed_arg_name,
+                    dest=arg_name,
+                    action='store_false',
+                    help=arg_info.help,
+                    default=argparse.SUPPRESS
+                )
+                project_type_parser.set_defaults(arg_name=arg_info.default)
+            else:
+                project_type_parser.add_argument(
+                    '--' + fixed_arg_name,  # example: constructor arg "job_name" --> cmd line arg "--job-name"
+                    help=arg_info.help,
+                    required=arg_info.required,
+                    default=argparse.SUPPRESS,  # don't add argument to parsed_args unless a value was explicitly specified
+                )
 
 
 def _initialize_configuration(app_subcommand, config_filename):
