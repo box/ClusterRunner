@@ -139,7 +139,11 @@ class Git(ProjectType):
             clone_command = 'git clone {} {} {}'. format(depth_param, self._url, self._repo_directory)
             self._execute_git_remote_command(clone_command)
 
-        fetch_command = 'git fetch {} {}'.format(self._remote, self._branch)
+        # Must add the --update-head-ok in the scenario that the current branch of the working directory
+        # is equal to self._branch, otherwise the git fetch will exit with a non-zero exit code.
+        # Must specify the colon in 'branch:branch' so that the branch will be created locally. This is
+        # important because it allows the slave hosts to do a git fetch from the master for this branch.
+        fetch_command = 'git fetch --update-head-ok {0} {1}:{1}'.format(self._remote, self._branch)
         self._execute_git_remote_command(fetch_command, self._repo_directory)
 
         commit_hash = self._hash or 'FETCH_HEAD'
