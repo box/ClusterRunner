@@ -118,12 +118,9 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
             return False
 
         allowed_origins_regex = Configuration['cors_allowed_origins_regex']
-        if allowed_origins_regex is not None:
-            self._logger.debug('Matching request origin "{}" against cors_allowed_origins_regex conf value "{}".',
-                               request_origin, allowed_origins_regex)
-            if re.match(allowed_origins_regex, request_origin):
-                self._logger.debug('Origin "{}" allowed. Setting Access-Control-Allow-Origin header.', request_origin)
-                return True
+        if allowed_origins_regex is not None and re.match(allowed_origins_regex, request_origin):
+            return True
 
-        self._logger.debug('Origin "{}" not allowed. Not setting Access-Control-Allow-Origin header.', request_origin)
+        self._logger.debug('Origin "{}" did not match cors_allowed_origins_regex conf value of "{}". '
+                           'Not setting Access-Control-Allow-Origin header.', request_origin, allowed_origins_regex)
         return False
