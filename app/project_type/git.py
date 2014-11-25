@@ -32,7 +32,8 @@ class Git(ProjectType):
         :return: A modified set of project type params
         :rtype: dict
         """
-        master_clone_is_shallow = project_type_params['shallow']
+        master_clone_is_shallow = ('shallow' in project_type_params and
+                                   isinstance(project_type_params['shallow'], bool) and project_type_params['shallow'])
         if master_clone_is_shallow:  # Exit early, we cannot clone from a shallow master repo
             return project_type_params
 
