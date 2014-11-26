@@ -24,9 +24,9 @@ class Git(ProjectType):
     @classmethod
     def params_for_slave(cls, project_type_params):
         """
-        Produces a modified set of project type params for use on a slave machine. If the master contains a full
-        copy of the repo (not a shallow clone), we modify the repo url so the slave clones or fetches from the master
-        directly. This should be faster than cloning/fetching from the original git remote.
+        Produces a modified set of project type params for use on a slave machine. We modify the repo url so the slave
+        clones or fetches from the master directly. This should be faster than cloning/fetching from the original git
+        remote.
         :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
             'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
             arguments for that ProjectType subclass.
@@ -34,11 +34,6 @@ class Git(ProjectType):
         :return: A modified set of project type params
         :rtype: dict
         """
-        master_clone_is_shallow = ('shallow' in project_type_params and
-                                   isinstance(project_type_params['shallow'], bool) and project_type_params['shallow'])
-        if master_clone_is_shallow:  # Exit early, we cannot clone from a shallow master repo
-            return project_type_params
-
         master_repo_path = cls.get_full_repo_directory(project_type_params['url'])
         master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], master_repo_path)
         project_type_params = project_type_params.copy()
@@ -78,7 +73,7 @@ class Git(ProjectType):
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash=None, config=None, job_name=None, remote_files=None, shallow=False):
+                 hash=None, config=None, job_name=None, remote_files=None):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -101,15 +96,12 @@ class Git(ProjectType):
         :type job_name: list [str] | None
         :param remote_files: dictionary mapping of output file to URL
         :type remote_files: dict[str, str] | None
-        :param shallow: When cloning a repo, should the clone be shallow?
-        :type shallow: bool
         """
         super().__init__(config, job_name, remote_files)
         self._url = url
         self._remote = remote
         self._branch = branch
         self._hash = hash
-        self._shallow = shallow
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
 
@@ -137,8 +129,7 @@ class Git(ProjectType):
         """
         # For backward compatibility: If a shallow repo exists, delete it.  Shallow cloning is no longer supported,
         # it causes failures when fetching refs that depend on commits which are excluded from the shallow clone.
-        _, shallow_exit_code = self.execute_command_in_project('[ -f {}/.git/shallow ]'.format(self._repo_directory))
-        existing_repo_is_shallow = shallow_exit_code == 0
+        existing_repo_is_shallow = os.path.isfile(os.path.join(self._repo_directory, '.git', 'shallow'))
         if existing_repo_is_shallow:
             if os.path.exists(self._repo_directory):
                 shutil.rmtree(self._repo_directory)
