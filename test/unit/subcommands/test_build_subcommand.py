@@ -1,5 +1,6 @@
 from app.subcommands.build_subcommand import BuildSubcommand
 from app.util.conf.configuration import Configuration
+from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -62,7 +63,11 @@ class TestBuildSubcommand(BaseUnitTestCase):
         build_subcommand = BuildSubcommand()
         build_subcommand.run(None, None, type='git')
         # assert on constructor params
-        self.mock_BuildRunner.assert_called_once_with('localhost:43000', request_params={'type':'git'}, secret=None)
+        self.mock_BuildRunner.assert_called_once_with(
+            'localhost:43000',
+            request_params={'type': 'git'},
+            secret=Secret.get()
+        )
 
     def test_run_instantiates_buildrunner_with_correct_constructor_args_for_directory_project_type(self):
         Configuration['hostname'] = 'localhost'
@@ -75,5 +80,5 @@ class TestBuildSubcommand(BaseUnitTestCase):
         self.mock_BuildRunner.assert_called_once_with(
             'localhost:43000',
             request_params={'type':'directory', 'project_directory':'/current/directory'},
-            secret=None
+            secret=Secret.get()
         )

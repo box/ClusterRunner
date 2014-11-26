@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 from app.master.slave import Slave
 from app.util.conf.configuration import Configuration
+from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -49,7 +50,7 @@ class TestSlave(BaseUnitTestCase):
                                                                    self._fake_hostname,
                                                                    base_directory,
                                                                    remote_path),
-                                                               'type': 'git'}}, None)
+                                                               'type': 'git'}}, Secret.get())
 
     def _create_slave(self, **kwargs):
         """

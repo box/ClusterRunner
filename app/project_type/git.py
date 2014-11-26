@@ -1,6 +1,7 @@
 import os
 import pexpect
 import signal
+import shutil
 from urllib.parse import urlparse
 
 from app.util import fs
@@ -18,13 +19,14 @@ class Git(ProjectType):
     """
 
     CLONE_DEPTH = 50
+    DIRECTORY_PERMISSIONS = 0o700
 
     @classmethod
     def params_for_slave(cls, project_type_params):
         """
-        Produces a modified set of project type params for use on a slave machine. If the master contains a full
-        copy of the repo (not a shallow clone), we modify the repo url so the slave clones or fetches from the master
-        directly. This should be faster than cloning/fetching from the original git remote.
+        Produces a modified set of project type params for use on a slave machine. We modify the repo url so the slave
+        clones or fetches from the master directly. This should be faster than cloning/fetching from the original git
+        remote.
         :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
             'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
             arguments for that ProjectType subclass.
@@ -32,11 +34,6 @@ class Git(ProjectType):
         :return: A modified set of project type params
         :rtype: dict
         """
-        master_clone_is_shallow = ('shallow' in project_type_params and
-                                   isinstance(project_type_params['shallow'], bool) and project_type_params['shallow'])
-        if master_clone_is_shallow:  # Exit early, we cannot clone from a shallow master repo
-            return project_type_params
-
         master_repo_path = cls.get_full_repo_directory(project_type_params['url'])
         master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], master_repo_path)
         project_type_params = project_type_params.copy()
@@ -76,7 +73,7 @@ class Git(ProjectType):
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash=None, config=None, job_name=None, remote_files=None, shallow=False):
+                 hash=None, config=None, job_name=None, remote_files=None):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -99,21 +96,18 @@ class Git(ProjectType):
         :type job_name: list [str] | None
         :param remote_files: dictionary mapping of output file to URL
         :type remote_files: dict[str, str] | None
-        :param shallow: When cloning a repo, should the clone be shallow?
-        :type shallow: bool
         """
         super().__init__(config, job_name, remote_files)
         self._url = url
         self._remote = remote
         self._branch = branch
         self._hash = hash
-        self._shallow = shallow
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
-        fs.create_dir(self._repo_directory, 0o700)
-        fs.create_dir(self._timing_file_directory, 0o700)
+        fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
+        fs.create_dir(self._timing_file_directory, self.DIRECTORY_PERMISSIONS)
         fs.create_dir(os.path.dirname(build_project_directory))
 
         # Create a symlink from the generated build project directory to the actual project directory.
@@ -133,10 +127,19 @@ class Git(ProjectType):
         """
         Clones the project if necessary, fetches from the remote repo and resets to the requested commit
         """
-        _, exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
-        if exit_code != 0:  # This is not a git repo yet, we have to clone the project.
-            depth_param = '--depth {}'.format(str(self.CLONE_DEPTH)) if self._shallow else ''
-            clone_command = 'git clone {} {} {}'. format(depth_param, self._url, self._repo_directory)
+        # For backward compatibility: If a shallow repo exists, delete it.  Shallow cloning is no longer supported,
+        # it causes failures when fetching refs that depend on commits which are excluded from the shallow clone.
+        existing_repo_is_shallow = os.path.isfile(os.path.join(self._repo_directory, '.git', 'shallow'))
+        if existing_repo_is_shallow:
+            if os.path.exists(self._repo_directory):
+                shutil.rmtree(self._repo_directory)
+                fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
+
+        # Clone the repo if it doesn't exist
+        _, git_exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
+        repo_exists = git_exit_code == 0
+        if not repo_exists:  # This is not a git repo yet, we have to clone the project.
+            clone_command = 'git clone {} {}'. format(self._url, self._repo_directory)
             self._execute_git_remote_command(clone_command)
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
