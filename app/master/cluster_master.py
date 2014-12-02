@@ -201,6 +201,25 @@ class ClusterMaster(object):
 
         return success, response
 
+    def handle_request_to_update_build(self, build_id, update_params):
+        """
+        Updates the state of a build with the values passed in.  Used for cancelling running builds.
+
+        :type build_id: int
+        :param update_params: The fields that should be updated and their new values
+        :type update_params: dict [str, str]
+        :return: The success/failure and the response we want to send to the requestor
+        :rtype: tuple [bool, dict [str, str]]
+        """
+        build = self._all_builds_by_id[int(build_id)]
+        if build is None:
+            raise ItemNotFoundError('Invalid build id.')
+
+        success, response = build.validate_update_params(update_params)
+        if not success:
+            return success, response
+        return build.update_state(update_params), {}
+
     def handle_result_reported_from_slave(self, slave_url, build_id, subjob_id, payload=None):
         """
         Process the result and dispatch the next subjob

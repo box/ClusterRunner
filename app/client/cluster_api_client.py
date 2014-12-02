@@ -42,6 +42,23 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         )
         return response.json()
 
+    def cancel_build(self, build_id):
+        """
+        PUT a request to the master to cancel a build.
+        :param build_id: The id of the build we want to cancel
+        :type build_id: int
+        :return: The API response
+        :rtype: dict
+        """
+        build_url = self._api.url('build', build_id)
+        response = self._network.put_with_digest(
+            build_url,
+            {'status': 'canceled'},
+            Secret.get(),
+            error_on_failure=True
+        )
+        return response.json()
+
     def get_build_status(self, build_id):
         """
         Send a get request to the master to get the status of the specified build.
@@ -74,7 +91,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         def is_build_finished():
             response_data = self.get_build_status(build_id)
             build_data = response_data['build']
-            if build_data['status'] in (BuildStatus.FINISHED, BuildStatus.ERROR):
+            if build_data['status'] in (BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED):
                 return True
             if build_in_progress_callback:
                 build_in_progress_callback(build_data)

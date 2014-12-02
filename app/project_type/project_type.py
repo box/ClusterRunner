@@ -101,7 +101,8 @@ class ProjectType(object):
 
     def _execute_and_raise_on_failure(self, command, message, cwd=None):
         output, exit_code = self.execute_command_in_project(command, cwd=cwd)
-        if exit_code != 0:
+        # If the command was intentionally killed, do not raise an error
+        if exit_code != 0 and not self._kill_event.is_set():
             raise RuntimeError('{} Command: "{}"\nOutput: "{}"'.format(message, command, output))
 
     def _execute_in_project_and_raise_on_failure(self, command, message):

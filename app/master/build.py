@@ -36,9 +36,11 @@ class Build(object):
         self._error_message = None
         self.is_prepared = False
         self._preparation_coin = SingleUseCoin()  # protects against separate threads calling prepare() more than once
+        self._is_canceled = False
 
         self._project_type = None
         self._num_slaves_in_use = 0
+        self._slaves_allocated = []
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
         self._num_allocated_executors = 0
         self._max_executors = float('inf')
@@ -109,6 +111,7 @@ class Build(object):
         :type slave: master.Slave
         """
         self._num_slaves_in_use += 1
+        self._slaves_allocated.append(slave)
         slave.setup(self.build_id(), project_type_params=self.build_request.build_parameters())
 
         for _ in range(slave.num_executors):
@@ -152,6 +155,7 @@ class Build(object):
         except Empty:
             num_executors_in_use = slave.free_executor()
             if num_executors_in_use == 0:
+                self._slaves_allocated.remove(slave)
                 slave.teardown()
 
     def handle_subjob_payload(self, subjob_id, payload=None):
@@ -207,6 +211,55 @@ class Build(object):
         self._logger.error('Build {} failed: {}', self.build_id(), failure_reason)
         self._error_message = failure_reason
 
+    def cancel(self):
+        """
+        Cancel a running build
+        """
+        # Early exit if build is not running
+        if self._status() in [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED]:
+            return
+
+        self._is_canceled = True
+
+        # Deplete the unstarted subjob queue
+        while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
+            self._unstarted_subjobs.get()
+
+    def validate_update_params(self, update_params):
+        """
+        Determine if a dict of update params are valid, and generate an error if not
+        :param update_params: Params passed into a PUT for this build
+        :type update_params: dict [str, str]
+        :return: Whether the params are valid and a response containing an error message if not
+        :rtype: tuple [bool, dict [str, str]]
+        """
+        keys_and_values_allowed = {'status': ['canceled']}
+        message = None
+        for key, value in update_params.items():
+            if key not in keys_and_values_allowed.keys():
+                message = 'Key ({}) is not in list of allowed keys ({})'.format(key, keys_and_values_allowed.keys())
+            elif value not in keys_and_values_allowed[key]:
+                message = 'Value ({}) is not in list of allowed values ({}) for {}'.\
+                    format(value, keys_and_values_allowed[key], key)
+
+        if message is not None:
+            return False, {'error': message}
+        return True, {}
+
+    def update_state(self, update_params):
+        """
+        Make updates to the state of this build given a set of update params
+        :param update_params: The keys and values to update on this build
+        :type update_params: dict [str, str]
+        """
+        success = False
+        for key, value in update_params.items():
+            if key == 'status':
+                if value == 'canceled':
+                    self.cancel()
+                    success = True
+        return success
+
     @property
     def artifacts_archive_file(self):
         return self._artifacts_archive_file
@@ -227,11 +280,12 @@ class Build(object):
 
     @property
     def _subjobs_are_finished(self):
-        return self.is_prepared and self._finished_subjobs.full()
+        return self._is_canceled or (self.is_prepared and self._finished_subjobs.full())
 
     @property
     def is_finished(self):
-        return self._subjobs_are_finished and self._postbuild_tasks_are_finished and self._teardowns_finished
+        return (self._subjobs_are_finished and self._is_canceled) or (self._postbuild_tasks_are_finished and
+                                                                       self._teardowns_finished)
 
     @property
     def is_unstarted(self):
@@ -257,6 +311,8 @@ class Build(object):
         """
         if self.has_error:
             return BuildStatus.ERROR
+        elif self._is_canceled:
+            return BuildStatus.CANCELED
         elif not self.is_prepared or self.is_unstarted:
             return BuildStatus.QUEUED
         elif self.is_finished:
@@ -269,6 +325,9 @@ class Build(object):
         The commands which failed
         :rtype: list [str] | None
         """
+        if self._is_canceled:
+            return []
+
         if self.is_finished:
             # dict.values() returns a view object in python 3, so wrapping values() in a list
             return list(self._build_artifact.get_failed_commands().values())
@@ -278,6 +337,9 @@ class Build(object):
         """
         :rtype: str | None
         """
+        if self._is_canceled:
+            return BuildResult.FAILURE
+
         if self.is_finished:
             if len(self._build_artifact.get_failed_commands()) == 0:
                 return BuildResult.NO_FAILURES
@@ -318,6 +380,7 @@ class BuildStatus(str, Enum):
     BUILDING = 'BUILDING'
     FINISHED = 'FINISHED'
     ERROR = 'ERROR'
+    CANCELED = 'CANCELED'
 
 
 class BuildResult(str, Enum):

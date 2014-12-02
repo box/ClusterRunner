@@ -8,7 +8,9 @@ from app.master.build import BuildStatus, BuildResult
 import app.util.fs
 from app.util.log import get_logger
 from app.util.network import Network
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from app.util.url_builder import UrlBuilder
+from app.client.cluster_api_client import ClusterMasterAPIClient
 
 
 class BuildRunner(object):
@@ -40,6 +42,7 @@ class BuildRunner(object):
         self._logger = get_logger(__name__)
         self._last_build_status_details = None
         self._master_api = UrlBuilder(master_url, self.API_VERSION)
+        self._cluster_master_api_client = ClusterMasterAPIClient(master_url)
 
     def run(self):
         """
@@ -58,8 +61,17 @@ class BuildRunner(object):
 
         except _BuildRunnerError as ex:
             self._logger.error(str(ex))
-            self._logger.warning('Script aborted due to error! Note: build may still be executing on master.')
+            self._logger.warning('Script aborted due to error!')
+            if self._build_id is not None:
+                self._logger.warning('Cancelling build {}'.format(self._build_id))
+                self._cancel_build()
             return False
+
+    def _cancel_build(self):
+        """
+        Request the master cancels the build.
+        """
+        self._cluster_master_api_client.cancel_build(self._build_id)
 
     def _start_build(self):
         """
@@ -75,6 +87,8 @@ class BuildRunner(object):
             raise _BuildRunnerError('Error starting build: ' + error_message)
 
         self._build_id = response_data['build_id']
+
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self._cancel_build)
         self._logger.info('Build is running. (Build id: {})', self._build_id)
 
     def _block_until_finished(self, timeout=None):

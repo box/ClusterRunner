@@ -164,6 +164,13 @@ class _BuildsHandler(_ClusterMasterBaseHandler):
 
 
 class _BuildHandler(_ClusterMasterBaseHandler):
+    @authenticated
+    def put(self, build_id):
+        update_params = self.decoded_body
+        success, response = self._cluster_master.handle_request_to_update_build(build_id, update_params)
+        status_code = http.client.OK if success else http.client.BAD_REQUEST
+        self._write_status(response, success, status_code=status_code)
+
     def get(self, build_id):
         response = {
             'build': self._cluster_master.get_build(int(build_id)).api_representation(),

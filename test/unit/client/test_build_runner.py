@@ -1,5 +1,5 @@
 from requests.models import Response
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 from app.client.build_runner import BuildRunner
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -25,12 +25,18 @@ class TestBuildRunner(BaseUnitTestCase):
 
     def test_runner_should_abort_when_status_is_error(self):
         runner = self.mock_runner_with_status_response({"build": {"status": "ERROR"}})
+        runner._cancel_build = Mock()
+
         runner.run()
+
         self.assertFalse(runner._download_and_extract_results.called,
                          'Client should not have tried to download results')
 
     def test_runner_should_abort_when_status_is_invalid(self):
         runner = self.mock_runner_with_status_response({"build": "x"})
+        runner._cancel_build = Mock()
+
         runner.run()
+
         self.assertFalse(runner._download_and_extract_results.called,
                          'Client should not have tried to download results')

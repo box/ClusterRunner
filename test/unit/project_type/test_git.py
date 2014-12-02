@@ -90,10 +90,12 @@ class TestGit(BaseUnitTestCase):
             if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
                 raise pexpect.TIMEOUT('some_msg')
             return None
-
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
+        git._kill_event.is_set = Mock(return_value=True)
+
         git._execute_git_remote_command('some_command')
+
         self.assertEquals(self.mock_pexpect_child.sendline.call_count, 0)
 
     def test_execute_git_remote_command_raises_exception_if_strict_host_checking_and_prompted(self):

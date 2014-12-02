@@ -1,5 +1,5 @@
 from queue import Queue
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 from app.project_type.project_type import ProjectType
 from app.master.build import Build, BuildStatus
@@ -149,8 +149,62 @@ class TestBuild(BaseUnitTestCase):
         slave.teardown = MagicMock()
         slave.free_executor = MagicMock(return_value=0)
         build._unstarted_subjobs = Queue()
+        build._slaves_allocated = [slave]
+
         build.execute_next_subjob_on_slave(slave)
+
         slave.teardown.assert_called_with()
+
+    def test_cancel_depletes_queue_and_sets_canceled(self):
+        build = Build(BuildRequest({}))
+        build._unstarted_subjobs = Queue()
+        build._unstarted_subjobs.put(1)
+        slave_mock = Mock()
+        build._slaves_allocated = [slave_mock]
+
+        build.cancel()
+
+        self.assertTrue(build._is_canceled)
+        self.assertTrue(build._unstarted_subjobs.empty())
+
+    def test_cancel_exits_early_if_build_not_running(self):
+        build = Build(BuildRequest({}))
+        build._unstarted_subjobs = Queue()
+        build._unstarted_subjobs.put(1)
+        slave_mock = Mock()
+        build._slaves_allocated = [slave_mock]
+        build._status = Mock(return_value=BuildStatus.FINISHED)
+
+        build.cancel()
+
+        self.assertFalse(build._is_canceled)
+        self.assertFalse(build._unstarted_subjobs.empty())
+        self.assertEqual(slave_mock.teardown.call_count, 0)
+
+    def test_validate_update_params_for_cancelling_build(self):
+        build = Build(BuildRequest({}))
+
+        success, response = build.validate_update_params({'status': 'canceled'})
+
+        self.assertTrue(success)
+        self.assertEqual({}, response)
+
+    def test_validate_update_params_rejects_bad_params(self):
+        build = Build(BuildRequest({}))
+
+        success, response = build.validate_update_params({'status': 'foo'})
+
+        self.assertFalse(success)
+        self.assertEqual({'error': "Value (foo) is not in list of allowed values (['canceled']) for status"}, response)
+
+    def test_update_state_canceled(self):
+        build = Build(BuildRequest({}))
+        build._unstarted_subjobs = Queue()
+
+        success = build.update_state({'status': 'canceled'})
+
+        self.assertEqual(build._status(), BuildStatus.CANCELED)
+        self.assertTrue(success)
 
     def _create_subjobs(self, count=3):
         return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]
