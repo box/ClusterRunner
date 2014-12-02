@@ -124,6 +124,7 @@ class BaseConfigLoader(object):
             'master_hostname',
             'master_port',
             'log_filename',
+            'max_log_file_size',
             'eventlog_filename',
             'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
