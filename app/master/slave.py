@@ -33,7 +33,7 @@ class Slave(object):
             'id': self.id,
             'num_executors': self.num_executors,
             'num_executors_in_use': self.num_executors_in_use(),
-            'current_build_id': self.current_build(),
+            'current_build_id': self.current_build_id,
         }
 
     def mark_as_idle(self):
@@ -63,6 +63,7 @@ class Slave(object):
             'project_type_params': slave_project_type_params,
         }
         self._network.post_with_digest(setup_url, post_data, Secret.get())
+        self.current_build_id = build_id
 
     def teardown(self):
         """
@@ -82,7 +83,6 @@ class Slave(object):
             raise RuntimeError('Tried to start a subjob on a dead slave! ({}, id: {})'.format(self.url, self.id))
 
         SafeThread(target=self._async_start_subjob, args=(subjob,)).start()
-        self.current_build_id = subjob.build_id()
 
     def _async_start_subjob(self, subjob):
         """
@@ -113,10 +113,3 @@ class Slave(object):
         if new_count < 0:
             raise Exception('Cannot free executor on slave {}. All are free.'.format(self.url))
         return new_count
-
-    def current_build(self):
-        """
-        :return:
-        :rtype: int|None
-        """
-        return self.current_build_id

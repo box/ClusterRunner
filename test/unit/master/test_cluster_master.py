@@ -5,7 +5,8 @@ from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
 from app.master.slave import Slave
-from app.util.exceptions import ItemNotFoundError
+from app.slave.cluster_slave import SlaveState
+from app.util.exceptions import BadRequestError, ItemNotFoundError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -17,7 +18,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('app.util.fs.create_dir')
         self.patch('shutil.rmtree')
 
-    def test_add_idle_slave_marks_build_finished_when_slaves_are_done(self):
+    def test_updating_slave_to_idle_state_marks_build_finished_when_slaves_are_done(self):
         master = ClusterMaster()
         slave1 = Slave('', 1)
         slave2 = Slave('', 1)
@@ -30,10 +31,10 @@ class TestClusterMaster(BaseUnitTestCase):
         master._all_builds_by_id = {1: build1}
         build1._build_id = 1
         build1.finish = MagicMock()
-        master.add_idle_slave(slave1)
+        master.handle_slave_state_update(slave1, SlaveState.IDLE)
         build1.finish.assert_called_once_with()
 
-    def test_add_idle_slave_does_not_mark_build_finished_when_slaves_not_done(self):
+    def test_updating_slave_to_idle_state_does_not_mark_build_finished_when_slaves_not_done(self):
         master = ClusterMaster()
         slave1 = Slave('', 1)
         slave2 = Slave('', 1)
@@ -46,7 +47,7 @@ class TestClusterMaster(BaseUnitTestCase):
         master._all_builds_by_id = {1: build1}
         build1._build_id = 1
         build1.finish = MagicMock()
-        master.add_idle_slave(slave1)
+        master.handle_slave_state_update(slave1, SlaveState.IDLE)
         self.assertFalse(build1.finish.called)
 
     @genty_dataset(
@@ -112,3 +113,35 @@ class TestClusterMaster(BaseUnitTestCase):
         build.update_state = Mock()
 
         self.assertRaises(ItemNotFoundError, master.handle_request_to_update_build, invalid_build_id, update_params)
+
+    def test_updating_slave_to_disconnected_state_should_mark_slave_as_dead(self):
+        master = ClusterMaster()
+        slave_url = 'raphael.turtles.gov'
+        master.connect_new_slave(slave_url, 10)
+        slave = master.get_slave(slave_url=slave_url)
+        self.assertTrue(slave.is_alive)
+
+        master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
+
+        self.assertFalse(slave.is_alive)
+
+    def test_updating_slave_to_setup_completed_state_should_tell_build_to_begin_subjob_execution(self):
+        master = ClusterMaster()
+        fake_build = MagicMock()
+        master.get_build = MagicMock(return_value=fake_build)
+        slave_url = 'raphael.turtles.gov'
+        master.connect_new_slave(slave_url, 10)
+        slave = master.get_slave(slave_url=slave_url)
+
+        master.handle_slave_state_update(slave, SlaveState.SETUP_COMPLETED)
+
+        fake_build.begin_subjob_executions_on_slave.assert_called_once_with(slave)
+
+    def test_updating_slave_to_nonexistent_state_should_raise_bad_request_error(self):
+        master = ClusterMaster()
+        slave_url = 'raphael.turtles.gov'
+        master.connect_new_slave(slave_url, 10)
+        slave = master.get_slave(slave_url=slave_url)
+
+        with self.assertRaises(BadRequestError):
+            master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')

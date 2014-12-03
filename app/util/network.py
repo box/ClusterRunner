@@ -53,7 +53,7 @@ class Network(object):
         """
         Post to a url with the Message Authentication Digest
         :type url: str
-        :type request_params: dict [str, str]
+        :type request_params: dict [str, any]
         :param secret: the secret used to produce the message auth digest
         :rtype: requests.Response
         """
@@ -61,12 +61,12 @@ class Network(object):
         return self.post(url, encoded_body, headers=Secret.header(encoded_body, secret),
                          error_on_failure=error_on_failure)
 
-    # todo: may be a bad idea to retry -- what if post was successful but just had a response error?
+    # todo: may be a bad idea to retry -- what if put was successful but just had a response error?
     @retry_on_exception(exceptions=(requests.ConnectionError,))
     def put(self, *args, **kwargs):
         """
         Send a PUT request to a url. Arguments to this method, unless otherwise documented below in _request(), are
-        exactly the same as arguments to session.post() in the requests library.
+        exactly the same as arguments to session.put() in the requests library.
 
         :rtype: requests.Response
         """
@@ -76,13 +76,13 @@ class Network(object):
         """
         Put to a url with the Message Authentication Digest
         :type url: str
-        :type request_params: dict [str, str]
+        :type request_params: dict [str, any]
         :param secret: the secret used to produce the message auth digest
         :rtype: requests.Response
         """
         encoded_body = self.encode_body(request_params)
         return self.put(url, encoded_body, headers=Secret.header(encoded_body, secret),
-                         error_on_failure=error_on_failure)
+                        error_on_failure=error_on_failure)
 
     def encode_body(self, body_decoded):
         """

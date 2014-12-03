@@ -41,10 +41,7 @@ class ClusterMasterApplication(ClusterApplication):
                     ]),
                     RouteNode(r'queue', _QueueHandler),
                     RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
-                        RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
-                            RouteNode(r'idle', _SlaveIdleHandler),
-                            RouteNode(r'disconnect', _SlaveDisconnectHandler)
-                        ])
+                        RouteNode(r'(\d+)', _SlaveHandler, 'slave')
                     ]),
                     RouteNode(r'eventlog', _EventlogHandler)
                 ])
@@ -233,18 +230,15 @@ class _SlaveHandler(_ClusterMasterBaseHandler):
         }
         self.write(response)
 
-
-class _SlaveIdleHandler(_ClusterMasterBaseHandler):
-    def post(self, slave_id):
+    @authenticated
+    def put(self, slave_id):
+        new_slave_state = self.decoded_body.get('slave', {}).get('state')
         slave = self._cluster_master.get_slave(int(slave_id))
-        self._cluster_master.add_idle_slave(slave)
-        self._write_status()
+        self._cluster_master.handle_slave_state_update(slave, new_slave_state)
 
-
-class _SlaveDisconnectHandler(_ClusterMasterBaseHandler):
-    def post(self, slave_id):
-        self._cluster_master.disconnect_slave(int(slave_id))
-        self._write_status()
+        self._write_status({
+            'slave': slave.api_representation()
+        })
 
 
 class _EventlogHandler(_ClusterMasterBaseHandler):

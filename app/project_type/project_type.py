@@ -121,15 +121,15 @@ class ProjectType(object):
 
     def run_job_config_setup(self):
         """
-        Execute any setup commands defined in the job config
+        Execute any setup commands defined in the job config.
         """
         job_config = self.job_config()
         if job_config.setup_build:
             output, exit_code = self.execute_command_in_project(job_config.setup_build)
             if exit_code != 0:
-                raise RuntimeError('Job setup failed, cmd: {} -- output: {}'.format(job_config.setup_build,
-                                                                                    output))
-            self._logger.info('Job setup complete')
+                raise SetupFailureError('Build setup failed!\nCommand:\n"{}"\n\nOutput:\n{}'
+                                        .format(job_config.setup_build, output))
+            self._logger.info('Build setup completed successfully.')
 
     def run_job_config_teardown(self, timeout=None):
         """
@@ -142,9 +142,9 @@ class ProjectType(object):
         if job_config.teardown_build:
             output, exit_code = self.execute_command_in_project(job_config.teardown_build, timeout=timeout)
             if exit_code != 0:
-                raise RuntimeError('Job teardown failed, cmd: {} -- output: {}'.format(job_config.teardown_build,
-                                                                                       output))
-            self._logger.info('Job teardown complete')
+                raise TeardownFailureError('Build teardown failed!\nCommand:\n"{}"\n\nOutput:\n{}'
+                                           .format(job_config.teardown_build, output))
+            self._logger.info('Build teardown completed successfully.')
 
     def _setup_executors(self, executors, project_type_params):
         """
@@ -385,3 +385,11 @@ class ProjectType(object):
 
 
 _ProjectTypeArgumentInfo = namedtuple('_ProjectTypeArgumentInfo', ['help', 'required', 'default'])
+
+
+class SetupFailureError(Exception):
+    pass
+
+
+class TeardownFailureError(Exception):
+    pass

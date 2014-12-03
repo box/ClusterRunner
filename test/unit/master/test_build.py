@@ -1,12 +1,13 @@
 from queue import Queue
 from unittest.mock import MagicMock, Mock
 
-from app.project_type.project_type import ProjectType
+from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus
 from app.master.build_request import BuildRequest
 from app.master.job_config import JobConfig
 from app.master.slave import Slave
 from app.master.subjob import Subjob
+from app.project_type.project_type import ProjectType
 from app.util import poll
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -36,24 +37,29 @@ class TestBuild(BaseUnitTestCase):
         # assert
         mock_slave.setup.assert_called_once_with(build.build_id(), project_type_params={'setup': fake_setup_command})
 
-    def test_allocate_slave_doesnt_use_more_than_max_executors(self):
+    def test_slave_doesnt_use_more_than_max_executors(self):
         subjobs = self._create_subjobs()
-
         mock_project_type = self._create_mock_project_type()
         fake_setup_command = 'mock command'
-        mock_slave = self._create_mock_slave()
+        mock_slaves = [self._create_mock_slave(num_executors=5) for _ in range(3)]
+        expected_num_max_executors = 12  # We expect the slave to use 12 out of 15 available executors.
 
         build = Build(BuildRequest({'setup': fake_setup_command}))
-        build.prepare(subjobs, mock_project_type, self._create_job_config(1))
-        build.allocate_slave(mock_slave)
+        build.execute_next_subjob_on_slave = MagicMock()
 
-        self.assertEqual(build._num_allocated_executors, build._max_executors)
+        build.prepare(subjobs, mock_project_type, self._create_job_config(max_executors=expected_num_max_executors))
+        [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
+        [build.begin_subjob_executions_on_slave(mock_slave) for mock_slave in mock_slaves]
+
+        self.assertEqual(build.execute_next_subjob_on_slave.call_count, expected_num_max_executors,
+                         'Build should start executing as many subjobs as its max_executors setting.')
 
     def test_build_status_returns_requested_after_build_creation(self):
         build = Build(BuildRequest({}))
         status = build._status()
 
-        self.assertEqual(status, BuildStatus.QUEUED)
+        self.assertEqual(status, BuildStatus.QUEUED,
+                         'Build status should be QUEUED immediately after build has been created.')
 
     def test_build_status_returns_queued_after_build_preparation(self):
         subjobs = self._create_subjobs()
@@ -63,19 +69,33 @@ class TestBuild(BaseUnitTestCase):
         build.prepare(subjobs, mock_project_type, self._create_job_config(self._FAKE_MAX_EXECUTORS))
         status = build._status()
 
-        self.assertEqual(status, BuildStatus.QUEUED)
+        self.assertEqual(status, BuildStatus.QUEUED,
+                         'Build status should be QUEUED after build has been prepared.')
 
-    def test_build_status_returns_building_after_some_subjobs_are_executing(self):
+    def test_build_status_returns_building_after_setup_has_started(self):
+        subjobs = self._create_subjobs()
+        mock_project_type = self._create_mock_project_type()
+        mock_slave = self._create_mock_slave()
+        build = Build(BuildRequest({}))
+
+        build.prepare(subjobs, mock_project_type, self._create_job_config(self._FAKE_MAX_EXECUTORS))
+        build.allocate_slave(mock_slave)
+
+        self.assertEqual(build._status(), BuildStatus.BUILDING,
+                         'Build status should be BUILDING after setup has started on slaves.')
+
+    def test_build_status_returns_building_after_setup_is_complete_and_subjobs_are_executing(self):
         subjobs = self._create_subjobs(count=3)
         mock_project_type = self._create_mock_project_type()
         mock_slave = self._create_mock_slave(num_executors=2)
         build = Build(BuildRequest({}))
 
         build.prepare(subjobs, mock_project_type, self._create_job_config(self._FAKE_MAX_EXECUTORS))
-        build.allocate_slave(mock_slave)  # two out of three subjobs are now "in progress"
-        status = build._status()
+        build.allocate_slave(mock_slave)
+        build.begin_subjob_executions_on_slave(mock_slave)  # two out of three subjobs are now in progress
 
-        self.assertEqual(status, BuildStatus.BUILDING)
+        self.assertEqual(build._status(), BuildStatus.BUILDING,
+                         'Build status should be BUILDING after subjobs have started executing on slaves.')
 
     def test_build_status_returns_finished_after_all_subjobs_complete_and_slaves_finished(self):
         subjobs = self._create_subjobs(count=3)
@@ -218,7 +238,8 @@ class TestBuild(BaseUnitTestCase):
         return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]
 
     def _create_job_config(self, max_executors):
-        return JobConfig('', '', '', '', '', max_executors)
+        atomizer = Atomizer([{'FAKE': 'fake atomizer command'}])
+        return JobConfig('', '', '', '', atomizer, max_executors)
 
     def _create_mock_project_type(self):
         return MagicMock(spec_set=ProjectType())
