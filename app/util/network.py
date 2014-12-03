@@ -61,6 +61,27 @@ class Network(object):
         return self.post(url, encoded_body, headers=Secret.header(encoded_body, secret),
                          error_on_failure=error_on_failure)
 
+    def put(self, *args, **kwargs):
+        """
+        Send a PUT request to a url. Arguments to this method, unless otherwise documented below in _request(), are
+        exactly the same as arguments to session.put() in the requests library.
+
+        :rtype: requests.Response
+        """
+        return self._request('PUT', *args, **kwargs)
+
+    def put_with_digest(self, url, request_params, secret, error_on_failure=False):
+        """
+        Put to a url with the Message Authentication Digest
+        :type url: str
+        :type request_params: dict [str, str]
+        :param secret: the secret used to produce the message auth digest
+        :rtype: requests.Response
+        """
+        encoded_body = self.encode_body(request_params)
+        return self.put(url, encoded_body, headers=Secret.header(encoded_body, secret),
+                        error_on_failure=error_on_failure)
+
     def encode_body(self, body_decoded):
         """
         :type body_decoded: dict [str, str]

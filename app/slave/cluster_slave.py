@@ -1,9 +1,9 @@
-import http.client
+from enum import Enum
 from queue import Queue
-import sys
-from threading import Event
 import requests
+import sys
 
+from app.project_type.project_type import SetupFailureError
 from app.slave.subjob_executor import SubjobExecutor
 from app.util import analytics, log, util
 from app.util.exceptions import BadRequestError
@@ -41,7 +41,6 @@ class ClusterSlave(object):
             self._idle_executors.put(executor)
             self.executors_by_id[executor_id] = executor
 
-        self._setup_complete_event = Event()
         self._master_url = None
         self._network = Network(min_connection_poolsize=num_executors)
         self._master_api = None  # wait until we connect to a master first
@@ -55,11 +54,12 @@ class ClusterSlave(object):
         Gets a dict representing this resource which can be returned in an API response.
         :rtype: dict [str, mixed]
         """
+        # todo: add this to the ClusterSlave api response
         executors_representation = [executor.api_representation() for executor in self.executors_by_id.values()]
         return {
             'connected': str(self._is_connected()),
             'master_url': self._master_url,
-            'setup_complete': str(self._setup_complete_event.isSet()),
+            'current_build_id': self._current_build_id,
             'slave_id': self._slave_id,
             'executors': executors_representation,
         }
@@ -85,7 +85,6 @@ class ClusterSlave(object):
         :type project_type_params: dict
         """
         self._logger.info('Executing setup for build {} (type: {}).', build_id, project_type_params.get('type'))
-        self._setup_complete_event.clear()
         self._current_build_id = build_id
         self._build_teardown_coin = SingleUseCoin()  # protects against build_teardown being executed multiple times
 
@@ -110,13 +109,23 @@ class ClusterSlave(object):
         """
         Called from setup_build(). Do asynchronous setup for the build so that we can make the call to setup_build()
         non-blocking.
+
+        :type executors: list[SubjobExecutor]
+        :type project_type_params: dict
         """
         # todo(joey): It's strange that the project_type is setting up the executors, which in turn set up projects.
         # todo(joey): I think this can be untangled a bit -- we should call executor.configure_project_type() here.
-        self._project_type.setup_build(executors, project_type_params)
+        try:
+            self._project_type.setup_build(executors, project_type_params)
 
-        self._logger.info('Build setup complete for build {}.', self._current_build_id)
-        self._setup_complete_event.set()  # free any subjob threads that are waiting for setup to complete
+        except SetupFailureError as ex:
+            self._logger.error(ex)
+            self._logger.info('Notifying master that build setup has failed for build {}.', self._current_build_id)
+            self._notify_master_of_state_change(SlaveState.SETUP_FAILED)
+
+        else:
+            self._logger.info('Notifying master that build setup is complete for build {}.', self._current_build_id)
+            self._notify_master_of_state_change(SlaveState.SETUP_COMPLETED)
 
     def teardown_build(self, build_id=None):
         """
@@ -176,26 +185,18 @@ class ClusterSlave(object):
             self._logger.notice('Could not post idle notification to master because master is unresponsive.')
             return
 
-        # Report back to master that this slave is finished with teardown and ready for a new build
+        # Notify master that this slave is finished with teardown and ready for a new build.
         self._logger.info('Notifying master that this slave is ready for new builds.')
-        idle_url = self._master_api.url('slave', self._slave_id, 'idle')
-        response = self._network.post(idle_url)
-        if response.status_code != http.client.OK:
-            raise RuntimeError('Error during post of idle notification to master <{}>. (Response code: {})'
-                               .format(idle_url, response.status_code))
+        self._notify_master_of_state_change(SlaveState.IDLE)
 
     def _send_master_disconnect_notification(self):
         if not self._is_master_responsive():
             self._logger.notice('Could not post disconnect notification to master because master is unresponsive.')
             return
 
-        # Report back to master that this slave is shutting down and should not receive new builds
-        self._logger.info('Notifying master to disconnect this slave.')
-        disconnect_url = self._master_api.url('slave', self._slave_id, 'disconnect')
-        response = self._network.post(disconnect_url)
-        if response.status_code != http.client.OK:
-            self._logger.error('Disconnect notification to master <{}> failed with response code '
-                               '{}.'.format(disconnect_url, response.status_code))
+        # Notify master that this slave is shutting down and should not receive new builds.
+        self._logger.info('Notifying master that this slave is disconnecting.')
+        self._notify_master_of_state_change(SlaveState.DISCONNECTED)
 
     def connect_to_master(self, master_url=None):
         """
@@ -211,7 +212,7 @@ class ClusterSlave(object):
             'slave': '{}:{}'.format(self.host, self.port),
             'num_executors': self._num_executors,
         }
-        response = self._network.post(connect_url, data)
+        response = self._network.post(connect_url, data=data)
         self._slave_id = int(response.json().get('slave_id'))
         self._logger.info('Slave {}:{} connected to master on {}.', self.host, self.port, self._master_url)
 
@@ -279,8 +280,6 @@ class ClusterSlave(object):
         :type subjob_artifact_dir: str
         :type atomic_commands: list[str]
         """
-        self._logger.debug('Waiting for setup to complete (Build {}, Subjob {})...', build_id, subjob_id)
-        self._setup_complete_event.wait()  # block until setup completes
         subjob_event_data = {'build_id': build_id, 'subjob_id': subjob_id, 'executor_id': executor.id}
 
         analytics.record_event(analytics.SUBJOB_EXECUTION_START, **subjob_event_data)
@@ -299,9 +298,30 @@ class ClusterSlave(object):
 
         self._logger.info('Build {}, Subjob {} completed and sent results to master.', build_id, subjob_id)
 
+    def _notify_master_of_state_change(self, new_state):
+        """
+        Send a state notification to the master. This is used to notify the master of events occurring on the slave
+        related to build execution progress.
+
+        :type new_state: SlaveState
+        """
+        state_url = self._master_api.url('slave', self._slave_id)
+        self._network.put(state_url, data={'slave': {'state': new_state}}, error_on_failure=True)
+
     def kill(self):
         # TODO(dtran): Kill the threads and this server more gracefully
         sys.exit(0)
+
+
+class SlaveState(str, Enum):
+    """
+    An enum of possible slave states. Also inherits from string to allow comparisons with other strings (which is
+    useful when including these values in API responses).
+    """
+    DISCONNECTED = 'DISCONNECTED'
+    IDLE = 'IDLE'
+    SETUP_COMPLETED = 'SETUP_COMPLETE'
+    SETUP_FAILED = 'SETUP_FAILED'
 
 
 class BuildTeardownError(Exception):
