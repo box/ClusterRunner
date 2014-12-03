@@ -29,6 +29,8 @@ class BaseFunctionalTestCase(TestCase):
         self.test_conf_file_path = self._create_test_config_file({
             'secret': Secret.get(),
             'base_directory': self.test_app_base_dir.name,
+            # Set the max log file size to a low value so that we cause  at least one rollover during the test.
+            'max_log_file_size': 1024 * 5,
         })
 
         self.cluster = FunctionalTestCluster(
@@ -60,7 +62,6 @@ class BaseFunctionalTestCase(TestCase):
 
     def tearDown(self):
         # Clean up files created during this test
-        self.test_app_base_dir.cleanup()
         with suppress(FileNotFoundError):
             os.remove(self.test_conf_file_path)
 
@@ -73,6 +74,8 @@ class BaseFunctionalTestCase(TestCase):
         for service in services:
             self.assertEqual(service.return_code, 0, 'Service running on url: {} should exit with code 0, but exited '
                                                      'with code {}.'.format(service.url, service.return_code))
+        # Remove the temp dir. This will delete the log files, so should be run after cluster shuts down.
+        self.test_app_base_dir.cleanup()
 
     def _get_test_verbosity(self):
         """

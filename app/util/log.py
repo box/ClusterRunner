@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from termcolor import colored
+import threading
 
 from app.util import autoversioning, fs
 from app.util.conf.configuration import Configuration
@@ -154,9 +155,15 @@ class _ColorizingStreamHandler(StreamHandler):
 
 class _ColorizingRotatingFileHandler(_ColorizingStreamHandler, RotatingFileHandler):
     """
-    This is a RotatingFileHandler that colorizes its log messages.
+    This is a RotatingFileHandler that colorizes its log messages. It also adds an application summary log message at
+    the beginning of each log file.
     """
     _logfile_count = 1
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The superclass implementation uses a Lock, but we need an RLock so that we can log a message during rollover.
+        self.lock = threading.RLock()
 
     def perform_rollover(self, increment_logfile_counter=True):
         """
