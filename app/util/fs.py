@@ -101,5 +101,5 @@ def remove_invalid_path_characters(path):
     :return: the path with the invalid characters removed
     :rtype: str
     """
-    # For now, just replace colons.
-    return path.replace(':', '')
+    # Replace colons and dashes
+    return path.replace(':', '').replace('-', '')
