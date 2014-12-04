@@ -7,9 +7,10 @@ from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.serial_request_handler import SerialRequestHandler
 from app.master.slave import Slave
+from app.slave.cluster_slave import SlaveState
 from app.util import analytics
 from app.util.conf.configuration import Configuration
-from app.util.exceptions import ItemNotFoundError, ItemNotReadyError
+from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
 from app.util.ordered_set_queue import OrderedSetQueue
@@ -86,19 +87,6 @@ class ClusterMaster(object):
         """
         return [build for build in self.builds() if not build.is_finished]
 
-    def add_idle_slave(self, slave):
-        """
-        Add a slave to the idle queue
-        :type slave: Slave
-        """
-        build_id = slave.current_build_id
-        slave.mark_as_idle()
-
-        if build_id is not None:
-            self._mark_build_finished_if_slaves_are_done(build_id)
-
-        self._idle_slaves.put(slave)
-
     def _mark_build_finished_if_slaves_are_done(self, build_id):
         """
         Run when a slave is finished with a build.  If this is the last slave for that build, mark the build finished.
@@ -155,23 +143,75 @@ class ClusterMaster(object):
         """
         slave = Slave(slave_url, num_executors)
         self._all_slaves_by_url[slave_url] = slave
-        self.add_idle_slave(slave)
+        self._add_idle_slave(slave)
 
         self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
                           slave_url, num_executors, slave.id)
         return {'slave_id': str(slave.id)}
 
-    def disconnect_slave(self, slave_id):
+    def handle_slave_state_update(self, slave, new_slave_state):
         """
-        Mark a slave dead
-        :type slave_id: int
+
+        :type slave: Slave
+        :type new_slave_state: SlaveState
+        :return:
+        """
+        slave_transition_functions = {
+            SlaveState.DISCONNECTED: self._disconnect_slave,
+            SlaveState.IDLE: self._add_idle_slave,
+            SlaveState.SETUP_COMPLETED: self._handle_setup_success_on_slave,
+            SlaveState.SETUP_FAILED: self._handle_setup_failure_on_slave,
+        }
+
+        if new_slave_state not in slave_transition_functions:
+            raise BadRequestError('Invalid slave state "{}". Valid states are: {}.'
+                                  .format(new_slave_state, ', '.join(slave_transition_functions.keys())))
+
+        do_transition = slave_transition_functions.get(new_slave_state)
+        do_transition(slave)
+
+    def _disconnect_slave(self, slave):
+        """
+        Mark a slave dead.
+
+        :type slave: Slave
         """
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
-        slave = self.get_slave(slave_id)
         slave.is_alive = False
         # todo: Fail any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
+
+    def _add_idle_slave(self, slave):
+        """
+        Add a slave to the idle quexue
+        :type slave: Slave
+        """
+        build_id = slave.current_build_id
+        slave.mark_as_idle()
+
+        if build_id is not None:
+            self._mark_build_finished_if_slaves_are_done(build_id)
+
+        self._idle_slaves.put(slave)
+
+    def _handle_setup_success_on_slave(self, slave):
+        """
+        Respond to successful build setup on a slave. This starts subjob executions on the slave. This should be called
+        once after the specified slave has already run build_setup commands for the specified build.
+
+        :type slave: Slave
+        """
+        build = self.get_build(slave.current_build_id)
+        build.begin_subjob_executions_on_slave(slave)
+
+    def _handle_setup_failure_on_slave(self, slave):
+        """
+        Respond to failed build setup on a slave. This should put the slave back into a usable state.
+
+        :type slave: Slave
+        """
+        raise BadRequestError('Setup failure handling on the master is not yet implemented.')
 
     def handle_request_for_new_build(self, build_params):
         """
@@ -287,6 +327,6 @@ class ClusterMaster(object):
                                       claimed_slave.url, build_waiting_for_slave.build_id())
                     build_waiting_for_slave.allocate_slave(claimed_slave)
                 else:
-                    self.add_idle_slave(claimed_slave)
+                    self._add_idle_slave(claimed_slave)
 
             self._logger.info('Done allocating slaves for build {}.', build_waiting_for_slave.build_id())

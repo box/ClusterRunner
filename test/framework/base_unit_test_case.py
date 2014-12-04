@@ -1,6 +1,7 @@
 from contextlib import suppress
-import os
+import functools
 import logbook
+import os
 from unittest import TestCase
 from unittest.mock import MagicMock, NonCallableMock, patch
 
@@ -186,6 +187,20 @@ class BaseUnitTestCase(TestCase):
     def _blackist_target(self, patch_target, disabled_reason):
         message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(patch_target, disabled_reason)
         self.patch(patch_target, allow_repatch=True, side_effect=[UnitTestDisabledMethodError(message)])
+
+    def no_args_side_effect(self, actual_function):
+        """
+        Wrap the specified function inside a new function that will swallow any args or kwargs passed in. This is
+        useful in tests as a convenience method to specify side effect methods that do not accept the arguments passed
+        into the original function. (A good example is replacing some method with Event.set() or Event.wait() to assist
+        in testing multithreaded code.)
+
+        :type actual_function: callable
+        """
+        @functools.wraps(actual_function)
+        def argument_swallowing_wrapper_function(*args, **kwargs):
+            return actual_function()  # do not pass args and kwargs through to actual_function
+        return argument_swallowing_wrapper_function
 
 
 class UnitTestDisabledMethodError(Exception):

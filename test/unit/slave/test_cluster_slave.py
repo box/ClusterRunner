@@ -5,7 +5,8 @@ import requests.models
 from threading import Event
 from unittest.mock import ANY, call, MagicMock, mock_open
 
-from app.slave.cluster_slave import ClusterSlave, BuildTeardownError
+from app.project_type.project_type import SetupFailureError
+from app.slave.cluster_slave import BuildTeardownError, ClusterSlave, SlaveState
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
@@ -53,26 +54,30 @@ class TestClusterSlave(BaseUnitTestCase):
         unresponsive_master=(False,),
     )
     def test_disconnect_request_sent_if_and_only_if_master_is_responsive(self, is_master_responsive):
-        connect_api_url = 'http://{}/v1/slave'.format(self._FAKE_MASTER_URL)
-        disconnect_api_url = 'http://{}/v1/slave/1/disconnect'.format(self._FAKE_MASTER_URL)
+        slave_creation_url = 'http://{}/v1/slave'.format(self._FAKE_MASTER_URL)
+        master_connectivity_url = 'http://{}/v1'.format(self._FAKE_MASTER_URL)
+        slave_info_url = 'http://{}/v1/slave/1'.format(self._FAKE_MASTER_URL)
         if not is_master_responsive:
-            self.mock_network.get.side_effect = requests.ConnectionError  # trigger an exception on get
+            self.mock_network.get.side_effect = requests.ConnectionError  # an offline master raises ConnectionError
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
         slave._send_master_disconnect_notification()
 
-        # always expect a connect call, and if the master is responsive also expect a disconnect call
-        expected_network_post_calls = [call(connect_api_url, ANY)]
+        # expect a connect call and a connectivity call, and if the master is responsive also expect a disconnect call
+        expected_network_calls = [
+            call.post(slave_creation_url, data=ANY),
+            call.get(master_connectivity_url),
+        ]
         if is_master_responsive:
-            expected_network_post_calls.append(call(disconnect_api_url))
+            expected_network_calls.append(call.put(slave_info_url, data=ANY, error_on_failure=ANY))
 
-        self.mock_network.post.assert_has_calls(expected_network_post_calls, any_order=True)
-        self.assertEqual(self.mock_network.post.call_count, len(expected_network_post_calls),
-                         'All POST requests should be accounted for in the test.')
+        self.mock_network.assert_has_calls(expected_network_calls, any_order=True)
+        self.assertEqual(len(self.mock_network.method_calls), len(expected_network_calls),
+                         'All requests should be accounted for in the test.')
 
     def test_signal_shutdown_process_disconnects_from_master_before_killing_executors(self):
-        disconnect_api_url = 'http://{}/v1/slave/1/disconnect'.format(self._FAKE_MASTER_URL)
+        disconnect_api_url = 'http://{}/v1/slave/1'.format(self._FAKE_MASTER_URL)
         mock_executor = self.patch('app.slave.cluster_slave.SubjobExecutor').return_value
 
         parent_mock = MagicMock()  # create a parent mock so we can assert on the order of child mock calls.
@@ -83,7 +88,7 @@ class TestClusterSlave(BaseUnitTestCase):
         slave.connect_to_master(self._FAKE_MASTER_URL)
         self.trigger_graceful_app_shutdown()
 
-        expected_disconnect_call = call.mock_network.post(disconnect_api_url)
+        expected_disconnect_call = call.mock_network.put(disconnect_api_url, data=ANY, error_on_failure=ANY)
         expected_kill_executor_call = call.mock_executor.kill()
         self.assertEqual(1, parent_mock.method_calls.count(expected_disconnect_call),
                          'Graceful shutdown should cause the slave to make a disconnect call to the master.')
@@ -103,9 +108,9 @@ class TestClusterSlave(BaseUnitTestCase):
         self.patch('app.slave.cluster_slave.open', new=mock_open(read_data=''), create=True)
         slave = self._create_cluster_slave()
         expected_results_api_url = 'http://{}/v1/build/123/subjob/321/result'.format(self._FAKE_MASTER_URL)
-        expected_idle_api_url = 'http://{}/v1/slave/1/idle'.format(self._FAKE_MASTER_URL)
-        subjob_done_event, teardown_done_event = self._mock_network_post(expected_results_api_url,
-                                                                         expected_idle_api_url)
+        expected_idle_api_url = 'http://{}/v1/slave/1'.format(self._FAKE_MASTER_URL)
+        subjob_done_event, teardown_done_event = self._mock_network_post_and_put(expected_results_api_url,
+                                                                                 expected_idle_api_url)
         slave.connect_to_master(self._FAKE_MASTER_URL)
         slave.setup_build(build_id=123, project_type_params={'type': 'Fake'})
         slave.start_working_on_subjob(build_id=123, subjob_id=321,
@@ -118,12 +123,12 @@ class TestClusterSlave(BaseUnitTestCase):
                                                              'url very quickly.')
         self.trigger_graceful_app_shutdown()  # Triggering shutdown should not raise an exception.
 
-    def _mock_network_post(self, expected_results_api_url, expected_idle_api_url):
+    def _mock_network_post_and_put(self, expected_results_api_url, expected_idle_api_url):
         # Since subjob execution and teardown is async, we use Events to tell our test when each thread has completed.
         subjob_done_event = Event()
         teardown_done_event = Event()
 
-        def fake_network_post(url, *args, **kwargs):
+        def fake_network_post_and_put(url, *args, **kwargs):
             if url == expected_results_api_url:
                 subjob_done_event.set()  # Consider subjob finished once code posts to results url.
             elif url == expected_idle_api_url:
@@ -132,20 +137,24 @@ class TestClusterSlave(BaseUnitTestCase):
             mock_response.status_code = http.client.OK
             return mock_response
 
-        self.mock_network.post = fake_network_post
+        self.mock_network.post = fake_network_post_and_put
+        self.mock_network.put = fake_network_post_and_put
         return subjob_done_event, teardown_done_event
 
     def test_executing_build_teardown_multiple_times_will_raise_exception(self):
         self.mock_network.post().status_code = http.client.OK
         slave = self._create_cluster_slave()
-        # We use an Event here to make teardown_build() block and reliably recreate the race condition in the test.
-        teardown_event = Event()
         project_type_mock = self.patch('app.slave.cluster_slave.util.create_project_type').return_value
-        project_type_mock.teardown_build.side_effect = teardown_event.wait
+        # This test uses setup_complete_event to detect when the async setup_build() has executed.
+        setup_complete_event = Event()
+        project_type_mock.setup_build.side_effect = self.no_args_side_effect(setup_complete_event.set)
+        # This test uses teardown_event to cause a thread to block on the teardown_build() call.
+        teardown_event = Event()
+        project_type_mock.teardown_build.side_effect = self.no_args_side_effect(teardown_event.wait)
 
         slave.connect_to_master(self._FAKE_MASTER_URL)
         slave.setup_build(build_id=123, project_type_params={'type': 'Fake'})
-        self.assertTrue(slave._setup_complete_event.wait(timeout=5), 'Job setup should complete very quickly.')
+        self.assertTrue(setup_complete_event.wait(timeout=5), 'Build setup should complete very quickly.')
 
         # Start the first thread that does build teardown. This thread will block on teardown_build().
         first_thread = SafeThread(target=slave._do_build_teardown_and_reset)
@@ -154,10 +163,28 @@ class TestClusterSlave(BaseUnitTestCase):
         with self.assertRaises(BuildTeardownError):
             slave._do_build_teardown_and_reset()
 
-        # Cleanup: unblock first thread and let it finish..
+        # Cleanup: Unblock the first thread and let it finish. We use the unhandled exception handler just in case any
+        # exceptions occurred on the thread (so that they'd be passed back to the main thread and fail the test).
         teardown_event.set()
         with UnhandledExceptionHandler.singleton():
             first_thread.join()
+
+    @genty_dataset(
+        successful_setup=(True, SlaveState.SETUP_COMPLETED),
+        failed_setup=(False, SlaveState.SETUP_FAILED),
+    )
+    def test_setup_should_send_correct_state_update_to_master(self, is_setup_successful, expected_slave_state):
+        expected_slave_data_url = 'http://{}/v1/slave/1'.format(self._FAKE_MASTER_URL)
+        slave = self._create_cluster_slave()
+        slave.connect_to_master(self._FAKE_MASTER_URL)
+        slave._project_type = MagicMock()
+        if not is_setup_successful:
+            slave._project_type.setup_build.side_effect = SetupFailureError
+
+        slave._async_setup_build(executors=[], project_type_params={})
+
+        self.mock_network.put.assert_called_once_with(
+            expected_slave_data_url, data={'slave': {'state': expected_slave_state}}, error_on_failure=True)
 
     def _create_cluster_slave(self, **kwargs):
         """

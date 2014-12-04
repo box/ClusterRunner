@@ -38,9 +38,9 @@ class Build(object):
         self._preparation_coin = SingleUseCoin()  # protects against separate threads calling prepare() more than once
 
         self._project_type = None
-        self._num_slaves_in_use = 0
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
-        self._num_allocated_executors = 0
+        self._num_executors_allocated = 0
+        self._num_executors_in_use = 0
         self._max_executors = float('inf')
         self._build_completion_lock = Lock()
 
@@ -95,28 +95,26 @@ class Build(object):
 
     def build_id(self):
         """
-        :return:
         :rtype: int
         """
         return self._build_id
 
     def needs_more_slaves(self):
-        return self._num_allocated_executors < self._max_executors and not self._unstarted_subjobs.empty()
+        """
+        Determine whether or not this build should have more slaves allocated to it.
+
+        :rtype: bool
+        """
+        return self._num_executors_allocated < self._max_executors and not self._unstarted_subjobs.empty()
 
     def allocate_slave(self, slave):
         """
-        Allocate a slave to this build.
-        :type slave: master.Slave
-        """
-        self._num_slaves_in_use += 1
-        slave.setup(self.build_id(), project_type_params=self.build_request.build_parameters())
+        Allocate a slave to this build. This tells the slave to execute setup commands for this build.
 
-        for _ in range(slave.num_executors):
-            if self._num_allocated_executors >= self._max_executors:
-                break
-            slave.claim_executor()
-            self._num_allocated_executors += 1
-            self.execute_next_subjob_on_slave(slave)
+        :type slave: Slave
+        """
+        slave.setup(self.build_id(), project_type_params=self.build_request.build_parameters())
+        self._num_executors_allocated += slave.num_executors
 
     def all_subjobs(self):
         """
@@ -136,12 +134,26 @@ class Build(object):
             raise ItemNotFoundError('Invalid subjob id.')
         return subjob
 
+    def begin_subjob_executions_on_slave(self, slave):
+        """
+        Begin subjob executions on a slave. This should be called once after the specified slave has already run
+        build_setup commands for this build.
+
+        :type slave: Slave
+        """
+        for _ in range(slave.num_executors):
+            if self._num_executors_in_use >= self._max_executors:
+                break
+            slave.claim_executor()
+            self._num_executors_in_use += 1
+            self.execute_next_subjob_on_slave(slave)
+
     def execute_next_subjob_on_slave(self, slave):
         """
         Grabs an unstarted subjob off the queue and sends it to the specified slave to be executed. If the unstarted
         subjob queue is empty, we mark the slave as idle.
 
-        :type slave: master.Slave
+        :type slave: Slave
         """
         try:
             subjob = self._unstarted_subjobs.get(block=False)
@@ -235,7 +247,7 @@ class Build(object):
 
     @property
     def is_unstarted(self):
-        return self.is_prepared and self._unstarted_subjobs.full()
+        return self.is_prepared and self._num_executors_allocated == 0 and self._unstarted_subjobs.full()
 
     @property
     def has_error(self):
@@ -253,7 +265,7 @@ class Build(object):
 
     def _status(self):
         """
-        :rtype: str
+        :rtype: BuildStatus
         """
         if self.has_error:
             return BuildStatus.ERROR
