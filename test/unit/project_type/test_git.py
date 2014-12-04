@@ -70,7 +70,7 @@ class TestGit(BaseUnitTestCase):
         def expect_side_effect(*args, **kwargs):
             nonlocal prompted
 
-            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'] \
+            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*'] \
                     and not prompted:
                 prompted = True
                 return 2
@@ -87,7 +87,7 @@ class TestGit(BaseUnitTestCase):
 
     def test_execute_git_remote_command_doesnt_auto_add_known_host_if_no_prompt(self):
         def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
+            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
                 raise pexpect.TIMEOUT('some_msg')
             return None
 
@@ -98,7 +98,7 @@ class TestGit(BaseUnitTestCase):
 
     def test_execute_git_remote_command_raises_exception_if_strict_host_checking_and_prompted(self):
         def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
+            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
                 return 2
             return None
 
