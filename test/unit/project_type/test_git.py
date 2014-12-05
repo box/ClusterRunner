@@ -89,10 +89,11 @@ class TestGit(BaseUnitTestCase):
         def expect_side_effect(*args, **kwargs):
             if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
                 raise pexpect.TIMEOUT('some_msg')
+            if args[0] == pexpect.EOF:
+                return 1
             return None
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
-        git._kill_event.is_set = Mock(return_value=True)
 
         git._execute_git_remote_command('some_command')
 

@@ -209,7 +209,7 @@ class Git(ProjectType):
         finished = None
         while not self._kill_event.is_set() and finished is None:
             try:
-                finished = child.expect(pexpect.EOF, timeout=timeout)
+                finished = child.expect(pexpect.EOF, timeout=1)
             except pexpect.TIMEOUT:
                 continue
 

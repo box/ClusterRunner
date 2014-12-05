@@ -211,7 +211,7 @@ class ClusterMaster(object):
         :return: The success/failure and the response we want to send to the requestor
         :rtype: tuple [bool, dict [str, str]]
         """
-        build = self._all_builds_by_id[int(build_id)]
+        build = self._all_builds_by_id.get(int(build_id))
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 

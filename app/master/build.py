@@ -221,9 +221,14 @@ class Build(object):
 
         self._is_canceled = True
 
-        # Deplete the unstarted subjob queue
+        # Deplete the unstarted subjob queue.
+        # TODO: Handle situation where cancel() is called while subjobs are being added to _unstarted_subjobs
         while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
-            self._unstarted_subjobs.get()
+            try:
+                # A subjob may be asynchronously pulled from this queue, so we need to avoid blocking when empty.
+                self._unstarted_subjobs.get(block=False)
+            except Empty:
+                break
 
     def validate_update_params(self, update_params):
         """
@@ -237,7 +242,8 @@ class Build(object):
         message = None
         for key, value in update_params.items():
             if key not in keys_and_values_allowed.keys():
-                message = 'Key ({}) is not in list of allowed keys ({})'.format(key, keys_and_values_allowed.keys())
+                message = 'Key ({}) is not in list of allowed keys ({})'.\
+                    format(key, ",".join(keys_and_values_allowed.keys()))
             elif value not in keys_and_values_allowed[key]:
                 message = 'Value ({}) is not in list of allowed values ({}) for {}'.\
                     format(value, keys_and_values_allowed[key], key)
@@ -284,8 +290,10 @@ class Build(object):
 
     @property
     def is_finished(self):
-        return (self._subjobs_are_finished and self._is_canceled) or (self._postbuild_tasks_are_finished and
-                                                                       self._teardowns_finished)
+        # TODO: Clean up this logic or move everything into a state machine
+        build_canceled_and_subjobs_cleaned_up = self._subjobs_are_finished and self._is_canceled
+        build_fully_completed = self._postbuild_tasks_are_finished and self._teardowns_finished
+        return build_canceled_and_subjobs_cleaned_up or build_fully_completed
 
     @property
     def is_unstarted(self):

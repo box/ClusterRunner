@@ -164,47 +164,55 @@ class TestBuild(BaseUnitTestCase):
 
         build.cancel()
 
-        self.assertTrue(build._is_canceled)
-        self.assertTrue(build._unstarted_subjobs.empty())
+        self.assertTrue(build._is_canceled, "Build should've been canceled")
+        self.assertTrue(build._unstarted_subjobs.empty(), "Build's unstarted subjobs should've been depleted")
 
     def test_cancel_exits_early_if_build_not_running(self):
         build = Build(BuildRequest({}))
         build._unstarted_subjobs = Queue()
-        build._unstarted_subjobs.put(1)
         slave_mock = Mock()
         build._slaves_allocated = [slave_mock]
         build._status = Mock(return_value=BuildStatus.FINISHED)
 
         build.cancel()
 
-        self.assertFalse(build._is_canceled)
-        self.assertFalse(build._unstarted_subjobs.empty())
-        self.assertEqual(slave_mock.teardown.call_count, 0)
+        self.assertFalse(build._is_canceled, "Build should not be canceled")
+        self.assertEqual(slave_mock.teardown.call_count, 0, "Teardown should not have been called")
 
     def test_validate_update_params_for_cancelling_build(self):
         build = Build(BuildRequest({}))
 
         success, response = build.validate_update_params({'status': 'canceled'})
 
-        self.assertTrue(success)
-        self.assertEqual({}, response)
+        self.assertTrue(success, "Correct status update should report success")
+        self.assertEqual({}, response, "Error response should be empty")
 
     def test_validate_update_params_rejects_bad_params(self):
         build = Build(BuildRequest({}))
 
         success, response = build.validate_update_params({'status': 'foo'})
 
-        self.assertFalse(success)
-        self.assertEqual({'error': "Value (foo) is not in list of allowed values (['canceled']) for status"}, response)
+        self.assertFalse(success, "Bad status update reported success")
+        self.assertEqual({'error': "Value (foo) is not in list of allowed values (['canceled']) for status"}, response,
+                         "Error response not expected")
 
-    def test_update_state_canceled(self):
+    def test_validate_update_params_rejects_bad_keys(self):
+        build = Build(BuildRequest({}))
+
+        success, response = build.validate_update_params({'badkey': 'foo'})
+
+        self.assertFalse(success, "Bad status update reported success")
+        self.assertEqual({'error': "Key (badkey) is not in list of allowed keys (status)"}, response,
+                         "Error response not expected")
+
+    def test_update_state_to_canceled_sets_state_correctly(self):
         build = Build(BuildRequest({}))
         build._unstarted_subjobs = Queue()
 
         success = build.update_state({'status': 'canceled'})
 
-        self.assertEqual(build._status(), BuildStatus.CANCELED)
-        self.assertTrue(success)
+        self.assertEqual(build._status(), BuildStatus.CANCELED, "Status not set to canceled")
+        self.assertTrue(success, "Update did not report success")
 
     def _create_subjobs(self, count=3):
         return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]

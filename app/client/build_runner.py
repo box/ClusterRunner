@@ -62,16 +62,16 @@ class BuildRunner(object):
         except _BuildRunnerError as ex:
             self._logger.error(str(ex))
             self._logger.warning('Script aborted due to error!')
-            if self._build_id is not None:
-                self._logger.warning('Cancelling build {}'.format(self._build_id))
-                self._cancel_build()
+            self._cancel_build()
             return False
 
     def _cancel_build(self):
         """
         Request the master cancels the build.
         """
-        self._cluster_master_api_client.cancel_build(self._build_id)
+        if self._build_id is not None:
+            self._logger.warning('Cancelling build {}'.format(self._build_id))
+            self._cluster_master_api_client.cancel_build(self._build_id)
 
     def _start_build(self):
         """

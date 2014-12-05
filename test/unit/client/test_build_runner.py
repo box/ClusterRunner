@@ -34,7 +34,7 @@ class TestBuildRunner(BaseUnitTestCase):
 
     def test_runner_should_abort_when_status_is_invalid(self):
         runner = self.mock_runner_with_status_response({"build": "x"})
-        runner._cancel_build = Mock()
+        runner._cluster_master_api_client.cancel_build = Mock()
 
         runner.run()
 

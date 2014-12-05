@@ -98,5 +98,17 @@ class TestClusterMaster(BaseUnitTestCase):
         success, response = master.handle_request_to_update_build(build_id, update_params)
 
         build.update_state.assert_called_once_with(update_params)
-        self.assertTrue(success)
-        self.assertEqual(response, {})
+        self.assertTrue(success, "Update build should return success")
+        self.assertEqual(response, {}, "Response should be empty")
+
+    def test_update_build_with_bad_build_id_fails(self):
+        build_id = 1
+        invalid_build_id = 2
+        update_params = {'key': 'value'}
+        master = ClusterMaster()
+        build = Mock()
+        master._all_builds_by_id[build_id] = build
+        build.validate_update_params = Mock(return_value=(True, update_params))
+        build.update_state = Mock()
+
+        self.assertRaises(ItemNotFoundError, master.handle_request_to_update_build, invalid_build_id, update_params)
