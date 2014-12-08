@@ -132,6 +132,20 @@ class BaseFunctionalTestCase(TestCase):
         }
         self.assert_build_status_contains_expected_data(build_id, expected_failure_build_params)
 
+    def assert_build_has_canceled_status(self, build_id):
+        """
+        Assert that the build status endpoint contains fields signifying the build was failed. This assertion does an
+        API request to the master service of self.cluster.
+
+        :param build_id: The id of the build whose status to check
+        :type build_id: int
+        """
+        expected_failure_build_params = {
+            'result': 'FAILURE',
+            'status': 'CANCELED',
+            }
+        self.assert_build_status_contains_expected_data(build_id, expected_failure_build_params)
+
     def assert_build_artifact_contents_match_expected(self, build_id, expected_build_artifact_contents):
         """
         Assert that artifact files for this build have the expected contents.

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 from box.test.genty import genty, genty_dataset
 
 from app.master.build import Build
@@ -85,3 +85,30 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(2, actual_slave_by_id.id, 'Retrieved slave should have the same id as requested.')
         self.assertEqual('leonardo.turtles.gov', actual_slave_by_url.url,
                          'Retrieved slave should have the same url as requested.')
+
+    def test_update_build_with_valid_params_succeeds(self):
+        build_id = 1
+        update_params = {'key': 'value'}
+        master = ClusterMaster()
+        build = Mock()
+        master._all_builds_by_id[build_id] = build
+        build.validate_update_params = Mock(return_value=(True, update_params))
+        build.update_state = Mock()
+
+        success, response = master.handle_request_to_update_build(build_id, update_params)
+
+        build.update_state.assert_called_once_with(update_params)
+        self.assertTrue(success, "Update build should return success")
+        self.assertEqual(response, {}, "Response should be empty")
+
+    def test_update_build_with_bad_build_id_fails(self):
+        build_id = 1
+        invalid_build_id = 2
+        update_params = {'key': 'value'}
+        master = ClusterMaster()
+        build = Mock()
+        master._all_builds_by_id[build_id] = build
+        build.validate_update_params = Mock(return_value=(True, update_params))
+        build.update_state = Mock()
+
+        self.assertRaises(ItemNotFoundError, master.handle_request_to_update_build, invalid_build_id, update_params)

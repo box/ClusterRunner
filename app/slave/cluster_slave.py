@@ -3,6 +3,7 @@ from queue import Queue
 import sys
 from threading import Event
 import requests
+import time
 
 from app.slave.subjob_executor import SubjobExecutor
 from app.util import analytics, log, util
@@ -143,6 +144,8 @@ class ClusterSlave(object):
         teardown_build() non-blocking. Also take care of posting back to the master when teardown is complete.
         """
         self._do_build_teardown_and_reset()
+        while not self._idle_executors.full():
+            time.sleep(1)
         self._send_master_idle_notification()
 
     def _do_build_teardown_and_reset(self, timeout=None):
@@ -153,6 +156,11 @@ class ClusterSlave(object):
         :param timeout: A maximum time in seconds to allow the teardown process to run before killing
         :type timeout: int | None
         """
+
+        # If setup is currently running, kill it and wait for it to die
+        if self._project_type is not None:
+            self._project_type.kill_subprocesses()
+            self._setup_complete_event.wait()
 
         # Kill all subjob executors' processes. This only has an effect if we are tearing down before a build completes.
         for executor in self.executors_by_id.values():

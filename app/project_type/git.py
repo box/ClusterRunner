@@ -204,15 +204,20 @@ class Git(ProjectType):
         # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
         self._logger.debug("Output from command [{}] after {} seconds: {}".format(command, timeout, child.before))
 
-        # The timeout here is set to None because we do not want a timeout of any sort--In the case that command
-        # is a git clone, this call could potentially run for several minutes. We assume that by the time
-        # code has reached this line (when it has exceeded the timeout value specified in the child.expect call
-        # above) that if we were going to get prompted, we would have seen the prompts already.
-        child.expect(pexpect.EOF, timeout=None)
+        # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
+        # if the kill event has been set in case the build is canceled during setup.
+        finished = None
+        while not self._kill_event.is_set() and finished is None:
+            try:
+                finished = child.expect(pexpect.EOF, timeout=1)
+            except pexpect.TIMEOUT:
+                continue
+
         # This call is necessary for the child.exitstatus to be set properly. Otherwise, it can be set to None.
         child.close()
 
-        if child.exitstatus != 0:
+        # If the command was intentionally killed, do not raise an error
+        if child.exitstatus != 0 and not self._kill_event.is_set():
             raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
                 child.exitstatus, command, child.before.decode('utf-8', errors='replace')))
 
