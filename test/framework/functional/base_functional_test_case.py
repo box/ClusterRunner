@@ -138,12 +138,23 @@ class BaseFunctionalTestCase(TestCase):
 
         :param build_id: The id of the build whose artifacts to check
         :type build_id: int
-        :param expected_build_artifact_contents: A list of lists of mappings from artifact filename to artifact contents
-            string; the outer list corresponds to subjob ids, the inner list corresponds to atom ids, and the dict
-            should be a mapping of filenames to expected file contents for the corresponding atom. See the configs in
-            functional_test_job_configs.py for examples.
+        :param expected_build_artifact_contents: A list of FSItems corresponding to the expected artifact dir contents
         :type expected_build_artifact_contents: list[FSItem]
         """
-        build_artifacts_dir = os.path.join(self.test_app_base_dir.name, 'results', 'master', str(build_id))
-        expected_build_artifacts = Directory(str(build_id), expected_build_artifact_contents)
-        expected_build_artifacts.assert_matches_path(build_artifacts_dir, allow_extra_items=False)
+        build_artifacts_dir_path = os.path.join(self.test_app_base_dir.name, 'results', 'master', str(build_id))
+        self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
+
+    def assert_directory_contents_match_expected(self, dir_path, expected_dir_contents):
+        """
+        Assert that the specified directory has the expected contents.
+
+        :param dir_path: The path of the directory whose artifacts to check
+        :type dir_path: string
+        :param expected_dir_contents: A list of FSItems corresponding to the expected directory contents
+        :type expected_dir_contents: list[FSItem]
+        """
+        if expected_dir_contents is not None:
+            dir_path = os.path.abspath(dir_path)  # converts path to absolute, removes trailing slash if present
+            expected_dir_name = os.path.basename(dir_path)
+            expected_build_artifacts = Directory(expected_dir_name, expected_dir_contents)
+            expected_build_artifacts.assert_matches_path(dir_path, allow_extra_items=False)
