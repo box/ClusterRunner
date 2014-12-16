@@ -1,5 +1,6 @@
 from unittest.mock import ANY, Mock, MagicMock, patch
 import pexpect
+import re
 
 from app.project_type.git import Git
 from app.util.conf.configuration import Configuration
@@ -159,3 +160,21 @@ class TestGit(BaseUnitTestCase):
         self.assertEqual(mock_fs.create_dir.call_count, 1)
         self.assertEqual(mock_rmtree.call_count, 1)
 
+    def test_password_prompt_is_covered_by_pexpect_regexes(self):
+        git = Git("url")
+        matched_prompt = False
+
+        def expect_side_effect(*args, **kwargs):
+            nonlocal matched_prompt
+            if isinstance(args[0], list):
+                for regex in args[0]:
+                    if re.match(regex, "Password:"):
+                        matched_prompt = True
+
+                raise pexpect.EOF(Mock())
+
+        self.mock_pexpect_child.expect.side_effect = expect_side_effect
+
+        git._execute_git_remote_command("command")
+
+        self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
