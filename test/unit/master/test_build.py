@@ -234,6 +234,18 @@ class TestBuild(BaseUnitTestCase):
         self.assertEqual(build._status(), BuildStatus.CANCELED, "Status not set to canceled")
         self.assertTrue(success, "Update did not report success")
 
+    def test_execute_next_subjob_with_empty_queue_cant_teardown_same_slave_twice(self):
+        build = Build(BuildRequest({}))
+        build._unstarted_subjobs = Queue()
+        slave = Mock()
+        slave.free_executor = Mock(return_value=0)
+        build._slaves_allocated.append(slave)
+
+        build.execute_next_subjob_on_slave(slave)
+        build.execute_next_subjob_on_slave(slave)
+
+        self.assertEqual(slave.teardown.call_count, 1, "Teardown should only be called once")
+
     def _create_subjobs(self, count=3):
         return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]
 
