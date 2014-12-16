@@ -145,3 +145,22 @@ class TestClusterMaster(BaseUnitTestCase):
 
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
+
+    def test_handle_result_reported_from_slave_does_nothing_when_build_is_canceled(self):
+        build_id = 1
+        slave_url = "url"
+        build = Build(BuildRequest({}))
+        build.handle_subjob_payload = Mock()
+        build.mark_subjob_complete = Mock()
+        build.execute_next_subjob_on_slave = Mock()
+        master = ClusterMaster()
+        master._all_builds_by_id[build_id] = build
+        master._all_slaves_by_url[slave_url] = Mock()
+        build._is_canceled = True
+
+        master.handle_result_reported_from_slave(slave_url, build_id, 1)
+
+        self.assertEqual(build.handle_subjob_payload.call_count, 0, "Build is canceled, should not handle payload")
+        self.assertEqual(build.mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
+        self.assertEqual(build.execute_next_subjob_on_slave.call_count, 0,
+                         "Build is canceled, should not do next subjob")
