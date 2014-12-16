@@ -167,8 +167,12 @@ class Build(object):
         except Empty:
             num_executors_in_use = slave.free_executor()
             if num_executors_in_use == 0:
-                self._slaves_allocated.remove(slave)
-                slave.teardown()
+                try:
+                    self._slaves_allocated.remove(slave)
+                except ValueError:
+                    pass  # We have already deallocated this slave, no need to teardown
+                else:
+                    slave.teardown()
 
     def handle_subjob_payload(self, subjob_id, payload=None):
         if not payload:
@@ -303,9 +307,8 @@ class Build(object):
     @property
     def is_finished(self):
         # TODO: Clean up this logic or move everything into a state machine
-        build_canceled_and_subjobs_cleaned_up = self._subjobs_are_finished and self._is_canceled
         build_fully_completed = self._postbuild_tasks_are_finished and self._teardowns_finished
-        return build_canceled_and_subjobs_cleaned_up or build_fully_completed
+        return self._is_canceled or build_fully_completed
 
     @property
     def is_unstarted(self):

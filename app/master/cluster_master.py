@@ -274,10 +274,11 @@ class ClusterMaster(object):
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
         build = self._all_builds_by_id[int(build_id)]
         slave = self._all_slaves_by_url[slave_url]
-
-        build.handle_subjob_payload(subjob_id, payload)
-        build.mark_subjob_complete(subjob_id)
-        build.execute_next_subjob_on_slave(slave)
+        # If the build has been canceled, don't work on the next subjob.
+        if not build.is_finished:
+            build.handle_subjob_payload(subjob_id, payload)
+            build.mark_subjob_complete(subjob_id)
+            build.execute_next_subjob_on_slave(slave)
 
     def get_build(self, build_id):
         """
