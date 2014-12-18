@@ -178,7 +178,7 @@ class Git(ProjectType):
         while True:
             try:
                 prompt_index = child.expect(
-                    ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
+                    ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
 
                 # Prompt: User/Password
                 if prompt_index == 0 or prompt_index == 1:

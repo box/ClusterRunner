@@ -1,6 +1,5 @@
 from unittest.mock import ANY, Mock, MagicMock, patch
 import pexpect
-import re
 
 from app.project_type.git import Git
 from app.util.conf.configuration import Configuration
@@ -71,7 +70,7 @@ class TestGit(BaseUnitTestCase):
         def expect_side_effect(*args, **kwargs):
             nonlocal prompted
 
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*'] \
+            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*'] \
                     and not prompted:
                 prompted = True
                 return 2
@@ -88,7 +87,7 @@ class TestGit(BaseUnitTestCase):
 
     def test_execute_git_remote_command_doesnt_auto_add_known_host_if_no_prompt(self):
         def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
+            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
                 raise pexpect.TIMEOUT('some_msg')
             if args[0] == pexpect.EOF:
                 return 1
@@ -102,7 +101,7 @@ class TestGit(BaseUnitTestCase):
 
     def test_execute_git_remote_command_raises_exception_if_strict_host_checking_and_prompted(self):
         def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
+            if args[0] == ['^User.*: ', '^Pass.*: ', '.*Are you sure you want to continue connecting.*']:
                 return 2
             return None
 
@@ -163,21 +162,3 @@ class TestGit(BaseUnitTestCase):
         self.assertEqual(mock_fs.create_dir.call_count, 1)
         self.assertEqual(mock_rmtree.call_count, 1)
 
-    def test_password_prompt_is_covered_by_pexpect_regexes(self):
-        git = Git("url")
-        matched_prompt = False
-
-        def expect_side_effect(*args, **kwargs):
-            nonlocal matched_prompt
-            if isinstance(args[0], list):
-                for regex in args[0]:
-                    if re.match(regex, "Password:"):
-                        matched_prompt = True
-
-                raise pexpect.EOF(Mock())
-
-        self.mock_pexpect_child.expect.side_effect = expect_side_effect
-
-        git._execute_git_remote_command("command")
-
-        self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
