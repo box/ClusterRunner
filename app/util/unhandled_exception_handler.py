@@ -2,7 +2,7 @@ from queue import LifoQueue, Queue
 import signal
 from threading import current_thread, Lock, main_thread
 
-from app.util import log
+from app.util import app_info, log
 from app.util.singleton import Singleton
 
 
@@ -21,6 +21,14 @@ class UnhandledExceptionHandler(Singleton):
     HANDLED_EXCEPTION_EXIT_CODE = 1
     EXCEPTION_DURING_TEARDOWN_EXIT_CODE = 2
 
+    _SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
+
+    _signal_names = {
+        _SIGINFO: 'SIGINFO',
+        signal.SIGINT: 'SIGINT',
+        signal.SIGTERM: 'SIGTERM',
+    }
+
     def __init__(self):
         super().__init__()
         self._handling_lock = Lock()
@@ -29,12 +37,13 @@ class UnhandledExceptionHandler(Singleton):
         self._handled_exceptions = Queue()
         self._teardown_callback_raised_exception = False
 
-        # Set up a handler to be called when process receives SIGTERM.
+        # Set up handlers to be called when the application process receives certain signals.
         # Note: this will raise if called on a non-main thread, but we should NOT work around that here. (That could
         # prevent the teardown handler from ever being registered!) Calling code should be organized so that this
         # singleton is only ever initialized on the main thread.
         signal.signal(signal.SIGTERM, self._application_teardown_signal_handler)
         signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
+        signal.signal(self._SIGINFO, self._application_info_dump_signal_handler)
 
     def add_teardown_callback(self, callback, *callback_args, **callback_kwargs):
         """
@@ -58,12 +67,20 @@ class UnhandledExceptionHandler(Singleton):
         :param frame: The interrupted stack frame
         :type frame: frame
         """
-        signal_names = {
-            signal.SIGTERM: 'SIGTERM',
-            signal.SIGINT: 'SIGINT',
-        }
-        self._logger.info('{} signal received. Triggering teardown.', signal_names[sig])
+        self._logger.info('{} signal received. Triggering teardown.', self._signal_names[sig])
         raise AppTeardown
+
+    def _application_info_dump_signal_handler(self, sig, frame):
+        """
+        A signal handler that will dump application info to the logs.
+
+        :param sig: Signal number of the received signal
+        :type sig: int
+        :param frame: The interrupted stack frame
+        :type frame: frame
+        """
+        self._logger.info('{} signal received. Dumping application info.', self._signal_names[sig])
+        self._logger.notice(app_info.get_app_info_string())
 
     def __enter__(self):
         """
