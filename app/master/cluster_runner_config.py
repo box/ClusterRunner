@@ -12,6 +12,7 @@ TEARDOWN_BUILD = 'teardown_build'
 COMMANDS = 'commands'
 ATOMIZERS = 'atomizers'
 MAX_EXECUTORS = 'max_executors'
+MAX_EXECUTORS_PER_SLAVE = 'max_executors_per_slave'
 
 
 class ClusterRunnerConfig(object):
@@ -81,6 +82,7 @@ class ClusterRunnerConfig(object):
             COMMANDS: [(list, str)],
             ATOMIZERS: [(list, dict)],  # (list, dict) means this field should be a list of dicts
             MAX_EXECUTORS: [int],
+            MAX_EXECUTORS_PER_SLAVE: [int],
         }
 
         for job_name, job_config_sections in config.items():
@@ -139,8 +141,10 @@ class ClusterRunnerConfig(object):
 
         atomizer = Atomizer(job_values[ATOMIZERS])
         max_executors = job_values.get(MAX_EXECUTORS, self.DEFAULT_MAX_EXECUTORS)
+        max_executors_per_slave = job_values.get(MAX_EXECUTORS_PER_SLAVE, self.DEFAULT_MAX_EXECUTORS)
 
-        return JobConfig(job_name, setup_build, teardown_build, command, atomizer, max_executors)
+        return JobConfig(job_name, setup_build, teardown_build, command, atomizer, max_executors,
+                         max_executors_per_slave)
 
     def _shell_command_list_to_single_command(self, commands):
         """
