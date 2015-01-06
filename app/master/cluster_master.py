@@ -47,10 +47,10 @@ class ClusterMaster(object):
         # It's important that idle slaves are only in the queue once so we use OrderedSet
         self._idle_slaves = OrderedSetQueue()
 
-        # Delete all old builds when master starts.  Remove this if/when build numbers are unique across master
-        # starts/stops
+        # Asynchronously delete (but immediately rename) all old builds when master starts.
+        # Remove this if/when build numbers are unique across master starts/stops
         if os.path.exists(self._master_results_path):
-            shutil.rmtree(self._master_results_path)
+            fs.async_delete(self._master_results_path)
 
         fs.create_dir(self._master_results_path)
 
