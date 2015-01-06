@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
 from box.test.genty import genty, genty_dataset
-from unittest.mock import Mock, MagicMock
+import signal
+from threading import Event
+from unittest.mock import Mock, MagicMock, patch
 
 from app.project_type.project_type import ProjectType
 from app.subcommands.build_subcommand import BuildSubcommand
@@ -8,6 +10,7 @@ from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
 import main
 from test.framework.base_unit_test_case import BaseUnitTestCase
+from test.framework.comparators import AnythingOfType
 
 
 @genty
@@ -34,6 +37,11 @@ class TestMain(BaseUnitTestCase):
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
         self.patch('app.subcommands.master_subcommand.analytics.initialize')
         self.patch('argparse._sys.stderr')  # Hack to prevent argparse from printing output during tests.
+
+        # We want the method _start_app_force_kill_countdown mocked out for every test *except* one, so we are patching
+        # this method in an uglier way that allows us to unpatch it just for that test.
+        self.start_force_kill_countdown_patcher = patch('main._start_app_force_kill_countdown')
+        self.start_force_kill_countdown_mock = self.start_force_kill_countdown_patcher.start()
 
     def test_master_args_correctly_create_cluster_master(self):
         mock_cluster_master = self.mock_ClusterMaster.return_value  # get the mock for the ClusterMaster instance
@@ -173,6 +181,49 @@ class TestMain(BaseUnitTestCase):
                 msg='Executing _parse_args on a set of invalid args should raise SystemExit with a non-zero exit code.'
         ):
             main._parse_args(invalid_arg_set)
+
+    def test_start_app_force_kill_countdown_is_called_when_app_exits_normally(self):
+        self.patch('main.MasterSubcommand')  # causes subcommand run() method to return immediately
+
+        main.main(['master'])
+
+        self.start_force_kill_countdown_mock.assert_called_once_with(seconds=AnythingOfType(int))
+
+    def test_start_app_force_kill_countdown_is_called_when_app_exits_via_unhandled_exception(self):
+        run_mock = self.patch('main.MasterSubcommand').return_value.run
+        run_mock.side_effect = Exception('I am here to trigger teardown handlers!')
+
+        with self.assertRaises(SystemExit, msg='UnhandledExceptionHandler should convert Exception to SystemExit.'):
+            main.main(['master'])
+
+        self.start_force_kill_countdown_mock.assert_called_once_with(seconds=AnythingOfType(int))
+
+    def test_start_app_force_kill_countdown_sends_self_sigkill_after_delay(self):
+        # Since the countdown logic executes asynchronously on a separate thread, we replace os.kill() with this
+        # callback to both capture the os.kill() args and set an event to signal us that async execution finished.
+        def fake_os_kill(*args):
+            nonlocal os_kill_args, os_kill_called_event
+            os_kill_args = args
+            os_kill_called_event.set()
+
+        mock_os = self.patch('main.os')
+        mock_time = self.patch('main.time')
+        self.start_force_kill_countdown_patcher.stop()  # unpatch this method so we can test it
+        pid_of_self = 12345
+        sleep_duration = 15
+        os_kill_args = None
+        os_kill_called_event = Event()
+        mock_os.getpid.return_value = pid_of_self
+        mock_os.kill.side_effect = fake_os_kill
+
+        main._start_app_force_kill_countdown(seconds=sleep_duration)
+
+        # Wait for the async thread to finish executing.
+        self.assertTrue(os_kill_called_event.wait(timeout=5), 'os.kill() should be called within a few seconds.')
+
+        mock_time.sleep.assert_called_once_with(sleep_duration)
+        self.assertEqual(os_kill_args, (pid_of_self, signal.SIGKILL),
+                         'The force kill countdown should send SIGKILL to self after a delay.')
 
     def mock_cwd(self, current_dir=None):
         mock_os = self.patch('app.subcommands.build_subcommand.os')
