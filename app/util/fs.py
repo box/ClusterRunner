@@ -1,6 +1,29 @@
 import os
+import shutil
 import tarfile
+import tempfile
+import subprocess
 
+def async_delete(path):
+    """
+    Asynchronously delete a file or a directory. This functionality is handy for deleting large directories.
+    For example, in ClusterRunner, deleting the results directory can take up to half an hour. With async_delete(),
+    the delete call will return almost immediately.
+
+    Under the covers, this is implemented by first synchronously renaming the file or directory to a unique name
+    inside of a temporary directory. After that, we launch an asynchronous process that deletes that file/directory.
+    This asynchronous process does not die when the invoking process (this process) exits/dies.
+
+    :param path: the absolute path to the file or directory to asynchronously delete
+    :type path: str
+    """
+    if os.path.isdir(path):
+        new_temp_path = tempfile.mkdtemp(prefix='async_delete_directory')
+    else:
+        _, new_temp_path = tempfile.mkstemp(prefix='async_delete_file')
+
+    shutil.move(path, new_temp_path)
+    subprocess.Popen("rm -rf {}".format(new_temp_path), shell=True)
 
 def create_dir(dir_path, mode=None):
     """
