@@ -119,7 +119,8 @@ class Build(object):
         :type slave: Slave
         """
         self._slaves_allocated.append(slave)
-        self._num_executors_allocated += slave.num_executors
+        self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
+
         slave.setup(self.build_id(), project_type_params=self.build_request.build_parameters())
 
     def all_subjobs(self):

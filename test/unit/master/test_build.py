@@ -276,6 +276,21 @@ class TestBuild(BaseUnitTestCase):
 
         self.assertEqual(slave.teardown.call_count, 1, "Teardown should only be called once")
 
+    def test_allocate_slave_increments_by_num_executors_when_max_is_inf(self):
+        build = Build(BuildRequest({}))
+        slave = Mock()
+        slave.num_executors = 10
+        build.allocate_slave(slave)
+        self.assertEqual(build._num_executors_allocated, 10, "Should be incremented by num executors")
+
+    def test_allocate_slave_increments_by_per_slave_when_max_not_inf_and_less_than_num(self):
+        build = Build(BuildRequest({}))
+        build._max_executors_per_slave = 5
+        slave = Mock()
+        slave.num_executors = 10
+        build.allocate_slave(slave)
+        self.assertEqual(build._num_executors_allocated, 5, "Should be incremented by num executors")
+
     def _create_subjobs(self, count=3):
         return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]
 
