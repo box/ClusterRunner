@@ -52,7 +52,7 @@ class TestProjectType(BaseUnitTestCase):
                          'Actual default value for argument should match expected.')
 
     def test_teardown_build_runs_teardown(self):
-        job_config = JobConfig('name', 'setup', 'teardown', 'command', 'atomizer', 10)
+        job_config = JobConfig('name', 'setup', 'teardown', 'command', 'atomizer', 10, 10)
         project_type = ProjectType()
         project_type.job_config = MagicMock(return_value=job_config)
         project_type.execute_command_in_project = MagicMock(return_value=('', 0))

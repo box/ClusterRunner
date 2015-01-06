@@ -1,4 +1,6 @@
 SampleJob:
+    max_executors: 2
+    max_executors_per_slave: 5
     setup_build:
         - echo "run setup"
     commands:

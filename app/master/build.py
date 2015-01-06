@@ -43,14 +43,16 @@ class Build(object):
         self._slaves_allocated = []
         self._num_executors_allocated = 0
         self._num_executors_in_use = 0
+
         self._max_executors = float('inf')
-        self._build_completion_lock = Lock()
+        self._max_executors_per_slave = float('inf')
 
         self._all_subjobs_by_id = {}
         self._unstarted_subjobs = None
         self._finished_subjobs = None
         self._postbuild_tasks_are_finished = False
         self._teardowns_finished = False
+        self._timing_file_path = None
 
     def api_representation(self):
         return {
@@ -69,7 +71,7 @@ class Build(object):
         """
         :type subjobs: list[Subjob]
         :type project_type: project_type.project_type.ProjectType
-        :type job_config: master.job_config.JobConfig
+        :type job_config: JobConfig
         """
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
@@ -83,6 +85,7 @@ class Build(object):
             self._unstarted_subjobs.put(subjob)
 
         self._max_executors = job_config.max_executors
+        self._max_executors_per_slave = job_config.max_executors_per_slave
         self._timing_file_path = project_type.timing_file_path(job_config.name)
         self.is_prepared = True
 
@@ -144,8 +147,9 @@ class Build(object):
 
         :type slave: Slave
         """
-        for _ in range(slave.num_executors):
-            if self._num_executors_in_use >= self._max_executors:
+        for slave_executor_count in range(slave.num_executors):
+            if (self._num_executors_in_use >= self._max_executors
+                    or slave_executor_count >= self._max_executors_per_slave):
                 break
             slave.claim_executor()
             self._num_executors_in_use += 1
