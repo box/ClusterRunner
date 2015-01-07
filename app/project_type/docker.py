@@ -51,7 +51,7 @@ class Docker(ProjectType):
 
         self._container = DockerContainer(image, user, host, mounted_volumes)
 
-    def _setup_build(self):
+    def _fetch_project(self):
         pull_command = 'docker pull {}'.format(self._image)
         self._execute_in_project_and_raise_on_failure(pull_command, 'Could not pull Docker container.')
 

@@ -143,7 +143,7 @@ class TestGit(BaseUnitTestCase):
 
         self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
 
-    def test_setup_build_when_existing_repo_is_shallow_deletes_repo(self):
+    def test_fetch_project_when_existing_repo_is_shallow_deletes_repo(self):
         url = 'url'
         repo_path = 'repo_path'
         git = Git(url)
@@ -155,10 +155,10 @@ class TestGit(BaseUnitTestCase):
         mock_fs = self.patch('app.project_type.git.fs')
         mock_rmtree = self.patch('shutil.rmtree')
         git._execute_git_remote_command = Mock()
-        mock_fs.create_dir.call_count = 0  # only measure calls made in _setup_build
+        mock_fs.create_dir.call_count = 0  # only measure calls made in _fetch_project
         mock_rmtree.call_count = 0
 
-        git._setup_build()
+        git._fetch_project()
 
         self.assertEqual(mock_fs.create_dir.call_count, 1)
         self.assertEqual(mock_rmtree.call_count, 1)

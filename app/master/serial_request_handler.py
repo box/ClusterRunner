@@ -53,7 +53,7 @@ class SerialRequestHandler(object):
             raise BuildProjectError('Build failed due to an invalid build type.')
 
         self._logger.info('Fetching project for build {}.', build_id)
-        project_type.setup_build()
+        project_type.fetch_project()
 
         self._logger.info('Successfully fetched project for build {}.', build_id)
         job_config = project_type.job_config()

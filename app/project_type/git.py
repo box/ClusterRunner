@@ -123,7 +123,7 @@ class Git(ProjectType):
         os.symlink(actual_project_directory, build_project_directory)
         self.project_directory = build_project_directory
 
-    def _setup_build(self):
+    def _fetch_project(self):
         """
         Clones the project if necessary, fetches from the remote repo and resets to the requested commit
         """

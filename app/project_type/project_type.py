@@ -70,11 +70,12 @@ class ProjectType(object):
             config_contents = f.read()
         return config_contents
 
-    def setup_build(self, executors=None, project_type_params=None):
+    def fetch_project(self, executors=None, project_type_params=None):
         """
-        Setup the project_type on the local machine.  Runs once per machine per build. Runs the project_type's
-        retrieve command (fetch, reset, etc), produces a list of per-executor project_type, and runs any setup defined
-        in the job config on each of those.
+        Fetch the project onto the local machine.
+
+        Runs once per machine per build. Runs the project_type's retrieve command (fetch, reset, etc) and produces
+        a list of per-executor project_types.
 
         :type executors: list [SubjobExecutor]
         :type project_type_params: dict [str, str]
@@ -83,20 +84,17 @@ class ProjectType(object):
             raise RuntimeError('setup_build called with invalid params, either both executors and project_type_params '
                                'should be set, or neither')
 
-        self._setup_build()
+        self._fetch_project()
         self._logger.info('Build setup complete.')
 
         if self._remote_files:
             self._run_remote_file_setup()
 
-        # If executors were passed in, run configure_environment to do per-executor setup and any job config setup on
-        # each one.
+        # If executors were passed in, run configure_environment to do per-executor setup.
         if executors and project_type_params:
             self._setup_executors(executors, project_type_params)
-        else:  # Otherwise, do any job config setup defined in this (main) project_type
-            self.run_job_config_setup()
 
-    def _setup_build(self):
+    def _fetch_project(self):
         raise NotImplementedError
 
     def _execute_and_raise_on_failure(self, command, message, cwd=None):
@@ -149,13 +147,13 @@ class ProjectType(object):
     def _setup_executors(self, executors, project_type_params):
         """
         Given the executors, run the job config setup commands.  Override this to specify different behavior per
-        project_type type
+        project_type type.
+
         :type executors: list [SubjobExecutor]
         :type project_type_params: dict [str, str]
         """
         for executor in executors:
             executor.configure_project_type(project_type_params)
-        self.run_job_config_setup()
 
     def setup_executor(self):
         """
@@ -166,7 +164,7 @@ class ProjectType(object):
 
     def teardown_executor(self):
         """
-        Do cleanup for each executor. This should be called by client code if project_type.setup_build()
+        Do cleanup for each executor. This should be called by client code if project_type.fetch_project()
         was called. Default implementation is to do nothing.
         """
         pass

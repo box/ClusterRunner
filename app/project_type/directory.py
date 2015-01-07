@@ -35,7 +35,7 @@ class Directory(ProjectType):
         self.project_directory = os.path.abspath(project_directory)
         self._logger.debug('Project directory is {}'.format(project_directory))
 
-    def _setup_build(self):
+    def _fetch_project(self):
         check_command = 'test -d "{}"'.format(self.project_directory)
         output, exit_code = self.execute_command_in_project(check_command, cwd='/')
         if exit_code != 0:
