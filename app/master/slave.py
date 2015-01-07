@@ -23,7 +23,7 @@ class Slave(object):
         self._num_executors_in_use = Counter()
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
-        self.is_alive = True
+        self._is_alive = True
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
         self._logger = log.get_logger(__name__)
 
@@ -69,7 +69,7 @@ class Slave(object):
         """
         Tell the slave to run the build teardown
         """
-        if self.is_alive:
+        if self.is_alive():
             teardown_url = self._slave_api.url('build', self.current_build_id, 'teardown')
             self._network.post(teardown_url)
         else:
@@ -79,7 +79,7 @@ class Slave(object):
         """
         :type subjob: Subjob
         """
-        if not self.is_alive:
+        if not self.is_alive():
             raise RuntimeError('Tried to start a subjob on a dead slave! ({}, id: {})'.format(self.url, self.id))
 
         SafeThread(target=self._async_start_subjob, args=(subjob,)).start()
@@ -113,3 +113,46 @@ class Slave(object):
         if new_count < 0:
             raise Exception('Cannot free executor on slave {}. All are free.'.format(self.url))
         return new_count
+
+    def is_alive(self, use_cached=True):
+        """
+        Is the slave API responsive?
+
+        :param use_cached: Should we use the last returned value of the network check to the slave? If True,
+            will return cached value. If False, this method will perform an actual network call to the slave.
+        :type use_cached: bool
+        :rtype: bool
+        """
+        if use_cached:
+            return self._is_alive
+
+        try:
+            response = self._network.get(self._slave_api.url())
+
+            if not response.ok:
+                self._is_alive = False
+            else:
+                response_data = response.json()
+
+                if 'slave' not in response_data or 'is_alive' not in response_data['slave']:
+                    self._logger.warning('{}\'s API is missing key slave[\'is_alive\'].', self.url)
+                    self._is_alive = False
+                elif not isinstance(response_data['slave']['is_alive'], bool):
+                    self._logger.warning('{}\'s API key \'is_alive\' is not a boolean.', self.url)
+                    self._is_alive = False
+                else:
+                    self._is_alive = response_data['slave']['is_alive']
+
+        except ConnectionError:
+            self._logger.warning('Slave with url {} is offline.', self.url)
+            self._is_alive = False
+
+        return self._is_alive
+
+    def set_is_alive(self, value):
+        """
+        Setter for the self._is_alive attribute.
+
+        :type value: bool
+        """
+        self._is_alive = value

@@ -32,6 +32,7 @@ class ClusterSlave(object):
         """
         self.port = port
         self.host = host
+        self.is_alive = True
         self._slave_id = None
         self._num_executors = num_executors
         self._logger = log.get_logger(__name__)
@@ -58,15 +59,12 @@ class ClusterSlave(object):
         """
         executors_representation = [executor.api_representation() for executor in self.executors_by_id.values()]
         return {
-            'connected': self._is_connected(),
+            'is_alive': self.is_alive,
             'master_url': self._master_url,
             'current_build_id': self._current_build_id,
             'slave_id': self._slave_id,
             'executors': executors_representation,
         }
-
-    def _is_connected(self):
-        return self._master_url is not None
 
     def get_status(self):
         """
@@ -192,7 +190,13 @@ class ClusterSlave(object):
         self._logger.info('Notifying master that this slave is ready for new builds.')
         self._notify_master_of_state_change(SlaveState.IDLE)
 
-    def _send_master_disconnect_notification(self):
+    def _disconnect_from_master(self):
+        """
+        Perform internal bookkeeping, as well as notify the master, that this slave is disconnecting itself
+        from the slave pool.
+        """
+        self.is_alive = False
+
         if not self._is_master_responsive():
             self._logger.notice('Could not post disconnect notification to master because master is unresponsive.')
             return
@@ -208,6 +212,7 @@ class ClusterSlave(object):
         :param master_url: The URL of the master service. If none specified, defaults to localhost:43000.
         :type master_url: str | None
         """
+        self.is_alive = True
         self._master_url = master_url or 'localhost:43000'
         self._master_api = UrlBuilder(self._master_url)
         connect_url = self._master_api.url('slave')
@@ -222,7 +227,7 @@ class ClusterSlave(object):
         # We disconnect from the master before build_teardown so that the master stops sending subjobs. (Teardown
         # callbacks are executed in the reverse order that they're added, so we add the build_teardown callback first.)
         UnhandledExceptionHandler.singleton().add_teardown_callback(self._do_build_teardown_and_reset, timeout=30)
-        UnhandledExceptionHandler.singleton().add_teardown_callback(self._send_master_disconnect_notification)
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self._disconnect_from_master)
 
     def _is_master_responsive(self):
         """

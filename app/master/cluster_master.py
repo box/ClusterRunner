@@ -179,7 +179,7 @@ class ClusterMaster(object):
         """
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
-        slave.is_alive = False
+        slave.set_is_alive(False)
         # todo: Fail any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 
@@ -337,9 +337,11 @@ class ClusterMaster(object):
 
             while build_waiting_for_slave.needs_more_slaves():
                 claimed_slave = self._idle_slaves.get()
+
                 # Remove dead slaves from the idle queue
-                if not claimed_slave.is_alive:
+                if not claimed_slave.is_alive(use_cached=False):
                     continue
+
                 # The build may have completed while we were waiting for an idle slave, so check one more time.
                 if build_waiting_for_slave.needs_more_slaves():
                     # Potential race condition here!  If the build completes after the if statement is checked,

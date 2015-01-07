@@ -119,11 +119,11 @@ class TestClusterMaster(BaseUnitTestCase):
         slave_url = 'raphael.turtles.gov'
         master.connect_new_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
-        self.assertTrue(slave.is_alive)
+        self.assertTrue(slave.is_alive())
 
         master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
 
-        self.assertFalse(slave.is_alive)
+        self.assertFalse(slave.is_alive())
 
     def test_updating_slave_to_setup_completed_state_should_tell_build_to_begin_subjob_execution(self):
         master = ClusterMaster()
