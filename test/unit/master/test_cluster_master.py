@@ -16,6 +16,7 @@ class TestClusterMaster(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.patch('app.util.fs.create_dir')
+        self.patch('app.util.fs.async_delete')
         self.patch('shutil.rmtree')
 
     def test_updating_slave_to_idle_state_marks_build_finished_when_slaves_are_done(self):

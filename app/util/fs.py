@@ -23,7 +23,7 @@ def async_delete(path):
         _, new_temp_path = tempfile.mkstemp(prefix='async_delete_file')
 
     shutil.move(path, new_temp_path)
-    subprocess.Popen("rm -rf {}".format(new_temp_path), shell=True)
+    subprocess.Popen(['rm', '-rf', new_temp_path])
 
 def create_dir(dir_path, mode=None):
     """
