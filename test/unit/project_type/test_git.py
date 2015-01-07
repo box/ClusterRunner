@@ -17,6 +17,8 @@ class TestGit(BaseUnitTestCase):
         self.mock_pexpect_child = self.patch('pexpect.spawn').return_value
         self.mock_pexpect_child.before = 'None'
         self.mock_pexpect_child.exitstatus = 0
+        mock_tempfile = self.patch('app.project_type.project_type.TemporaryFile').return_value
+        mock_tempfile.read.return_value = b'fake file contents'
 
     def test_timing_file_path_happy_path(self):
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
@@ -31,7 +33,6 @@ class TestGit(BaseUnitTestCase):
         os_path_exists_patch = self.patch('os.path.exists')
         os_path_exists_patch.return_value = True
         project_type_popen_patch = self.patch('app.project_type.project_type.Popen')
-        project_type_popen_patch.return_value.communicate.return_value = None, None
         project_type_popen_patch.return_value.returncode = 0
 
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
@@ -50,7 +51,6 @@ class TestGit(BaseUnitTestCase):
         os_path_exists_patch = self.patch('os.path.exists')
         os_path_exists_patch.return_value = False
         project_type_popen_patch = self.patch('app.project_type.project_type.Popen')
-        project_type_popen_patch.return_value.communicate.return_value = None, None
         project_type_popen_patch.return_value.returncode = 0
 
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')

@@ -3,7 +3,8 @@ import inspect
 import os
 import re
 import signal
-from subprocess import PIPE, Popen, TimeoutExpired
+from subprocess import Popen, TimeoutExpired
+from tempfile import TemporaryFile
 from threading import Event
 import time
 
@@ -205,59 +206,90 @@ class ProjectType(object):
         command = self.command_in_project('{} {}'.format(environment_setter, command))
         self._logger.debug('Executing command in project: {}', command)
 
+        # Redirect output to files instead of using pipes to avoid: https://github.com/box/ClusterRunner/issues/57
+        stdout_file = TemporaryFile()
+        stderr_file = TemporaryFile()
         pipe = Popen(
             command,
             shell=True,
-            stdout=PIPE,
-            stderr=PIPE,
+            stdout=stdout_file,
+            stderr=stderr_file,
             start_new_session=True,  # Starts a new process group (so we can kill it without killing clusterrunner).
             **popen_kwargs
         )
 
-        # Try waiting for the command to complete, but also periodically check an event flag to see if we should
-        # terminate the process prematurely.
-        output_raw, err_raw = None, None
+        clusterrunner_error_msgs = []
         command_completed = False
         timeout_time = time.time() + (timeout or float('inf'))
+
+        # Wait for the command to complete, but also periodically check the kill event flag to see if we should
+        # terminate the process prematurely.
         while not command_completed and not self._kill_event.is_set() and time.time() < timeout_time:
             try:
-                output_raw, err_raw = pipe.communicate(timeout=1)  # pylint: disable=unexpected-keyword-arg
-                command_completed = True  # communicate() didn't timeout, so process has finished executing.
+                pipe.wait(timeout=1)
+                command_completed = True  # wait() didn't raise TimeoutExpired, so process has finished executing.
             except TimeoutExpired:
                 continue
+            except Exception as ex:  # pylint: disable=broad-except
+                error_message = 'Exception while waiting for process to finish.'
+                self._logger.exception(error_message)
+                clusterrunner_error_msgs.append(
+                    'ClusterRunner: {} ({}: "{}")'.format(error_message, type(ex).__name__, ex))
+                break
 
         if not command_completed:
             # We've been signaled to terminate subprocesses, so terminate them. But we still collect stdout and stderr.
             # We must kill the entire process group since shell=True launches 'sh -c "cmd"' and just killing the pid
             # will kill only "sh" and not its child processes.
+            # Note: We may lose buffered output from the subprocess that hasn't been flushed before termination. If we
+            # want to prevent output buffering we should refactor this method to use pexpect.
             self._logger.warning('Terminating PID: {}, Command: "{}"', pipe.pid, command)
             try:
+                # todo: os.killpg sends a SIGTERM to all processes in the process group. If the immediate child process
+                # ("sh") dies but its child processes do not, we will leave them running orphaned.
                 os.killpg(pipe.pid, signal.SIGTERM)
             except (PermissionError, ProcessLookupError) as ex:  # os.killpg will raise if process has already ended
-                self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: {}.',
+                self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: "{}".',
                                      pipe.pid, type(ex).__name__, ex)
+            try:
+                pipe.wait()
+            except Exception as ex:  # pylint: disable=broad-except
+                error_message = 'Exception while waiting for terminated process to finish.'
+                self._logger.exception(error_message)
+                clusterrunner_error_msgs.append(
+                    'ClusterRunner: {} ({}: "{}")'.format(error_message, type(ex).__name__, ex))
 
-            output_raw, err_raw = pipe.communicate()
-
-        output = output_raw.decode('utf-8', errors='replace') if output_raw else ''
-        err = err_raw.decode('utf-8', errors='replace') if err_raw else ''
+        stdout, stderr = [self._read_file_contents_and_close(f) for f in [stdout_file, stderr_file]]
         exit_code = pipe.returncode
 
         if exit_code != 0:
             max_log_length = 300
-            logged_output, logged_err = output, err
-            if len(output) > max_log_length:
-                logged_output = '{}... (total stdout length: {})'.format(output[:max_log_length], len(output))
-            if len(err) > max_log_length:
-                logged_err = '{}... (total stderr length: {})'.format(err[:max_log_length], len(err))
+            logged_stdout, logged_stderr = stdout, stderr
+            if len(stdout) > max_log_length:
+                logged_stdout = '{}... (total stdout length: {})'.format(stdout[:max_log_length], len(stdout))
+            if len(stderr) > max_log_length:
+                logged_stderr = '{}... (total stderr length: {})'.format(stderr[:max_log_length], len(stderr))
 
             # Note we are intentionally not logging at error or warning level here. Interpreting a non-zero return code
             # as a failure is context-dependent, so we can't make that determination here.
             self._logger.notice(
                 'Command exited with non-zero exit code.\nCommand: {}\nExit code: {}\nStdout: {}\nStderr: {}\n',
-                command, exit_code, logged_output, logged_err
-            )
-        return '\n'.join([output, err]), exit_code
+                command, exit_code, logged_stdout, logged_stderr)
+        else:
+            self._logger.debug('Command completed with exit code {}.', exit_code)
+
+        exit_code = exit_code if exit_code is not None else -1  # Make sure we always return an int.
+        combined_command_output = '\n'.join([stdout, stderr] + clusterrunner_error_msgs)
+        return combined_command_output, exit_code
+
+    def _read_file_contents_and_close(self, file):
+        """
+        :type file: BufferedRandom
+        """
+        file.seek(0)  # Reset file positions so we are reading from the beginning.
+        contents = file.read().decode('utf-8', errors='replace')
+        file.close()
+        return contents
 
     def echo_command_in_project(self, command, *args, **kwargs):
         """
