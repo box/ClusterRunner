@@ -148,9 +148,9 @@ class TestClusterSlave(BaseUnitTestCase):
         self.mock_network.post().status_code = http.client.OK
         slave = self._create_cluster_slave()
         project_type_mock = self.patch('app.slave.cluster_slave.util.create_project_type').return_value
-        # This test uses setup_complete_event to detect when the async setup_build() has executed.
+        # This test uses setup_complete_event to detect when the async fetch_project() has executed.
         setup_complete_event = Event()
-        project_type_mock.setup_build.side_effect = self.no_args_side_effect(setup_complete_event.set)
+        project_type_mock.fetch_project.side_effect = self.no_args_side_effect(setup_complete_event.set)
         # This test uses teardown_event to cause a thread to block on the teardown_build() call.
         teardown_event = Event()
         project_type_mock.teardown_build.side_effect = self.no_args_side_effect(teardown_event.wait)
@@ -182,13 +182,23 @@ class TestClusterSlave(BaseUnitTestCase):
         slave.connect_to_master(self._FAKE_MASTER_URL)
         slave._project_type = MagicMock()
         if not is_setup_successful:
-            slave._project_type.setup_build.side_effect = SetupFailureError
+            slave._project_type.fetch_project.side_effect = SetupFailureError
 
         slave._async_setup_build(executors=[], project_type_params={})
 
         self.mock_network.put_with_digest.assert_called_once_with(
             expected_slave_data_url, request_params={'slave': {'state': expected_slave_state}},
             secret=ANY, error_on_failure=True)
+
+    def test_async_setup_happy_path_invokes_correct_methods(self):
+        slave = self._create_cluster_slave()
+        slave.connect_to_master(self._FAKE_MASTER_URL)
+        project_type_mock = self.patch('app.slave.cluster_slave.util.create_project_type').return_value
+        slave._project_type = project_type_mock
+        slave._async_setup_build([], [])
+
+        project_type_mock.fetch_project.assert_called_once_with([], [])
+        self.assertTrue(project_type_mock.run_job_config_setup.called)
 
     def _create_cluster_slave(self, **kwargs):
         """

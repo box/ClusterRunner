@@ -97,7 +97,7 @@ class ClusterSlave(object):
             raise RuntimeError('Slave tried to setup build but not all executors are idle. ({}/{} executors idle.)'
                                .format(self._idle_executors.qsize(), self._num_executors))
 
-        # Collect all the executors to pass to project_type.setup_build(). This will create a new project_type for
+        # Collect all the executors to pass to project_type.fetch_project(). This will create a new project_type for
         # each executor (for subjob-level operations).
         executors = list(self._idle_executors.queue)
         SafeThread(
@@ -117,7 +117,8 @@ class ClusterSlave(object):
         # todo(joey): It's strange that the project_type is setting up the executors, which in turn set up projects.
         # todo(joey): I think this can be untangled a bit -- we should call executor.configure_project_type() here.
         try:
-            self._project_type.setup_build(executors, project_type_params)
+            self._project_type.fetch_project(executors, project_type_params)
+            self._project_type.run_job_config_setup()
 
         except SetupFailureError as ex:
             self._logger.error(ex)
