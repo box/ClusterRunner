@@ -65,7 +65,11 @@ class _RootHandler(_ClusterMasterBaseHandler):
 
 
 class _APIVersionOneHandler(_ClusterMasterBaseHandler):
-    pass
+    def get(self):
+        response = {
+            'master': self._cluster_master.api_representation(),
+        }
+        self.write(response)
 
 
 class _VersionHandler(_ClusterMasterBaseHandler):
