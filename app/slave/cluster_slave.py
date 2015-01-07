@@ -56,10 +56,9 @@ class ClusterSlave(object):
         Gets a dict representing this resource which can be returned in an API response.
         :rtype: dict [str, mixed]
         """
-        # todo: add this to the ClusterSlave api response
         executors_representation = [executor.api_representation() for executor in self.executors_by_id.values()]
         return {
-            'connected': str(self._is_connected()),
+            'connected': self._is_connected(),
             'master_url': self._master_url,
             'current_build_id': self._current_build_id,
             'slave_id': self._slave_id,
