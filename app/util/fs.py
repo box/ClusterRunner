@@ -4,6 +4,7 @@ import tarfile
 import tempfile
 import subprocess
 
+
 def async_delete(path):
     """
     Asynchronously delete a file or a directory. This functionality is handy for deleting large directories.
@@ -17,13 +18,10 @@ def async_delete(path):
     :param path: the absolute path to the file or directory to asynchronously delete
     :type path: str
     """
-    if os.path.isdir(path):
-        new_temp_path = tempfile.mkdtemp(prefix='async_delete_directory')
-    else:
-        _, new_temp_path = tempfile.mkstemp(prefix='async_delete_file')
-
+    new_temp_path = tempfile.mkdtemp(prefix='async_delete_directory')
     shutil.move(path, new_temp_path)
     subprocess.Popen(['rm', '-rf', new_temp_path])
+
 
 def create_dir(dir_path, mode=None):
     """

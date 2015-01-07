@@ -1,7 +1,6 @@
 from collections import OrderedDict
 import os
 from queue import Queue
-import shutil
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
