@@ -2,14 +2,18 @@
 
 import argparse
 import hashlib
+import os
+import signal
 import sys
+import threading
+import time
 
 from app.subcommands.build_subcommand import BuildSubcommand
 from app.subcommands.deploy_subcommand import DeploySubcommand
 from app.subcommands.master_subcommand import MasterSubcommand
 from app.subcommands.slave_subcommand import SlaveSubcommand
 from app.subcommands.stop_subcommand import StopSubcommand
-from app.util import autoversioning, util
+from app.util import app_info, autoversioning, log, util
 from app.util.argument_parsing import ClusterRunnerArgumentParser, ClusterRunnerHelpFormatter
 from app.util.conf.configuration import Configuration
 from app.util.conf.base_config_loader import BaseConfigLoader, BASE_CONFIG_FILE_SECTION
@@ -221,22 +225,49 @@ def _set_secret(config_filename):
     Secret.set(secret)
 
 
+def _start_app_force_kill_countdown(seconds):
+    """
+    Start a daemon thread that will wait the specified number of seconds and then dump debug info and forcefully kill
+    the app. Note that this hard kill will only be executed if the app is unexpectedly hanging. Under normal
+    circumstances, the app will exit cleanly (all nondaemon threads will finish) before the specified delay has elapsed.
+
+    :param seconds: The number of seconds to wait before dumping debug info and hard killing the app
+    :type seconds: int
+    """
+    def log_app_debug_info_and_force_kill_after_delay():
+        time.sleep(seconds)
+        logger = log.get_logger(__name__)
+        logger.error('ClusterRunner did not exit within {} seconds. App debug info:\n\n{}.',
+                     seconds, app_info.get_app_info_string())
+        logger.critical('ClusterRunner seems to be hanging unexpectedly. Sending SIGKILL to self. Farewell!')
+        os.kill(os.getpid(), signal.SIGKILL)
+
+    # Execute on a daemon thread so that the countdown itself will not prevent the app from exiting naturally.
+    threading.Thread(target=log_app_debug_info_and_force_kill_after_delay, name='SuicideThread', daemon=True).start()
+
+
 def main(args):
     """
     This is the single entry point of the ClusterRunner application. This function feeds the command line parameters as
-    keyword args directly into the subcommand entry point functions above.
+    keyword args directly into the run() method of the appropriate Subcommand subclass.
 
-    Note that we execute most application logic off of the main thread. This frees up the main thread to be responsible
-    for facilitating a graceful application shutdown by intercepting external signals (currently only SIGINT/Ctrl-C)
-    and executing teardown handlers.
+    Note that for the master and slave subcommands, we execute all major application logic (including the web server)
+    on a separate thread (not the main thread). This frees up the main thread to be responsible for facilitating
+    graceful application shutdown by intercepting external signals and executing teardown handlers.
     """
     parsed_args = _parse_args(args)
     _initialize_configuration(parsed_args.pop('subcommand'), parsed_args.pop('config_file'))
     subcommand_class = parsed_args.pop('subcommand_class')  # defined in _parse_args() by subparser.set_defaults()
 
-    unhandled_exception_handler = UnhandledExceptionHandler.singleton()
-    with unhandled_exception_handler:
-        subcommand_class().run(**parsed_args)
+    try:
+        unhandled_exception_handler = UnhandledExceptionHandler.singleton()
+        with unhandled_exception_handler:
+            subcommand_class().run(**parsed_args)
+
+    finally:
+        # The force kill countdown is not an UnhandledExceptionHandler teardown callback because we want it to execute
+        # in all situations (not only when there is an unhandled exception).
+        _start_app_force_kill_countdown(seconds=10)
 
 
 if __name__ == '__main__':
