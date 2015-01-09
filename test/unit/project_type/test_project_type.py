@@ -1,6 +1,6 @@
 from box.test.genty import genty, genty_dataset
 from subprocess import TimeoutExpired
-from unittest.mock import MagicMock, ANY
+from unittest.mock import ANY, MagicMock
 
 from app.master.job_config import JobConfig
 from app.project_type.project_type import ProjectType
@@ -16,6 +16,18 @@ class TestProjectType(BaseUnitTestCase):
         super().setUp()
         self.mock_popen = self.patch('app.project_type.project_type.Popen').return_value
         self.mock_killpg = self.patch('os.killpg')
+        self.mock_temporary_files = []
+        self.mock_TemporaryFile = self.patch('app.project_type.project_type.TemporaryFile',
+                                             side_effect=self.mock_temporary_files)
+
+    def _mock_next_tempfile(self, contents):
+        next_tempfile_mock = MagicMock()
+        next_tempfile_mock.read.return_value = contents
+        self.mock_temporary_files.append(next_tempfile_mock)
+
+    def _mock_stdout_and_stderr(self, stdout_content, stderr_content):
+        self._mock_next_tempfile(contents=stdout_content)
+        self._mock_next_tempfile(contents=stderr_content)
 
     def test_required_constructor_args_are_correctly_detected_without_defaults(self):
         actual_required_args = _FakeEnvWithoutDefaultArgs.required_constructor_argument_names()
@@ -63,12 +75,14 @@ class TestProjectType(BaseUnitTestCase):
 
     def test_execute_command_in_project_does_not_choke_on_weird_command_output(self):
         some_weird_output = b'\xbf\xe2\x98\x82'  # the byte \xbf is invalid unicode
-        self.mock_popen.communicate.return_value = (some_weird_output, None)
-        self.mock_popen.returncode = (some_weird_output, None)
+        self._mock_stdout_and_stderr(some_weird_output, b'')
+        self.mock_popen.returncode = 0
 
         project_type = ProjectType()
-        project_type.execute_command_in_project('fake command')
-        # test is successful if no exception is raised!
+        actual_output, _ = project_type.execute_command_in_project('fake command')
+
+        # Part of this test is just proving that no exception is raised on invalid output.
+        self.assertIsInstance(actual_output, str, 'Invalid output from a process should still be converted to string.')
 
     @genty_dataset(
         no_blacklist=(['earth', 'wind', 'water'], None, True),
@@ -86,7 +100,9 @@ class TestProjectType(BaseUnitTestCase):
             self.assertEqual(arg_name in arg_mapping, expected)
 
     def test_calling_kill_subprocesses_will_break_out_of_command_execution_wait_loop(self):
-        self._mock_out_popen_communicate()
+        self._mock_stdout_and_stderr(b'fake_output', b'fake_error')
+        self.mock_popen.pid = 55555
+        self._simulate_hanging_popen_process()
 
         project_type = ProjectType()
         command_thread = SafeThread(target=project_type.execute_command_in_project, args=('echo The power is yours!',))
@@ -108,31 +124,85 @@ class TestProjectType(BaseUnitTestCase):
         self.mock_killpg.assert_called_once_with(55555, ANY)  # Note: os.killpg does not accept keyword args.
 
     def test_command_exiting_normally_will_break_out_of_command_execution_wait_loop(self):
-        # Simulate Popen.communicate() timing out twice before command completes and returns output.
-        timeout_exc = TimeoutExpired(None, 1)
-        self.mock_popen.communicate.side_effect = [timeout_exc, timeout_exc, (b'fake_output', b'fake_error')]
-        self.mock_popen.returncode = 0
-        self.mock_popen.pid = 55555
+        timeout_exc = TimeoutExpired(cmd=None, timeout=1)
+        expected_return_code = 0
+        # Simulate Popen.wait() timing out twice before command completes and returns output.
+        self.mock_popen.wait.side_effect = [timeout_exc, timeout_exc, expected_return_code]
+        self.mock_popen.returncode = expected_return_code
+        self._mock_stdout_and_stderr(b'fake_output', b'fake_error')
 
         project_type = ProjectType()
         actual_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
 
         self.assertEqual(self.mock_killpg.call_count, 0, 'os.killpg should not be called when command exits normally.')
         self.assertEqual(actual_output, 'fake_output\nfake_error', 'Output should contain stdout and stderr.')
+        self.assertEqual(actual_return_code, expected_return_code, 'Actual return code should match expected.')
+        self.assertTrue(all([file.close.called for file in self.mock_temporary_files]),
+                        'All created TemporaryFiles should be closed so that they are removed from the filesystem.')
 
     def test_timing_out_will_break_out_of_command_execution_wait_loop_and_kill_subprocesses(self):
         mock_time = self.patch('time.time')
         mock_time.side_effect = [0.0, 100.0, 200.0, 300.0]  # time increases by 100 seconds with each loop
-        self._mock_out_popen_communicate()
-        project_type = ProjectType()
+        expected_return_code = 1
+        self._simulate_hanging_popen_process(fake_returncode=expected_return_code)
+        self.mock_popen.pid = 55555
+        self._mock_stdout_and_stderr(b'fake output', b'fake error')
 
+        project_type = ProjectType()
         actual_output, actual_return_code = project_type.execute_command_in_project(
-            command='sleep 99',
-            timeout=250,
-        )
+            command='sleep 99', timeout=250)
 
         self.assertEqual(self.mock_killpg.call_count, 1, 'os.killpg should be called when execution times out.')
         self.assertEqual(actual_output, 'fake output\nfake error', 'Output should contain stdout and stderr.')
+        self.assertEqual(actual_return_code, expected_return_code, 'Actual return code should match expected.')
+        self.assertTrue(all([file.close.called for file in self.mock_temporary_files]),
+                        'All created TemporaryFiles should be closed so that they are removed from the filesystem.')
+
+    def test_exception_raised_while_waiting_causes_termination_and_adds_error_message_to_output(self):
+        exception_message = 'Something terribly horrible just happened!'
+        value_err_exc = ValueError(exception_message)
+        timeout_exc = TimeoutExpired(cmd=None, timeout=1)
+        fake_failing_return_code = -15
+        # Simulate Popen.wait() timing out twice before raising a ValueError exception.
+        self.mock_popen.wait.side_effect = [timeout_exc, timeout_exc, value_err_exc, fake_failing_return_code]
+        self.mock_popen.returncode = fake_failing_return_code
+        self.mock_popen.pid = 55555
+        self._mock_stdout_and_stderr(b'', b'')
+
+        project_type = ProjectType()
+        actual_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
+
+        self.assertEqual(self.mock_killpg.call_count, 1, 'os.killpg should be called when wait() raises exception.')
+        self.assertIn(exception_message, actual_output, 'ClusterRunner exception message should be included in output.')
+        self.assertEqual(actual_return_code, fake_failing_return_code, 'Actual return code should match expected.')
+
+    def test_exception_raised_while_waiting_for_termination_adds_error_message_to_output(self):
+        mock_time = self.patch('time.time')
+        mock_time.side_effect = [0.0, 100.0, 200.0, 300.0]  # time increases by 100 seconds with each loop
+        fake_failing_return_code = -15
+        self.mock_popen.pid = 55555
+        self._mock_stdout_and_stderr(b'', b'')
+        exception_message = 'Something terribly horrible just happened!'
+        self._simulate_hanging_popen_process(
+            fake_returncode=fake_failing_return_code, wait_exception=ValueError(exception_message))
+
+        project_type = ProjectType()
+        actual_output, actual_return_code = project_type.execute_command_in_project(
+            'echo The power is yours!', timeout=250)
+
+        self.assertIn(exception_message, actual_output, 'ClusterRunner exception message should be included in output.')
+        self.assertEqual(actual_return_code, fake_failing_return_code, 'Actual return code should match expected.')
+
+    def test_failing_exit_code_is_injected_when_no_return_code_available(self):
+        self.mock_popen.returncode = None  # This will happen if we were not able to terminate the process.
+        self._mock_stdout_and_stderr(b'', b'')
+
+        project_type = ProjectType()
+        actual_output, actual_return_code = project_type.execute_command_in_project('echo The power is yours!')
+
+        self.assertIsInstance(actual_return_code, int, 'Returned exit code should always be an int.')
+        self.assertNotEqual(actual_return_code, 0, 'Returned exit code should be failing (non-zero) when subprocess '
+                                                   'returncode is not available.')
 
     @genty_dataset(
         with_specified_timeout=(30,),
@@ -151,21 +221,23 @@ class TestProjectType(BaseUnitTestCase):
 
         mock_execute.assert_called_once_with(ANY, timeout=expected_timeout)
 
-    def _mock_out_popen_communicate(self):
+    def _simulate_hanging_popen_process(self, fake_returncode=0, wait_exception=None):
         """
-        Replace the Popen.communicate() call with a fake implementation.
+        Replace the Popen.wait() call with a fake implementation that imitates a process that never finishes until it
+        is terminated.
         """
-        def fake_communicate(timeout=None):
-            # The fake implementation is that communicate() times out forever until os.killpg is called.
+        def fake_wait(timeout=None):
+            # The fake implementation is that wait() times out forever until os.killpg is called.
             if self.mock_killpg.call_count == 0 and timeout is not None:
                 raise TimeoutExpired(None, timeout)
             elif self.mock_killpg.call_count > 0:
-                return b'fake output', b'fake error'
-            self.fail('Popen.communicate() should not be called without a timeout before os.killpg has been called.')
+                if wait_exception:
+                    raise wait_exception
+                return fake_returncode
+            self.fail('Popen.wait() should not be called without a timeout before os.killpg has been called.')
 
-        self.mock_popen.communicate.side_effect = fake_communicate
-        self.mock_popen.returncode = 1
-        self.mock_popen.pid = 55555
+        self.mock_popen.wait.side_effect = fake_wait
+        self.mock_popen.returncode = fake_returncode
 
 
 class _FakeEnvWithoutDefaultArgs(ProjectType):
