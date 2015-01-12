@@ -1,5 +1,6 @@
 from queue import Queue
 import sys
+from threading import Event
 from unittest.mock import MagicMock, Mock
 
 from app.master.atomizer import Atomizer
@@ -9,7 +10,7 @@ from app.master.job_config import JobConfig
 from app.master.slave import Slave
 from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
-from app.util import poll
+from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -21,7 +22,8 @@ class TestBuild(BaseUnitTestCase):
 
     def setUp(self):
         super().setUp()
-        self.patch('app.master.build.app.util')  # stub out util functions since these often interact with the fs
+        mock_util = self.patch('app.master.build.app.util')  # stub out util since these often interact with the fs
+        self.mock_fs = mock_util.fs
 
     def test_allocate_slave_calls_slave_setup(self):
         # arrange
@@ -131,32 +133,46 @@ class TestBuild(BaseUnitTestCase):
         subjobs = self._create_subjobs(count=3)
         mock_project_type = self._create_mock_project_type()
         mock_slave = self._create_mock_slave(num_executors=3)
+        postbuild_tasks_complete_event = Event()
         build = Build(BuildRequest({}))
+        build._create_build_artifact = MagicMock()
+        self._on_async_postbuild_tasks_completed(build, postbuild_tasks_complete_event.set)
 
         build.prepare(subjobs, mock_project_type, self._create_job_config())
         build.allocate_slave(mock_slave)  # all three subjobs are now "in progress"
-
-        # Mock out call to create build artifacts after subjobs complete
-        build._create_build_artifact = MagicMock()
-
         for subjob in subjobs:
-            build.mark_subjob_complete(subjob.subjob_id())
+            build.complete_subjob(subjob.subjob_id())
 
-        # Note: this was never a unit test! We have to wait for a thread to complete post build
-        # actions here. TODO: Fix this
-        poll.wait_for(lambda: build._postbuild_tasks_are_finished, 5)
-
+        # Wait for the async thread to complete executing postbuild tasks.
+        self.assertTrue(postbuild_tasks_complete_event.wait(timeout=2), 'Postbuild tasks should complete within a few'
+                                                                        'seconds.')
         # Verify build artifacts was called after subjobs completed
         build._create_build_artifact.assert_called_once_with()
-
-        build.finish()
-        status = build._status()
-
         self.assertTrue(build._subjobs_are_finished)
-        self.assertTrue(build._postbuild_tasks_are_finished)
-        self.assertTrue(build._teardowns_finished)
+        self.assertEqual(build._status(), BuildStatus.FINISHED)
 
-        self.assertEqual(status, BuildStatus.FINISHED)
+    def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
+        Configuration['results_directory'] = '/tmp/results'
+        build = Build(BuildRequest({}))
+        subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
+        build.prepare([subjob], self._create_mock_project_type(), self._create_job_config())
+
+        payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
+        build.complete_subjob(subjob.subjob_id(), payload=payload)
+
+        self.mock_fs.write_file.assert_called_once_with('Heroes in a half shell.', '/tmp/results/1/turtles.txt')
+        self.mock_fs.extract_tar.assert_called_once_with('/tmp/results/1/turtles.txt', delete=True)
+
+    def test_exception_is_raised_if_problem_occurs_writing_subjob(self):
+        Configuration['results_directory'] = '/tmp/results'
+        build = Build(BuildRequest({}))
+        subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
+        build.prepare([subjob], self._create_mock_project_type(), self._create_job_config())
+        self.mock_fs.write_file.side_effect = FileExistsError
+
+        with self.assertRaises(Exception):
+            payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
+            build.complete_subjob(subjob.subjob_id(), payload=payload)
 
     def test_need_more_slaves_returns_false_if_max_processes_is_reached(self):
         subjobs = self._create_subjobs(count=5)
@@ -187,11 +203,6 @@ class TestBuild(BaseUnitTestCase):
 
         with self.assertRaises(Exception):
             build.prepare(subjobs, mock_project_type, self._create_job_config())
-
-    def test_runtime_error_when_finishing_unfinished_build(self):
-        build = Build(BuildRequest({}))
-        build.is_prepared = False
-        self.assertRaises(RuntimeError, build.finish)
 
     def test_teardown_called_on_slave_when_no_subjobs_remain(self):
         build = Build(BuildRequest({}))
@@ -291,8 +302,11 @@ class TestBuild(BaseUnitTestCase):
         build.allocate_slave(slave)
         self.assertEqual(build._num_executors_allocated, 5, "Should be incremented by num executors")
 
-    def _create_subjobs(self, count=3):
-        return [Subjob(build_id=0, subjob_id=i, project_type=None, job_config=None, atoms=[]) for i in range(count)]
+    def _create_subjobs(self, count=3, build_id=0):
+        return [
+            Subjob(build_id=build_id, subjob_id=i, project_type=None, job_config=None, atoms=[])
+            for i in range(count)
+        ]
 
     def _create_job_config(
         self,
@@ -310,3 +324,13 @@ class TestBuild(BaseUnitTestCase):
         mock.url = self._FAKE_SLAVE_URL
         mock.num_executors = num_executors
         return mock
+
+    def _on_async_postbuild_tasks_completed(self, build, callback):
+        # Patch a build so it executes the specified callback after its PostBuild thread finishes.
+        original_async_postbuild_method = build._perform_async_postbuild_tasks
+
+        def async_postbuild_tasks_with_callback():
+            original_async_postbuild_method()
+            callback()
+
+        build._perform_async_postbuild_tasks = async_postbuild_tasks_with_callback

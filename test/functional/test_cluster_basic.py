@@ -17,7 +17,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
     )
     def test_basic_directory_configs_end_to_end(self, test_job_config):
         master = self.cluster.start_master()
-        self.cluster.start_slave()
+        slave = self.cluster.start_slave()
 
         project_dir = tempfile.TemporaryDirectory()
         build_resp = master.post_new_build({
@@ -27,6 +27,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
         })
         build_id = build_resp['build_id']
         master.block_until_build_finished(build_id, timeout=10)
+        slave.block_until_idle(timeout=5)  # ensure slave teardown has finished before making assertions
 
         if test_job_config.expected_to_fail:
             self.assert_build_has_failure_status(build_id=build_id)
