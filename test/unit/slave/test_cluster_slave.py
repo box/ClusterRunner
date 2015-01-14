@@ -62,7 +62,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave._send_master_disconnect_notification()
+        slave._disconnect_from_master()
 
         # expect a connect call and a connectivity call, and if the master is responsive also expect a disconnect call
         expected_network_calls = [
