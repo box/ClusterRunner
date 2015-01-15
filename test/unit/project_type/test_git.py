@@ -1,8 +1,8 @@
-from unittest.mock import ANY, Mock, MagicMock, patch
+from unittest.mock import ANY, Mock, MagicMock
 import pexpect
 import re
 
-from app.project_type.git import Git
+from app.project_type.git import Git, _GitRemoteCommandExecutor
 from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -66,50 +66,46 @@ class TestGit(BaseUnitTestCase):
         )
 
     def test_execute_git_remote_command_auto_adds_known_host_if_prompted(self):
-        prompted = False
+        expected_host_check_index = 3
+        expected_eof_index = 0
+        self.mock_pexpect_child.expect.side_effect = [
+            expected_host_check_index,  # first expect to match the host check prompt
+            pexpect.TIMEOUT(None),  # then expect no more prompts occur during the timeout
+            expected_eof_index,  # finally expect that the process finishes normally
+        ]
+        git_executor = _GitRemoteCommandExecutor()
 
-        def expect_side_effect(*args, **kwargs):
-            nonlocal prompted
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
+                                                 do_strict_host_key_checking=False)
 
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*'] \
-                    and not prompted:
-                prompted = True
-                return 2
-            elif args[0] == pexpect.EOF:
-                return 0
-
-            raise pexpect.TIMEOUT('some_msg')
-
-        self.mock_pexpect_child.expect.side_effect = expect_side_effect
-        Configuration['git_strict_host_key_checking'] = False
-        git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
-        git._execute_git_remote_command('some_command')
         self.mock_pexpect_child.sendline.assert_called_with("yes")
 
     def test_execute_git_remote_command_doesnt_auto_add_known_host_if_no_prompt(self):
-        def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
-                raise pexpect.TIMEOUT('some_msg')
-            if args[0] == pexpect.EOF:
-                return 1
-            return None
-        self.mock_pexpect_child.expect.side_effect = expect_side_effect
-        git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
+        expected_eof_index = 0
+        self.mock_pexpect_child.expect.side_effect = [
+            pexpect.TIMEOUT(None),  # first expect no prompts occur during the timeout
+            expected_eof_index,  # finally expect that the process finishes normally
+        ]
+        git_executor = _GitRemoteCommandExecutor()
 
-        git._execute_git_remote_command('some_command')
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
+                                                 do_strict_host_key_checking=False)
 
         self.assertEquals(self.mock_pexpect_child.sendline.call_count, 0)
 
     def test_execute_git_remote_command_raises_exception_if_strict_host_checking_and_prompted(self):
-        def expect_side_effect(*args, **kwargs):
-            if args[0] == ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*']:
-                return 2
-            return None
+        def expect_side_effect(patterns, *args, **kwargs):
+            for idx, pattern in enumerate(patterns):
+                if 'Are you sure you want to continue connecting' in pattern:
+                    return idx
+            raise pexpect.EOF(None)
 
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
-        Configuration['git_strict_host_key_checking'] = True
-        git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
-        self.assertRaises(RuntimeError, git._execute_git_remote_command, 'some_command')
+        git_executor = _GitRemoteCommandExecutor()
+
+        with self.assertRaisesRegex(RuntimeError, 'failed known_hosts check'):
+            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
+                                                     do_strict_host_key_checking=True)
 
     def test_get_full_repo_directory(self):
         Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
@@ -144,17 +140,17 @@ class TestGit(BaseUnitTestCase):
         self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
 
     def test_fetch_project_when_existing_repo_is_shallow_deletes_repo(self):
-        url = 'url'
-        repo_path = 'repo_path'
-        git = Git(url)
-        git._execute_and_raise_on_failure = Mock()
-        git._repo_directory = repo_path
-        git.execute_command_in_project = Mock(side_effect=[('', 0), ('', 0)])
-        self.patch('os.path.exists').return_value = True
-        self.patch('os.path.isfile').return_value = True
+        self.patch('app.project_type.git.os.path.exists').return_value = True
+        self.patch('app.project_type.git.os.path.isfile').return_value = True
+        self.patch('app.project_type.git._GitRemoteCommandExecutor')
         mock_fs = self.patch('app.project_type.git.fs')
         mock_rmtree = self.patch('shutil.rmtree')
-        git._execute_git_remote_command = Mock()
+
+        git = Git('url')
+        git._repo_directory = 'repo_path'
+        git._execute_and_raise_on_failure = Mock()
+        git.execute_command_in_project = Mock(return_value=('', 0))
+
         mock_fs.create_dir.call_count = 0  # only measure calls made in _fetch_project
         mock_rmtree.call_count = 0
 
@@ -164,22 +160,21 @@ class TestGit(BaseUnitTestCase):
         self.assertEqual(mock_rmtree.call_count, 1)
 
     def test_password_prompt_is_covered_by_pexpect_regexes(self):
-        git = Git("url")
+        git_executor = _GitRemoteCommandExecutor()
         matched_prompt = False
 
-        def expect_side_effect(*args, **kwargs):
+        def expect_side_effect(patterns, *args, **kwargs):
             nonlocal matched_prompt
-            if isinstance(args[0], list):
-                for regex in args[0]:
-                    if re.match(regex, "Password:"):
+            if isinstance(patterns, list):
+                for pattern in patterns:
+                    if re.match(pattern, "Password:"):
                         matched_prompt = True
-
                 raise pexpect.EOF(Mock())
             else:
-                return True
+                return 0  # pexpect returns 0 on a successful match
 
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
 
-        git._execute_git_remote_command("command")
+        git_executor._execute_git_remote_command('fake command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
         self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
