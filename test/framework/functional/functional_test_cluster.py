@@ -300,7 +300,7 @@ class ClusterService(object):
         :return: The return code, stdout, and stderr of the process
         :rtype: (int, str, str)
         """
-        self.return_code, self.stdout, self.stderr = process_utils.kill_gracefully(self.process, timeout=15)
+        self.return_code, self.stdout, self.stderr = process_utils.kill_gracefully(self.process)
         return self.return_code, self.stdout, self.stderr
 
     @property

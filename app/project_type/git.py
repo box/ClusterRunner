@@ -1,13 +1,11 @@
-from multiprocessing import Manager, Pool  # pylint: disable=no-name-in-module
 import os
 import pexpect
-import queue
-import shutil
 import signal
+import shutil
 from urllib.parse import urlparse
 
+from app.util import fs
 from app.project_type.project_type import ProjectType
-from app.util import fs, log
 from app.util.conf.configuration import Configuration
 
 
@@ -19,6 +17,7 @@ class Git(ProjectType):
         "url": "https://github.com/box/StatusWolf.git",
     }
     """
+
     CLONE_DEPTH = 50
     DIRECTORY_PERMISSIONS = 0o700
 
@@ -105,7 +104,6 @@ class Git(ProjectType):
         self._hash = hash
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
-        self._git_remote_command_executor = _GitRemoteCommandExecutor()
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
         fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
@@ -142,14 +140,14 @@ class Git(ProjectType):
         repo_exists = git_exit_code == 0
         if not repo_exists:  # This is not a git repo yet, we have to clone the project.
             clone_command = 'git clone {} {}'. format(self._url, self._repo_directory)
-            self._git_remote_command_executor.execute(clone_command)
+            self._execute_git_remote_command(clone_command)
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
         # is equal to self._branch, otherwise the git fetch will exit with a non-zero exit code.
         # Must specify the colon in 'branch:branch' so that the branch will be created locally. This is
         # important because it allows the slave hosts to do a git fetch from the master for this branch.
         fetch_command = 'git fetch --update-head-ok {0} {1}:{1}'.format(self._remote, self._branch)
-        self._git_remote_command_executor.execute(fetch_command, cwd=self._repo_directory)
+        self._execute_git_remote_command(fetch_command, self._repo_directory)
 
         commit_hash = self._hash or 'FETCH_HEAD'
         reset_command = 'git reset --hard {}'.format(commit_hash)
@@ -159,6 +157,69 @@ class Git(ProjectType):
 
     def _execute_in_repo_and_raise_on_failure(self, command, message):
         self._execute_and_raise_on_failure(command, message, self._repo_directory)
+
+    def _execute_git_remote_command(self, command, cwd=None, timeout=10):
+        """
+        Execute git-related commands. This functionality is sequestered into its own method because an automated
+        system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
+        deliberately and explicitly. This method will raise a RuntimeError in case of a prompt.
+
+        :type command: str
+        :type cwd: str|None
+        :param timeout: the number of seconds to wait for expected prompts before assuming there will be no prompt
+        :type timeout: int
+        """
+        child = pexpect.spawn(command, cwd=cwd)
+
+        # Because it is possible to receive multiple prompts in any git remote operation, we have to call pexpect
+        # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
+        # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
+        # hang in such a scenario.
+        while True:
+            try:
+                prompt_index = child.expect(
+                    ['^User.*:', '^Pass.*:', '.*Are you sure you want to continue connecting.*'], timeout=timeout)
+
+                # Prompt: User/Password
+                if prompt_index == 0 or prompt_index == 1:
+                    child.kill(signal.SIGKILL)
+                    raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
+                                       'Command: {}'.format(command))
+                # Prompt: ssh known_hosts check
+                elif prompt_index == 2:
+                    if Configuration['git_strict_host_key_checking']:
+                        child.kill(signal.SIGKILL)
+                        raise RuntimeError('Failed to retrieve from git remote due to failed known_hosts check. '
+                                           'Command: {}'.format(command))
+
+                    # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
+                    child.sendline('yes')
+                    self._logger.info('Automatically added a host to known_hosts in command: {}'.format(command))
+            except pexpect.EOF:
+                break
+            except pexpect.TIMEOUT:
+                self._logger.info('Command [{}] had no expected prompts after {} seconds.'.format(command, timeout))
+                break
+
+        # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
+        self._logger.debug("Output from command [{}] after {} seconds: {}".format(command, timeout, child.before))
+
+        # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
+        # if the kill event has been set in case the build is canceled during setup.
+        finished = None
+        while not self._kill_event.is_set() and finished is None:
+            try:
+                finished = child.expect(pexpect.EOF, timeout=1)
+            except pexpect.TIMEOUT:
+                continue
+
+        # This call is necessary for the child.exitstatus to be set properly. Otherwise, it can be set to None.
+        child.close()
+
+        # If the command was intentionally killed, do not raise an error
+        if child.exitstatus != 0 and not self._kill_event.is_set():
+            raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
+                child.exitstatus, command, child.before.decode('utf-8', errors='replace')))
 
     def execute_command_in_project(self, *args, **kwargs):
         """
@@ -179,128 +240,3 @@ class Git(ProjectType):
         :rtype: string
         """
         return os.path.join(self._timing_file_directory, "{}.timing.json".format(job_name))
-
-
-class _GitRemoteCommandExecutor(object):
-    """
-    This class is responsible for executing git commands that contact the repo's remote. We use the pexpect library here
-    since git commands may prompt for user input and we want to intercept those prompts.
-
-    We've moved the pexpect logic into a Python subprocess (using the multiprocessing library). This is to work around
-    a shortcoming of pexpect where it will begin to raise exceptions once the Python process holds more than 1024 open
-    files (which includes tcp connections, and those scale with the number of slaves connected to the master). Once]
-    pexpect fixes this issue, we can move this logic back into the main process.
-    The pexpect issue is tracked here: https://github.com/pexpect/pexpect/issues/47
-    """
-    def __init__(self):
-        self._logger = log.get_logger(__name__)
-
-    def execute(self, command, cwd=None, timeout=10):
-        """
-        Start the _execute_git_remote_command() method in a subprocess.
-        :type command: str
-        :type cwd: str | None
-        :param timeout: the number of seconds to wait for expected prompts before assuming there will be no prompt
-        :type timeout: int
-        """
-        # We use a multiprocessing.Pool here (instead of a Process) since the Pool can propagate any exceptions that
-        # occur in the subprocess back to the main process.
-        with Manager() as manager, Pool(processes=1) as pool:  # pylint: disable=not-callable
-            # A queue is used to transfer log messages back to the main process instead of trying to log them from the
-            # subprocess. This avoids issues around both processes potentially writing logs at the same time and
-            # clobbering each other's log messages.
-            log_msg_queue = manager.Queue()
-            do_strict_host_key_checking = Configuration['git_strict_host_key_checking']
-            async_result = pool.apply_async(self._execute_git_remote_command,
-                                            args=(command, cwd, timeout, log_msg_queue, do_strict_host_key_checking))
-
-            # While the subprocess is executing, watch for any logs it puts into the queue and log them immediately.
-            while not async_result.ready() or not log_msg_queue.empty():
-                try:
-                    log_level, unformatted_msg, format_args = log_msg_queue.get(timeout=0.5)
-                    self._logger.log(log_level, unformatted_msg, *format_args)
-                except queue.Empty:
-                    pass
-
-            # If any exception occurred in the subprocess, a call to async_result.get() will reraise that exception.
-            async_result.get()
-
-    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue, do_strict_host_key_checking=False):
-        """
-        Execute git-related commands. This functionality is sequestered into its own method because an automated
-        system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
-        deliberately and explicitly. This method will raise a RuntimeError in case of a prompt.
-
-        :type command: str
-        :type cwd: str|None
-        :type timeout: int
-        :type log_msg_queue: multiprocessing.queues.Queue
-        :param do_strict_host_key_checking: Whether or not to raise an error if prompted to allow a new known ssh host
-            This is passed in as a parameter only because this runs in a subprocess which can't access Configuration.
-        :type do_strict_host_key_checking: bool
-        """
-        # todo: Reenable the functionality around listening for a kill_event to abort execution of this method. This
-        # todo: has been temporarily disabled due to complexity around doing this between multiple processes.
-        credentials_prompt_patterns = [
-            r'^User.*:',
-            r'^Pass.*:',
-            r'(^|\n)\S+@\S+\'s password:',  # example prompt: "jharrington@jharrington.local's password: "
-        ]
-        ssh_host_check_patterns = [
-            'Are you sure you want to continue connecting',
-        ]
-        patterns_to_expect = credentials_prompt_patterns + ssh_host_check_patterns
-
-        # Because it is possible to receive multiple prompts in any git remote operation, we have to call pexpect
-        # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
-        # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
-        # hang in such a scenario.
-        child = pexpect.spawn(command, cwd=cwd)
-        while True:
-            try:
-                prompt_index = child.expect(patterns_to_expect, timeout=timeout)
-                matched_pattern = patterns_to_expect[prompt_index]
-
-                if matched_pattern in credentials_prompt_patterns:
-                    child.kill(signal.SIGKILL)
-                    raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
-                                       'Command: {}'.format(command))
-
-                elif matched_pattern in ssh_host_check_patterns:
-                    if do_strict_host_key_checking:
-                        child.kill(signal.SIGKILL)
-                        raise RuntimeError('Failed to retrieve from git remote due to failed known_hosts check. '
-                                           'Command: {}'.format(command))
-
-                    # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
-                    child.sendline('yes')
-                    log_msg_queue.put(
-                        ('INFO', 'Automatically added a host to known_hosts in command: {}', (command,)))
-
-            except pexpect.EOF:
-                break
-            except pexpect.TIMEOUT:
-                log_msg_queue.put(
-                    ('INFO', 'Command [{}] had no expected prompts after {} seconds.', (command, timeout)))
-                break
-
-        # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
-        log_msg_queue.put(
-            ('DEBUG', 'Output from command [{}] after {} seconds: {}', (command, timeout, child.before)))
-
-        # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
-        # if the kill event has been set in case the build is canceled during setup.
-        finished = None
-        while finished is None:  # and not self._kill_event.is_set()  # todo: kill_event temporarily disabled
-            try:
-                finished = child.expect(pexpect.EOF, timeout=1)
-            except pexpect.TIMEOUT:
-                continue
-
-        # This call is necessary for the child.exitstatus to be set properly. Otherwise, it can be set to None.
-        child.close()
-
-        # Raise an error on non-zero exit code (unless the command was intentionally killed).
-        if child.exitstatus != 0:  # and not self._kill_event.is_set():  # todo: kill_event temporarily disabled
-            raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
-                child.exitstatus, command, child.before.decode('utf-8', errors='replace')))

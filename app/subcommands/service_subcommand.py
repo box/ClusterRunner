@@ -1,5 +1,4 @@
 import functools
-import multiprocessing
 import os
 import sys
 import tornado.ioloop
@@ -17,12 +16,6 @@ class ServiceSubcommand(Subcommand):
     _THREAD_NAME = None
 
     def run(self, *args, **kwargs):
-        # Set the multiprocessing method to 'spawn'. (The default on unix is 'fork'.) According to documentation, this
-        # method should be called at most once, which is why it is here and not in the Git class. This prevents any
-        # subprocesses started by the multiprocessing library from inheriting the parent file descriptors. This is a
-        # vital fix for a very specific issue. See https://github.com/box/ClusterRunner/issues/69 for more details.
-        multiprocessing.set_start_method('spawn')  # pylint: disable=no-member
-
         app_thread = SafeThread(
             name=self._THREAD_NAME,
             target=self.async_run,
