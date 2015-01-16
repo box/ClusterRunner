@@ -15,7 +15,7 @@ install:
 script:
   - export DO_PYLINT_CMD="pylint app"
   - export TEST_UNIT_CMD="nosetests -v test/unit"
-  - export TEST_FUNC_CMD="nosetests -s -v test/functional"
+  - export TEST_FUNC_CMD="ls ~/.ssh/ && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys && nosetests -s -v test/functional"
   - export CR_VERBOSE=1
 
   - if [[ $DO_LINT == true ]]; then $DO_PYLINT_CMD; fi
