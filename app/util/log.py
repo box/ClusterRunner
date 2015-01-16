@@ -132,6 +132,7 @@ def application_summary(logfile_count):
     summary_lines = [
         ' ClusterRunner',
         '  * Version: {}'.format(autoversioning.get_version()),
+        '  * PID:     {}'.format(os.getpid()),
     ]
     if logfile_count > 1:
         summary_lines.append('  * Logfile count: {}'.format(logfile_count))

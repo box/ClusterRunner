@@ -1,6 +1,7 @@
 from multiprocessing import Manager, Pool  # pylint: disable=no-name-in-module
 import os
 import pexpect
+import psutil
 import queue
 import shutil
 import signal
@@ -9,6 +10,7 @@ from urllib.parse import urlparse
 from app.project_type.project_type import ProjectType
 from app.util import fs, log
 from app.util.conf.configuration import Configuration
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 class Git(ProjectType):
@@ -210,9 +212,8 @@ class _GitRemoteCommandExecutor(object):
             # subprocess. This avoids issues around both processes potentially writing logs at the same time and
             # clobbering each other's log messages.
             log_msg_queue = manager.Queue()
-            do_strict_host_key_checking = Configuration['git_strict_host_key_checking']
-            async_result = pool.apply_async(self._execute_git_remote_command,
-                                            args=(command, cwd, timeout, log_msg_queue, do_strict_host_key_checking))
+            async_result = pool.apply_async(self._execute_git_remote_command_subprocess,
+                                            args=(command, cwd, timeout, log_msg_queue))
 
             # While the subprocess is executing, watch for any logs it puts into the queue and log them immediately.
             while not async_result.ready() or not log_msg_queue.empty():
@@ -225,7 +226,32 @@ class _GitRemoteCommandExecutor(object):
             # If any exception occurred in the subprocess, a call to async_result.get() will reraise that exception.
             async_result.get()
 
-    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue, do_strict_host_key_checking=False):
+    def _execute_git_remote_command_subprocess(self, *args, **kwargs):
+        """
+        This is the entry point for the subprocess that executes git remote commands using pexpect. Args and kwargs are
+        passed directly through to self._execute_git_remote_command().
+        """
+        # Reset signal handlers -- unhandled exceptions will be handled by the main process when the subprocess dies.
+        UnhandledExceptionHandler.reset_signal_handlers()
+        self._close_unneeded_network_connections()
+        self._execute_git_remote_command(*args, **kwargs)
+
+    def _close_unneeded_network_connections(self):
+        """
+        This is called after forking a subprocess to reduce the number of open file descriptors of the child process.
+        Since a forked child process inherits file descriptors from the parent, the child ends up with a bunch of
+        unneeded fds. Doing this allows pexpect to use a low file descriptor number (since it raises an exception if
+        using a file descriptor number greater than 1024.)
+        """
+        process = psutil.Process(os.getpid())
+        fds_to_close = [connection.fd for connection in process.connections()]
+        for fd_to_close in fds_to_close:
+            try:
+                os.close(fd_to_close)
+            except OSError:
+                pass
+
+    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue):
         """
         Execute git-related commands. This functionality is sequestered into its own method because an automated
         system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
@@ -235,9 +261,6 @@ class _GitRemoteCommandExecutor(object):
         :type cwd: str|None
         :type timeout: int
         :type log_msg_queue: multiprocessing.queues.Queue
-        :param do_strict_host_key_checking: Whether or not to raise an error if prompted to allow a new known ssh host
-            This is passed in as a parameter only because this runs in a subprocess which can't access Configuration.
-        :type do_strict_host_key_checking: bool
         """
         # todo: Reenable the functionality around listening for a kill_event to abort execution of this method. This
         # todo: has been temporarily disabled due to complexity around doing this between multiple processes.
@@ -250,6 +273,7 @@ class _GitRemoteCommandExecutor(object):
             'Are you sure you want to continue connecting',
         ]
         patterns_to_expect = credentials_prompt_patterns + ssh_host_check_patterns
+        do_strict_host_key_checking = Configuration['git_strict_host_key_checking']
 
         # Because it is possible to receive multiple prompts in any git remote operation, we have to call pexpect
         # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second

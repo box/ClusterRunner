@@ -37,7 +37,6 @@ class TestMain(BaseUnitTestCase):
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
         self.patch('app.subcommands.master_subcommand.analytics.initialize')
         self.patch('argparse._sys.stderr')  # Hack to prevent argparse from printing output during tests.
-        self.patch('multiprocessing.set_start_method')
 
         # We want the method _start_app_force_kill_countdown mocked out for every test *except* one, so we are patching
         # this method in an uglier way that allows us to unpatch it just for that test.

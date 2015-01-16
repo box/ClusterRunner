@@ -73,10 +73,10 @@ class TestGit(BaseUnitTestCase):
             pexpect.TIMEOUT(None),  # then expect no more prompts occur during the timeout
             expected_eof_index,  # finally expect that the process finishes normally
         ]
+        Configuration['git_strict_host_key_checking'] = False
         git_executor = _GitRemoteCommandExecutor()
 
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
-                                                 do_strict_host_key_checking=False)
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
         self.mock_pexpect_child.sendline.assert_called_with("yes")
 
@@ -86,10 +86,10 @@ class TestGit(BaseUnitTestCase):
             pexpect.TIMEOUT(None),  # first expect no prompts occur during the timeout
             expected_eof_index,  # finally expect that the process finishes normally
         ]
+        Configuration['git_strict_host_key_checking'] = False
         git_executor = _GitRemoteCommandExecutor()
 
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
-                                                 do_strict_host_key_checking=False)
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
         self.assertEquals(self.mock_pexpect_child.sendline.call_count, 0)
 
@@ -101,11 +101,11 @@ class TestGit(BaseUnitTestCase):
             raise pexpect.EOF(None)
 
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
+        Configuration['git_strict_host_key_checking'] = True
         git_executor = _GitRemoteCommandExecutor()
 
         with self.assertRaisesRegex(RuntimeError, 'failed known_hosts check'):
-            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock(),
-                                                     do_strict_host_key_checking=True)
+            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
     def test_get_full_repo_directory(self):
         Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
