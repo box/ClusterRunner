@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 from subprocess import TimeoutExpired
 from unittest.mock import ANY, MagicMock
 
