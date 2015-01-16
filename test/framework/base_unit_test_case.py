@@ -171,7 +171,6 @@ class BaseUnitTestCase(TestCase):
                 'app.util.fs.write_file',
             ],
             'launching and interacting with child processes': [
-                'multiprocessing.set_start_method',
                 'os.execv', 'os.execve', 'os.fork', 'os.forkpty', 'os.kill', 'os.killpg', 'os.pipe', 'os.system',
                 'subprocess.call',
                 'subprocess.check_call',
