@@ -66,7 +66,10 @@ def _calculate_source_version():
     """
     Calculate the version using a scheme based off of git repo info. Note that since this depends on the git history,
     this will *not* work from a frozen package (which does not include the git repo data). This will only work in the
-    context of running the application from the cloned source code.
+    context of running the application from the cloned git repo.
+
+    If one of the git commands used to calculate the version fails unexpectedly, the patch in the version string will
+    be set to "???".
 
     :return: The version of the (source) application
     :rtype: str
@@ -74,18 +77,84 @@ def _calculate_source_version():
     global _calculated_version
 
     if _calculated_version is None:
-        # Do the version calculation by counting number of commits in the git repo.
-        commit_count_output = subprocess.check_output(
-            ['git rev-list HEAD | wc -l'],
-            shell=True,
-            universal_newlines=True,
-            cwd=os.path.dirname(__file__),
-        )
         try:
-            patch_version = int(commit_count_output)  # Cast to int to verify output of command was actually a number.
-        except TypeError:
-            patch_version = 'X'
+            head_commit_hash = _get_commit_hash_from_revision_param('HEAD')
+            head_commit_is_on_trunk = _is_commit_hash_in_masters_first_parent_chain(head_commit_hash)
 
-        _calculated_version = '{}.{}'.format(_MAJOR_MINOR_VERSION, patch_version)
+            commit_count = _get_repo_commit_count()
+            hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
+            mod_extension = '' if not _repo_has_uncommited_changes() else '-mod'
+            _calculated_version = '{}.{}{}{}'.format(_MAJOR_MINOR_VERSION, commit_count, hash_extension, mod_extension)
+
+        except subprocess.CalledProcessError:
+            _calculated_version = '{}.???'.format(_MAJOR_MINOR_VERSION)
 
     return _calculated_version
+
+
+def _get_repo_commit_count():
+    """
+    :return: The number of commits in the repo
+    :rtype: int
+    """
+    commit_list = _execute_local_git_command('rev-list', 'HEAD').split()
+    return len(commit_list)
+
+
+def _repo_has_uncommited_changes():
+    """
+    Check if the git repo has any changes to tracked files that haven't been committed.
+
+    :return: Whether or not the repo has uncommited changes to tracked files
+    :rtype: bool
+    """
+    has_uncommited_changes = False
+    try:
+        _execute_local_git_command('diff-index', '--quiet', 'HEAD')
+    except subprocess.CalledProcessError:  # CalledProcessError is raised if command exits with non-zero exit code
+        has_uncommited_changes = True
+
+    return has_uncommited_changes
+
+
+def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
+    """
+    Check if the current HEAD is in the first-parent chain of origin/master. The first-parent chain of origin/master
+    consists of all the "trunk" commits. All other commits are either on merged branches or haven't been merged at all.
+
+    :type commit_hash: str
+    :rtype: bool
+    """
+    master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
+    first_parent_chain = _execute_local_git_command(
+        'rev-list',
+        '--first-parent',
+        '{}^..{}'.format(commit_hash, master_commit_hash)).split()
+    return commit_hash in first_parent_chain
+
+
+def _get_commit_hash_from_revision_param(revision_param):
+    """
+    Get the full git commit hash from a given revision parameter (branch name, short hash, etc.)
+
+    :type revision_param: str
+    :rtype: str
+    """
+    return _execute_local_git_command('rev-parse', '--verify', revision_param).strip()
+
+
+def _execute_local_git_command(*args):
+    """
+    Execute a git command in the ClusterRunner git repo that we are currently executing from. subprocess.check_output()
+    raises a CalledProcessError exception if the command exits with a nonzero exit code.
+
+    :param args: The command arguments to provide to git
+    :type args: tuple
+    :return: The output of the git command
+    :rtype: str
+    """
+    command_output = subprocess.check_output(
+        ['git'] + list(args),
+        cwd=os.path.dirname(__file__),
+    )
+    return command_output.decode()
