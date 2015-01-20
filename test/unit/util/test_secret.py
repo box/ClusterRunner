@@ -1,6 +1,5 @@
+from genty import genty, genty_dataset
 import hashlib
-
-from box.test.genty import genty, genty_dataset
 
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.util.secret import Secret

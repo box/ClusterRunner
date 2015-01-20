@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock, Mock
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest

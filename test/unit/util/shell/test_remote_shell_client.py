@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 from unittest.mock import Mock
 
 from app.util.shell.remote import RemoteShellClient

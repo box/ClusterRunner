@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.util.shell.shell_client import ShellClient

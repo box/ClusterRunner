@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 import http.client
 import requests
 import requests.models

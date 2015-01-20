@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 import signal
 from threading import Event
 from unittest.mock import Mock, MagicMock, patch

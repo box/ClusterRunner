@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 
 from app.project_type.directory import Directory
 from test.framework.base_unit_test_case import BaseUnitTestCase

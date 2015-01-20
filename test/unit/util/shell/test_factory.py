@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 
 from app.util.shell.factory import ShellClientFactory
 from app.util.shell.local import LocalShellClient

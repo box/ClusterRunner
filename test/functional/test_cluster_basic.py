@@ -1,4 +1,4 @@
-from box.test.genty import genty, genty_dataset
+from genty import genty, genty_dataset
 import tempfile
 
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
