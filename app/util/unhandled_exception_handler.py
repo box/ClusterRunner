@@ -45,6 +45,15 @@ class UnhandledExceptionHandler(Singleton):
         signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
         signal.signal(self._SIGINFO, self._application_info_dump_signal_handler)
 
+    @classmethod
+    def reset_signal_handlers(cls):
+        """
+        Reset all signal handlers to their default values. This is useful in forked subprocesses since we often do not
+        want to inherit all the signal handlers.
+        """
+        for signal_num in cls._signal_names:
+            signal.signal(signal_num, signal.SIG_DFL)  # SIG_DFL restores the default behavior for each signal
+
     def add_teardown_callback(self, callback, *callback_args, **callback_kwargs):
         """
         Add a callback to be executed in the event of application teardown.
