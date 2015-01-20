@@ -1,5 +1,5 @@
 from app.util.log import get_logger
-from app.util.shell.factory import ShellClientFactory
+from app.util.shell.shell_client_factory import ShellClientFactory
 
 
 class RemoteService(object):

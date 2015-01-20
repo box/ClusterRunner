@@ -1,6 +1,6 @@
 from app.util.network import Network
-from app.util.shell.local import LocalShellClient
-from app.util.shell.remote import RemoteShellClient
+from app.util.shell.local_shell_client import LocalShellClient
+from app.util.shell.remote_shell_client import RemoteShellClient
 
 
 class ShellClientFactory(object):
