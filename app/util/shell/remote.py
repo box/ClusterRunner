@@ -1,4 +1,4 @@
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, DEVNULL
 
 from app.util.log import get_logger
 from app.util.shell.shell_client import ShellClient, Response, EmptyResponse
@@ -16,7 +16,7 @@ class RemoteShellClient(ShellClient):
         """
         escaped_command = self._escaped_ssh_command(command)
         self._logger.debug('SSH popen async [{}:{}]: {}'.format(self.user, self.host, escaped_command))
-        proc = Popen(escaped_command, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen(escaped_command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
         return EmptyResponse()
 
     def _exec_command_on_client_blocking(self, command):
