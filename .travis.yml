@@ -7,17 +7,17 @@ env:
   - DO_LINT=true DO_UNIT=true DO_FUNCTIONAL=false
   - DO_LINT=false DO_UNIT=false DO_FUNCTIONAL=true
 
-# command to install dependencies
 install:
-  - "pip install -r requirements.txt"
+  - pip install -r requirements.txt
 
-# command to run tests
 script:
-  - export DO_PYLINT_CMD="pylint app"
-  - export TEST_UNIT_CMD="nosetests -v test/unit"
-  - export TEST_FUNC_CMD="nosetests -s -v test/functional"
-  - export CR_VERBOSE=1
+  - DO_PYLINT_CMD="pylint app"
+  - TEST_UNIT_CMD="nosetests -v test/unit"
+  - TEST_FUNC_CMD="nosetests -s -v test/functional"
+  - TEST_BUILD_UNIT_CMD="./main.py build"
+  - export CR_VERBOSE=1  # turns on stdout logging for master and slave services during functional tests
 
   - if [[ $DO_LINT == true ]]; then $DO_PYLINT_CMD; fi
   - if [[ $DO_UNIT == true ]]; then $TEST_UNIT_CMD; fi
   - if [[ $DO_FUNCTIONAL == true ]]; then $TEST_FUNC_CMD; fi
+  - if [[ $DO_FUNCTIONAL == true ]]; then $TEST_BUILD_UNIT_CMD; fi

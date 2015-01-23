@@ -100,18 +100,19 @@ class Response(object):
         """
         return self.returncode == 0
 
-    def compare_to(self, response):
+    def __eq__(self, other):
         """
         Checks member equaivalence between self and another response
-        :param response:
-        :type response: Response
+        :param other: Another response object
+        :type other: Response
         :return: True if they have member equivalence, False otherwise
         :rtype: bool
         """
         return (
-            self.raw_output == response.raw_output and
-            self.raw_error == response.raw_error and
-            self.returncode == response.returncode
+            isinstance(other, type(self)) and
+            self.raw_output == other.raw_output and
+            self.raw_error == other.raw_error and
+            self.returncode == other.returncode
         )
 
 

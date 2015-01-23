@@ -62,6 +62,6 @@ class TestRemoteMasterService(BaseUnitTestCase):
                 response_mock.returncode = 0
                 return response_mock
 
-        shell_client_mock = self.patch('app.util.shell.remote.RemoteShellClient').return_value
+        shell_client_mock = self.patch('app.util.shell.remote_shell_client.RemoteShellClient').return_value
         shell_client_mock.exec_command.side_effect = exec_command
         self.patch('app.deployment.remote_service.ShellClientFactory').create.return_value = shell_client_mock
