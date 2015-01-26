@@ -154,7 +154,9 @@ class Git(ProjectType):
         self._git_remote_command_executor.execute(fetch_command, cwd=self._repo_directory)
 
         commit_hash = self._hash or 'FETCH_HEAD'
-        reset_command = 'git reset --hard {}'.format(commit_hash)
+
+        # The '--' option acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
+        reset_command = 'git reset --hard {} --'.format(commit_hash)
         self._execute_in_repo_and_raise_on_failure(reset_command, 'Could not reset Git repo.')
 
         self._execute_in_repo_and_raise_on_failure('git clean -dfx', 'Could not clean Git repo.')
