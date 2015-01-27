@@ -9,6 +9,9 @@ from app.web_framework.cluster_application import ClusterApplication
 from app.web_framework.cluster_base_handler import ClusterBaseHandler
 from app.web_framework.route_node import RouteNode
 
+# pylint: disable=abstract-method
+# "abstract-method" is disabled because it triggers on an optional abstract method in tornado.web.RequestHandler.
+
 
 class ClusterMasterApplication(ClusterApplication):
 

@@ -8,6 +8,9 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util.network import ENCODED_BODY
 
+# pylint: disable=abstract-method
+# "abstract-method" is disabled because it triggers on an optional abstract method in tornado.web.RequestHandler.
+
 
 class ClusterBaseHandler(tornado.web.RequestHandler):
 
