@@ -65,6 +65,7 @@ class Build(object):
             'num_subjobs': len(self._all_subjobs_by_id),
             'failed_atoms': self._failed_atoms(),  # todo: print the file contents instead of paths
             'result': self._result(),
+            'request_params': self.build_request.build_parameters(),
         }
 
     def prepare(self, subjobs, project_type, job_config):
