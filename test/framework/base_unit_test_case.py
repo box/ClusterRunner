@@ -19,14 +19,13 @@ class BaseUnitTestCase(TestCase):
     _base_setup_called = False
     # This allows test classes (e.g., TestNetwork) to disable network-related patches for testing the patched code.
     _do_network_mocks = True
-    _repatchable_items = {}
     _fake_hostname = 'fake_hostname'
 
     def setUp(self):
         super().setUp()
         self.addCleanup(patch.stopall)
 
-        self._repatchable_items = {}  # Reset this at the start of each test.
+        self._patched_items = {}
         self._blacklist_methods_not_allowed_in_unit_tests()
 
         # Stub out a few library dependencies that launch subprocesses.
@@ -88,7 +87,7 @@ class BaseUnitTestCase(TestCase):
         :type target: str
         :param allow_repatch: Whether or not the specified target can be patched again -- this is most useful for
             blacklisted unit test methods: test writers must repatch any blacklisted methods in their test.
-        :type allow_repatch:
+        :type allow_repatch: bool
         :param kwargs: Additional arguments to be passed to unittest.mock.patch
         :type kwargs: dict
         :return: The mock object that target has been replaced with
@@ -101,9 +100,14 @@ class BaseUnitTestCase(TestCase):
         patcher = patch(target, **kwargs)
         item_to_patch, _ = patcher.get_original()
 
-        # If the item to be patched is already patched and is repatchable, reset it so we can call patch on it again.
-        if item_to_patch in self._repatchable_items:
-            self._repatchable_items.pop(item_to_patch).stop()
+        # If the item to be patched was previously patched and was repatchable, reset it so we can patch it again. Note:
+        # we only allow repatching an item if that functionality is specifically requested via `allow_repatch`. This is
+        # meant to protect test writers from unpredictable effects due to accidentally patching the same thing twice.
+        if item_to_patch in self._patched_items:
+            prev_patcher, prev_allow_repatch = self._patched_items[item_to_patch]
+            if prev_allow_repatch:
+                prev_patcher.stop()
+                self._patched_items.pop(item_to_patch)
 
         # Check to see if this target has already been patched. Usually if `target` has already been patched, the
         # patcher.start() method will raise a TypeError anyway, but there are certain cases where this doesn't happen
@@ -116,10 +120,28 @@ class BaseUnitTestCase(TestCase):
         except TypeError as ex:
             raise UnitTestPatchError('Could not patch "{}". Has this target already been patched either in this class '
                                      '({}) or in BaseUnitTestCase?'.format(target, self.__class__.__name__)) from ex
-        if allow_repatch:
-            self._repatchable_items[mock] = patcher
 
+        self._patched_items[mock] = patcher, allow_repatch
         return mock
+
+    def unpatch(self, target):
+        """
+        Unpatch the specified target, restoring the original method or value. This is useful when something has already
+        been patched (e.g., in BaseUnitTestCase) but a specific test wants to test the code that was patched. If the
+        item was not previously patched, this method raises a ValueError.
+
+        :param target: The item to restore (object, method, etc.) that was previously patched
+        :type target: str
+        """
+        patcher = patch(target)
+        item_to_patch, _ = patcher.get_original()
+
+        # item_to_patch should be a mock if this was already patched
+        if item_to_patch in self._patched_items:
+            patcher, _ = self._patched_items.pop(item_to_patch)
+            patcher.stop()
+        else:
+            raise ValueError('Cannot unpatch target "{}" since it has not been patched!')
 
     def patch_abspath(self, abspath_target, cwd='/my_current_directory/'):
         """
@@ -185,7 +207,8 @@ class BaseUnitTestCase(TestCase):
                     self._blackist_target(patch_target, disabled_reason)
 
     def _blackist_target(self, patch_target, disabled_reason):
-        message = '"{}" must be explicitly patched in this unit test to avoid {}.'.format(patch_target, disabled_reason)
+        message = '"{}" (or the method that calls it) must be explicitly patched in this unit test to avoid {}.'.format(
+            patch_target, disabled_reason)
         self.patch(patch_target, allow_repatch=True, side_effect=[UnitTestDisabledMethodError(message)])
 
     def no_args_side_effect(self, actual_function):
