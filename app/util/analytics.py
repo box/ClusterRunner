@@ -6,12 +6,14 @@ import os
 import sys
 import time
 
-from app.util import fs
+from app.util import fs, log
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
 
 
 BUILD_REQUEST_QUEUED = 'BUILD_REQUEST_QUEUED'
+BUILD_PREPARE_START = 'BUILD_PREPARE_START'
+BUILD_PREPARE_FINISH = 'BUILD_PREPARE_FINISH'
 MASTER_RECEIVED_RESULT = 'MASTER_RECEIVED_RESULT'
 MASTER_TRIGGERED_SUBJOB = 'MASTER_TRIGGERED_SUBJOB'
 SERVICE_STARTED = 'SERVICE_STARTED'
@@ -64,13 +66,16 @@ def initialize(eventlog_file=None):
     _analytics_logger = TaggingLogger('analytics', ['event'])
 
 
-def record_event(tag, **event_data):
+def record_event(tag, log_msg=None, **event_data):
     """
     Record an event containing the specified data. Currently this just json-ifies the event and outputs it to the
     configured analytics logger (see analytics.initialize()).
 
     :param tag: A string identifier that describes the event being logged (e.g., "REQUEST_SENT")
     :type tag: str
+    :param log_msg: A message that will also be logged to the human-readable log (not the event log). It will be string
+        formatted with the event_data dict. This is a convenience for logging to both human- and machine-readable logs.
+    :type log_msg: str
     :param event_data: Free-form key value pairs that make up the event
     :type event_data: dict
     """
@@ -80,6 +85,10 @@ def record_event(tag, **event_data):
         event_data['__timestamp__'] = time.time()
         _analytics_logger.event(json.dumps(event_data, sort_keys=True))  # pylint: disable=no-member
         # todo(joey): cache most recent N events so get_events() doesn't always have to load file
+
+    if log_msg:
+        logger = log.get_logger(__name__)
+        logger.info(log_msg, **event_data)
 
 
 def get_events(since_timestamp=None, since_id=None):

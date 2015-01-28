@@ -69,7 +69,7 @@ class BaseConfigLoader(object):
         conf.set('log_filename', 'clusterrunner_default.log')
         conf.set('eventlog_filename', 'eventlog_default.log')
         conf.set('eventlog_file', None)
-        conf.set('max_eventlog_file_size', 1024 * 1024 * 10)  # 10mb
+        conf.set('max_eventlog_file_size', 1024 * 1024 * 50)  # 50mb
         conf.set('max_eventlog_file_backups', 5)
         conf.set('hostname', platform.node())
         conf.set('master_hostname', 'localhost')
