@@ -18,7 +18,7 @@ class TestClusterBaseHandler(BaseUnitTestCase):
     )
     def test_set_default_headers_should_not_set_origin_header(self, request_origin, cors_conf_value):
         mock_application = MagicMock(spec_set=ClusterApplication())
-        mock_request = MagicMock(headers={})
+        mock_request = MagicMock(spec=tornado.httpserver.HTTPRequest, headers={})
         if cors_conf_value:
             Configuration['cors_allowed_origins_regex'] = cors_conf_value
         if request_origin:
@@ -37,7 +37,7 @@ class TestClusterBaseHandler(BaseUnitTestCase):
     )
     def test_set_default_headers_should_set_origin_header(self, request_origin, cors_conf_value):
         mock_application = MagicMock(spec_set=ClusterApplication())
-        mock_request = MagicMock(headers={})
+        mock_request = MagicMock(spec=tornado.httpserver.HTTPRequest, headers={})
         Configuration['cors_allowed_origins_regex'] = cors_conf_value
         mock_request.headers['Origin'] = request_origin
 
