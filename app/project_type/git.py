@@ -184,6 +184,9 @@ class Git(ProjectType):
         """
         return os.path.join(self._timing_file_directory, "{}.timing.json".format(job_name))
 
+    def project_id(self):
+        return self._repo_directory
+
 
 class _GitRemoteCommandExecutor(object):
     """

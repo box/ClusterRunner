@@ -151,3 +151,8 @@ class Docker(ProjectType):
         """
         valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
         return ''.join(c for c in unescaped_path if c in valid_chars)
+
+    def project_id(self):
+        # TODO: Ideally each docker container could have a unique project_id since we can fetch/atomize any docker
+        # containers in parallel without conflicts
+        return self._image
