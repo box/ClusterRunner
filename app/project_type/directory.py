@@ -30,7 +30,6 @@ class Directory(ProjectType):
         :type remote_files: dict[str, str] | None
         """
         super().__init__(config, job_name, remote_files)
-        project_directory = project_directory
         self._logger = get_logger(__name__)
         self.project_directory = os.path.abspath(project_directory)
         self._logger.debug('Project directory is {}'.format(project_directory))
@@ -63,3 +62,6 @@ class Directory(ProjectType):
             timings_subdirectory,
             '{}.timing.json'.format(job_name)
         )
+
+    def project_id(self):
+        return self.project_directory

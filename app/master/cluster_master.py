@@ -30,12 +30,8 @@ class ClusterMaster(object):
         self._all_builds_by_id = OrderedDict()  # This is an OrderedDict so we can more easily implement get_queue()
         self._builds_waiting_for_slaves = Queue()
 
-        self._request_queue = Queue()
-        self._request_handler = SerialRequestHandler()
-
-        self._request_queue_worker_thread = SafeThread(
-            target=self._build_preparation_loop, name='RequestHandlerLoop', daemon=True)
-        self._request_queue_worker_thread.start()
+        self._request_queues = {}
+        self._request_handlers = {}
 
         self._slave_allocation_worker_thread = SafeThread(
             target=self._slave_allocation_loop, name='SlaveAllocationLoop', daemon=True)
@@ -228,7 +224,22 @@ class ClusterMaster(object):
         if build_request.is_valid():
             build = Build(build_request)
             self._all_builds_by_id[build.build_id()] = build
-            self._request_queue.put(build)
+
+            build.generate_project_type()
+            project_id = build.project_type.project_id()
+            if project_id in self._request_queues.keys():
+                self._request_queues[project_id].put(build)
+            else:
+                self._request_queues[project_id] = Queue()
+                self._request_queues[project_id].put(build)
+                self._request_handlers[project_id] = SerialRequestHandler()
+                SafeThread(
+                    target=self._build_preparation_loop,
+                    name='RequestHandlerLoop{}'.format(project_id),
+                    daemon=True,
+                    args=(project_id)
+                ).start()
+
             analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id())
             response = {'build_id': build.build_id()}
             success = True
@@ -311,14 +322,14 @@ class ClusterMaster(object):
 
         return archive_file
 
-    def _build_preparation_loop(self):
+    def _build_preparation_loop(self, project_id):
         """
         Grabs a build off the request_queue, prepares it, and puts that build onto the builds_waiting_for_slaves queue.
         """
         while True:
-            build = self._request_queue.get()
+            build = self._request_queues[project_id].get()
             try:
-                self._request_handler.handle_request(build)
+                self._request_handlers[project_id].handle_request(build)
                 if not build.has_error:
                     self._logger.info('Build {} was successfully prepared and is now waiting for slaves.',
                                       build.build_id())
