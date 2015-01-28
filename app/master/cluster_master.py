@@ -229,7 +229,8 @@ class ClusterMaster(object):
             build = Build(build_request)
             self._all_builds_by_id[build.build_id()] = build
             self._request_queue.put(build)
-            analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id())
+            analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
+                                   log_msg='Queued request for build {build_id}.')
             response = {'build_id': build.build_id()}
             success = True
 
@@ -317,15 +318,17 @@ class ClusterMaster(object):
         """
         while True:
             build = self._request_queue.get()
+            analytics.record_event(analytics.BUILD_PREPARE_START, build_id=build.build_id(),
+                                   log_msg='Build preparation loop is handling request for build {build_id}.')
             try:
                 self._request_handler.handle_request(build)
                 if not build.has_error:
-                    self._logger.info('Build {} was successfully prepared and is now waiting for slaves.',
-                                      build.build_id())
+                    analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(),
+                                           log_msg='Build {build_id} successfully prepared and waiting for slaves.')
                     self._builds_waiting_for_slaves.put(build)
             except Exception as ex:  # pylint: disable=broad-except
                 build.mark_failed(str(ex))
-                self._logger.exception('Could not handle build request for build {}'.format(build.build_id()))
+                self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
 
     def _slave_allocation_loop(self):
         """

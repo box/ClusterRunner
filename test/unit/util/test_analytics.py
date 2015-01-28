@@ -56,3 +56,14 @@ class TestAnalytics(BaseUnitTestCase):
     def test_get_events_returns_none_when_no_initialization_performed(self):
         events = analytics.get_events()
         self.assertEqual(events, None, 'get_events() should return None if no initialization was done.')
+
+    def test_record_event_with_log_msg_logs_correct_message(self):
+        analytics.record_event(
+            'SOME_EVENT_TAG',
+            log_msg='Build {build_id} was looking pretty {build_adjective}!',
+            build_id=12,
+            build_adjective='freaky')
+
+        self.assertTrue(
+            self.log_handler.has_info('Build 12 was looking pretty freaky!'),
+            'Passing a log_msg param to record_event() should log an info-level message to the application log.')
