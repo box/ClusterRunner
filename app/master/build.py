@@ -91,6 +91,8 @@ class Build(object):
         """
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
+        if self.project_type is None:
+            raise RuntimeError('No project type has been generated')
 
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))
         self._finished_subjobs = Queue(maxsize=len(subjobs))

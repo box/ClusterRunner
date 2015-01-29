@@ -9,7 +9,7 @@ from app.master.time_based_atom_grouper import TimeBasedAtomGrouper
 from app.util.log import get_logger
 
 
-class SerialRequestHandler(object):
+class RequestHandler(object):
 
     def __init__(self):
         self._logger = get_logger(__name__)
@@ -37,6 +37,7 @@ class SerialRequestHandler(object):
             return
 
         subjobs = self._compute_subjobs_for_build(build_id, job_config, build.project_type)
+        self._logger.error('going to call prepare')
         build.prepare(subjobs, job_config)
 
     def _compute_subjobs_for_build(self, build_id, job_config, project_type):

@@ -33,7 +33,8 @@ class TestBuild(BaseUnitTestCase):
 
         # act
         build = Build(BuildRequest({'setup': fake_setup_command}))
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
 
         # assert
@@ -49,7 +50,8 @@ class TestBuild(BaseUnitTestCase):
         build = Build(BuildRequest({'setup': fake_setup_command}))
         build.execute_next_subjob_on_slave = MagicMock()
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config(max_executors=expected_num_executors))
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config(max_executors=expected_num_executors))
         [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
         [build.begin_subjob_executions_on_slave(mock_slave) for mock_slave in mock_slaves]
 
@@ -67,8 +69,8 @@ class TestBuild(BaseUnitTestCase):
         build = Build(BuildRequest({'setup': fake_setup_command}))
         build.execute_next_subjob_on_slave = MagicMock()
 
-        build.prepare(subjobs, mock_project_type,
-                      self._create_job_config(max_executors_per_slave=max_executors_per_slave))
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config(max_executors_per_slave=max_executors_per_slave))
         [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
 
         expected_current_num_executors_used = 0
@@ -96,7 +98,8 @@ class TestBuild(BaseUnitTestCase):
         mock_project_type = self._create_mock_project_type()
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
         status = build._status()
 
         self.assertEqual(status, BuildStatus.QUEUED,
@@ -108,7 +111,8 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave()
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
@@ -120,7 +124,8 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave(num_executors=2)
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
         build.begin_subjob_executions_on_slave(mock_slave)  # two out of three subjobs are now in progress
 
@@ -133,7 +138,8 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave(num_executors=3)
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)  # all three subjobs are now "in progress"
 
         # Mock out call to create build artifacts after subjobs complete
@@ -164,7 +170,8 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave(num_executors=1)
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config(max_executors=1))
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config(max_executors=1))
         build.allocate_slave(mock_slave)
         self.assertFalse(build.needs_more_slaves(), "if max processes is reached, we shouldn't need more slaves")
 
@@ -174,7 +181,8 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave(num_executors=5)
         build = Build(BuildRequest({}))
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config(max_executors=8))
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config(max_executors=8))
         build.allocate_slave(mock_slave)
         self.assertTrue(build.needs_more_slaves(), "if max_processes is not reached, we should need more slaves")
 
@@ -183,10 +191,11 @@ class TestBuild(BaseUnitTestCase):
         subjobs = self._create_subjobs(count=3)
         mock_project_type = self._create_mock_project_type()
 
-        build.prepare(subjobs, mock_project_type, self._create_job_config())
+        build.project_type = mock_project_type
+        build.prepare(subjobs, self._create_job_config())
 
         with self.assertRaises(Exception):
-            build.prepare(subjobs, mock_project_type, self._create_job_config())
+            build.prepare(subjobs, self._create_job_config())
 
     def test_runtime_error_when_finishing_unfinished_build(self):
         build = Build(BuildRequest({}))

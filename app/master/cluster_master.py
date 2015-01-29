@@ -4,7 +4,7 @@ from queue import Queue
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.serial_request_handler import SerialRequestHandler
+from app.master.request_handler import RequestHandler
 from app.master.slave import Slave
 from app.slave.cluster_slave import SlaveState
 from app.util import analytics
@@ -30,8 +30,11 @@ class ClusterMaster(object):
         self._all_builds_by_id = OrderedDict()  # This is an OrderedDict so we can more easily implement get_queue()
         self._builds_waiting_for_slaves = Queue()
 
-        self._request_queues = {}
-        self._request_handlers = {}
+        self._request_queue = Queue()
+        self._request_handler = RequestHandler()
+        self._project_prep_tokens = {}
+        self._build_request_serializer_thread = SafeThread(target=self._build_request_serializer, name='RequestMutex')
+        self._build_request_serializer_thread.start()
 
         self._slave_allocation_worker_thread = SafeThread(
             target=self._slave_allocation_loop, name='SlaveAllocationLoop', daemon=True)
@@ -222,27 +225,8 @@ class ClusterMaster(object):
 
         success = False
         if build_request.is_valid():
-            build = Build(build_request)
-            self._all_builds_by_id[build.build_id()] = build
-            analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
-                                   log_msg='Queued request for build {build_id}.')
-
-            build.generate_project_type()
-            project_id = build.project_type.project_id()
-            if project_id in self._request_queues.keys():
-                self._request_queues[project_id].put(build)
-            else:
-                self._request_queues[project_id] = Queue()
-                self._request_queues[project_id].put(build)
-                self._request_handlers[project_id] = SerialRequestHandler()
-                SafeThread(
-                    target=self._build_preparation_loop,
-                    name='RequestHandlerLoop{}'.format(project_id),
-                    daemon=True,
-                    args=(project_id)
-                ).start()
-
-            analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id())
+            build = self._create_build(build_request)
+            self._queue_build(build)
             response = {'build_id': build.build_id()}
             success = True
 
@@ -254,6 +238,17 @@ class ClusterMaster(object):
             response = {'error': 'Missing required parameter. Required parameters: {}'.format(required_params)}
 
         return success, response
+
+    def _queue_build(self, build):
+        self._request_queue.put(build)
+        analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
+                               log_msg='Queued request for build {build_id}.')
+
+    def _create_build(self, build_request):
+        build = Build(build_request)
+        self._all_builds_by_id[build.build_id()] = build
+        build.generate_project_type()
+        return build
 
     def handle_request_to_update_build(self, build_id, update_params):
         """
@@ -324,23 +319,55 @@ class ClusterMaster(object):
 
         return archive_file
 
-    def _build_preparation_loop(self, project_id):
+    def _build_request_serializer(self):
         """
-        Grabs a build off the request_queue, prepares it, and puts that build onto the builds_waiting_for_slaves queue.
+        All build requests are processed serially here. We ensure a project_prep_token exists for the project and then
+        we start a thread to handle build preparation.
         """
+        self._logger.error('starting serializer')
         while True:
-            build = self._request_queues[project_id].get()
-            analytics.record_event(analytics.BUILD_PREPARE_START, build_id=build.build_id(),
-                   log_msg='Build preparation loop is handling request for build {build_id}.')
-            try:
-                self._request_handlers[project_id].handle_request(build)
-                if not build.has_error:
-                    analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(),
-                                           log_msg='Build {build_id} successfully prepared and waiting for slaves.')
-                    self._builds_waiting_for_slaves.put(build)
-            except Exception as ex:  # pylint: disable=broad-except
-                build.mark_failed(str(ex))
-                self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
+            build = self._request_queue.get()
+            self._logger.error('got build')
+            project_id = build.project_type.project_id()
+            self._create_project_prep_token_if_needed(project_id)
+            SafeThread(target=self._prepare_build, name='PrepareBuild', args=(build,)).start()
+
+    def _create_project_prep_token_if_needed(self, project_id):
+        """
+        Ensures that a token exists for a given project.  The token is used to serialize the preparation of builds
+        with the same project_id.
+
+        :type project_id: string
+        """
+        if self._project_prep_tokens.get(project_id) is None:
+            token = Queue()
+            token.put(1)
+            self._project_prep_tokens[project_id] = token
+
+    def _prepare_build(self, build):
+        """
+        Blocks while other builds for the same project are being prepared.  We hand off preparation to the request
+        handler.
+        :param build: The build to prepare
+        :type build: Build
+        """
+        self._logger.error('prepping build')
+        project_id = build.project_type.project_id()
+        self._project_prep_tokens.get(project_id).get()
+        try:
+            self._request_handler.handle_request(build)
+            self._logger.error('called handle request')
+            if not build.has_error:
+                analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(),
+                                       log_msg='Build {build_id} successfully prepared and waiting for slaves.')
+                self._logger.error('waiting for slave add')
+                self._builds_waiting_for_slaves.put(build)
+        except Exception as ex:  # pylint: disable=broad-except
+            build.mark_failed(str(ex))
+            self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
+        finally:
+            self._project_prep_tokens.get(project_id).put(1)
+        self._logger.info('done prepping build')
 
     def _slave_allocation_loop(self):
         """

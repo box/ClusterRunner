@@ -1,9 +1,12 @@
 from unittest.mock import MagicMock, Mock
 from genty import genty, genty_dataset
+import time
 
+from app.master.atomizer import Atomizer
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
+from app.master.job_config import JobConfig
 from app.master.slave import Slave
 from app.slave.cluster_slave import SlaveState
 from app.util.exceptions import BadRequestError, ItemNotFoundError
@@ -164,3 +167,17 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(build.mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
         self.assertEqual(build.execute_next_subjob_on_slave.call_count, 0,
                          "Build is canceled, should not do next subjob")
+
+    def test_handle_build(self):
+        master = ClusterMaster()
+        build = Build(BuildRequest({'type': 'directory', 'project_directory': '/tmp/asdf'}))
+        build.generate_project_type()
+        build.project_type.fetch_project = Mock()
+        build.project_type.job_config = Mock(return_value=JobConfig('name', None, None, '', Atomizer([]), 10, 10))
+        build.needs_more_slaves = Mock(return_value=False)
+        master._queue_build(build)
+
+        while build.needs_more_slaves.call_count == 0:
+            time.sleep(1)
+        self.assertEqual(build.needs_more_slaves.call_count, 1)
+
