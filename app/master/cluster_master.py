@@ -86,17 +86,6 @@ class ClusterMaster(object):
         """
         return [build for build in self.builds() if not build.is_finished]
 
-    def _mark_build_finished_if_slaves_are_done(self, build_id):
-        """
-        Run when a slave is finished with a build.  If this is the last slave for that build, mark the build finished.
-        Even when the subjobs are complete, a slave is not finished with the build until teardown is complete.
-        :type build_id: int
-        """
-        for slave in self._all_slaves_by_url.values():
-            if slave.current_build_id == build_id:
-                return
-        self.get_build(build_id).finish()
-
     def all_slaves_by_id(self):
         """
         Retrieve all connected slaves
@@ -180,7 +169,8 @@ class ClusterMaster(object):
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
         slave.set_is_alive(False)
-        # todo: Fail any currently executing subjobs still executing on this slave.
+        slave.current_build_id = None
+        # todo: Fail/resend any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 
     def _add_idle_slave(self, slave):
@@ -188,12 +178,7 @@ class ClusterMaster(object):
         Add a slave to the idle quexue
         :type slave: Slave
         """
-        build_id = slave.current_build_id
         slave.mark_as_idle()
-
-        if build_id is not None:
-            self._mark_build_finished_if_slaves_are_done(build_id)
-
         self._idle_slaves.put(slave)
 
     def _handle_setup_success_on_slave(self, slave):
@@ -276,8 +261,7 @@ class ClusterMaster(object):
         slave = self._all_slaves_by_url[slave_url]
         # If the build has been canceled, don't work on the next subjob.
         if not build.is_finished:
-            build.handle_subjob_payload(subjob_id, payload)
-            build.mark_subjob_complete(subjob_id)
+            build.complete_subjob(subjob_id, payload)
             build.execute_next_subjob_on_slave(slave)
 
     def get_build(self, build_id):

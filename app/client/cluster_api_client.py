@@ -105,6 +105,30 @@ class ClusterSlaveAPIClient(ClusterAPIClient):
     This is a light wrapper client around the ClusterSlave REST API.
     """
     # TODO: Move the API call logic from slave.py into this class.
+    def block_until_idle(self, timeout=None):
+        """
+        Poll the slave executor endpoint until all executors are idle.
+
+        :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
+        :type timeout: int | None
+        """
+        def is_slave_idle():
+            response_data = self.get_slave_status()
+            return response_data['slave']['current_build_id'] is None
+
+        poll.wait_for(is_slave_idle, timeout_seconds=timeout)
+
+    def get_slave_status(self):
+        """
+        Get the API status response for this slave.
+        """
+        slave_status_url = self._api.url()
+        response_data = self._network.get(slave_status_url).json()
+
+        if 'slave' not in response_data:
+            raise ClusterAPIValidationError('Slave API response does not contain a "slave" object. URL: {}, Content:{}'
+                                            .format(slave_status_url, response_data))
+        return response_data
 
 
 class ClusterAPIValidationError(Exception):

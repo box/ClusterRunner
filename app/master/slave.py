@@ -34,6 +34,7 @@ class Slave(object):
             'num_executors': self.num_executors,
             'num_executors_in_use': self.num_executors_in_use(),
             'current_build_id': self.current_build_id,
+            'is_alive': self.is_alive(),
         }
 
     def mark_as_idle(self):

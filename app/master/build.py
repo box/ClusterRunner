@@ -51,7 +51,6 @@ class Build(object):
         self._unstarted_subjobs = None
         self._finished_subjobs = None
         self._postbuild_tasks_are_finished = False
-        self._teardowns_finished = False
         self._timing_file_path = None
 
     def api_representation(self):
@@ -89,15 +88,6 @@ class Build(object):
         self._max_executors_per_slave = job_config.max_executors_per_slave
         self._timing_file_path = project_type.timing_file_path(job_config.name)
         self.is_prepared = True
-
-    def finish(self):
-        """
-        Called when all slaves are done with this build (and any teardown is complete)
-        """
-        if self._subjobs_are_finished:
-            self._teardowns_finished = True
-        else:
-            raise RuntimeError('Tried to finish build {} but not all subjobs are complete'.format(self._build_id))
 
     def build_id(self):
         """
@@ -180,9 +170,18 @@ class Build(object):
                 else:
                     slave.teardown()
 
-    def handle_subjob_payload(self, subjob_id, payload=None):
+    def complete_subjob(self, subjob_id, payload=None):
+        """
+        Handle the subjob payload and mark the given subjob id for this build as complete.
+        :type subjob_id: int
+        :type payload: dict
+        """
+        self._handle_subjob_payload(subjob_id, payload)
+        self._mark_subjob_complete(subjob_id)
+
+    def _handle_subjob_payload(self, subjob_id, payload):
         if not payload:
-            self._logger.warning('No payload for subjob {}.', subjob_id)
+            self._logger.warning('No payload for subjob {} of build {}.', subjob_id, self._build_id)
             return
 
         # Assertion: all payloads received from subjobs are uniquely named.
@@ -193,9 +192,8 @@ class Build(object):
         try:
             app.util.fs.write_file(payload['body'], result_file_path)
             app.util.fs.extract_tar(result_file_path, delete=True)
-            self._logger.debug('Payload for subjob {} written.', subjob_id)
         except:
-            self._logger.warning('Writing payload for subjob {} FAILED.', subjob_id)
+            self._logger.warning('Writing payload for subjob {} of build {} FAILED.', subjob_id, self._build_id)
             raise
 
     def _read_subjob_timings_from_results(self):
@@ -209,7 +207,7 @@ class Build(object):
 
         return timings
 
-    def mark_subjob_complete(self, subjob_id):
+    def _mark_subjob_complete(self, subjob_id):
         """
         :type subjob_id: int
         """
@@ -313,8 +311,7 @@ class Build(object):
     @property
     def is_finished(self):
         # TODO: Clean up this logic or move everything into a state machine
-        build_fully_completed = self._postbuild_tasks_are_finished and self._teardowns_finished
-        return self._is_canceled or build_fully_completed
+        return self._is_canceled or self._postbuild_tasks_are_finished
 
     @property
     def is_unstarted(self):
@@ -379,10 +376,6 @@ class Build(object):
         """
         Once a build is complete, certain tasks can be performed asynchronously.
         """
-        # @TODO There is a race condition here where the build is marked finished before the results archive
-        # is prepared.  If the user requests the build status before archival finishes, the 'artifacts'
-        # value in the post body will be None.  self.is_finished should be conditional on whether archival
-        # is finished.
         self._create_build_artifact()
         self._logger.debug('Postbuild tasks completed for build {}', self.build_id())
         self._postbuild_tasks_are_finished = True
