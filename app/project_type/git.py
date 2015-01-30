@@ -1,8 +1,7 @@
-from multiprocessing import Manager, Pool  # pylint: disable=no-name-in-module
+from multiprocessing import Pool  # pylint: disable=no-name-in-module
 import os
 import pexpect
 import psutil
-import queue
 import shutil
 import signal
 from urllib.parse import urlparse
@@ -209,21 +208,9 @@ class _GitRemoteCommandExecutor(object):
         """
         # We use a multiprocessing.Pool here (instead of a Process) since the Pool can propagate any exceptions that
         # occur in the subprocess back to the main process.
-        with Manager() as manager, Pool(processes=1) as pool:  # pylint: disable=not-callable
-            # A queue is used to transfer log messages back to the main process instead of trying to log them from the
-            # subprocess. This avoids issues around both processes potentially writing logs at the same time and
-            # clobbering each other's log messages.
-            log_msg_queue = manager.Queue()
-            async_result = pool.apply_async(self._execute_git_remote_command_subprocess,
-                                            args=(command, cwd, timeout, log_msg_queue))
-
-            # While the subprocess is executing, watch for any logs it puts into the queue and log them immediately.
-            while not async_result.ready() or not log_msg_queue.empty():
-                try:
-                    log_level, unformatted_msg, format_args = log_msg_queue.get(timeout=0.5)
-                    self._logger.log(log_level, unformatted_msg, *format_args)
-                except queue.Empty:
-                    pass
+        with Pool(processes=1) as pool:  # pylint: disable=not-callable
+            async_result = pool.apply_async(self._execute_git_remote_command_subprocess, args=(command, cwd, timeout))
+            async_result.wait()
 
             # If any exception occurred in the subprocess, a call to async_result.get() will reraise that exception.
             async_result.get()
@@ -253,7 +240,7 @@ class _GitRemoteCommandExecutor(object):
             except OSError:
                 pass
 
-    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue):
+    def _execute_git_remote_command(self, command, cwd, timeout):
         """
         Execute git-related commands. This functionality is sequestered into its own method because an automated
         system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
@@ -262,7 +249,6 @@ class _GitRemoteCommandExecutor(object):
         :type command: str
         :type cwd: str|None
         :type timeout: int
-        :type log_msg_queue: multiprocessing.queues.Queue
         """
         # todo: Reenable the functionality around listening for a kill_event to abort execution of this method. This
         # todo: has been temporarily disabled due to complexity around doing this between multiple processes.
@@ -281,6 +267,7 @@ class _GitRemoteCommandExecutor(object):
         # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
         # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
         # hang in such a scenario.
+        self._logger.debug('Executing git command in forked process: {}', command)
         child = pexpect.spawn(command, cwd=cwd)
         while True:
             try:
@@ -300,19 +287,16 @@ class _GitRemoteCommandExecutor(object):
 
                     # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
                     child.sendline('yes')
-                    log_msg_queue.put(
-                        ('INFO', 'Automatically added a host to known_hosts in command: {}', (command,)))
+                    self._logger.info('Automatically added a host to known_hosts in command: {}', command)
 
             except pexpect.EOF:
                 break
             except pexpect.TIMEOUT:
-                log_msg_queue.put(
-                    ('INFO', 'Command [{}] had no expected prompts after {} seconds.', (command, timeout)))
+                self._logger.info('Command [{}] had no expected prompts after {} seconds.', command, timeout)
                 break
 
         # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
-        log_msg_queue.put(
-            ('DEBUG', 'Output from command [{}] after {} seconds: {}', (command, timeout, child.before)))
+        self._logger.debug('Output from command [{}] after {} seconds: {}', command, timeout, child.before)
 
         # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
         # if the kill event has been set in case the build is canceled during setup.

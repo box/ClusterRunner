@@ -76,7 +76,7 @@ class TestGit(BaseUnitTestCase):
         Configuration['git_strict_host_key_checking'] = False
         git_executor = _GitRemoteCommandExecutor()
 
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0)
 
         self.mock_pexpect_child.sendline.assert_called_with("yes")
 
@@ -89,7 +89,7 @@ class TestGit(BaseUnitTestCase):
         Configuration['git_strict_host_key_checking'] = False
         git_executor = _GitRemoteCommandExecutor()
 
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
+        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0)
 
         self.assertEquals(self.mock_pexpect_child.sendline.call_count, 0)
 
@@ -105,7 +105,7 @@ class TestGit(BaseUnitTestCase):
         git_executor = _GitRemoteCommandExecutor()
 
         with self.assertRaisesRegex(RuntimeError, 'failed known_hosts check'):
-            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
+            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0)
 
     def test_get_full_repo_directory(self):
         Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
@@ -175,6 +175,6 @@ class TestGit(BaseUnitTestCase):
 
         self.mock_pexpect_child.expect.side_effect = expect_side_effect
 
-        git_executor._execute_git_remote_command('fake command', cwd=None, timeout=0, log_msg_queue=MagicMock())
+        git_executor._execute_git_remote_command('fake command', cwd=None, timeout=0)
 
         self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
