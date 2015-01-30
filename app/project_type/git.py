@@ -235,9 +235,13 @@ class _GitRemoteCommandExecutor(object):
                     # exception.
                     async_result.get()
                     break
-            except BrokenPipeError:
-                self._logger.exception('BrokenPipeError trying to execute command {}', command)
-                sleep(0.5)
+            except BrokenPipeError as broken_pipe_error:
+                # Not on the last try
+                if num_tries-1 > i:
+                    self._logger.exception('BrokenPipeError trying to execute command {}', command)
+                    sleep(0.5)
+                else:
+                    raise broken_pipe_error
 
     def _execute_git_remote_command_subprocess(self, command, cwd, timeout, log_msg_queue):
         """
