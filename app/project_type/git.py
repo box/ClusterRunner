@@ -1,9 +1,11 @@
-from multiprocessing import Pool  # pylint: disable=no-name-in-module
+from multiprocessing import Manager, Pool  # pylint: disable=no-name-in-module
 import os
 import pexpect
 import psutil
+import queue
 import shutil
 import signal
+from time import sleep
 from urllib.parse import urlparse
 
 from app.project_type.project_type import ProjectType
@@ -198,32 +200,65 @@ class _GitRemoteCommandExecutor(object):
     def __init__(self):
         self._logger = log.get_logger(__name__)
 
-    def execute(self, command, cwd=None, timeout=10):
+    def execute(self, command, cwd=None, timeout=10, num_tries=3):
         """
         Start the _execute_git_remote_command() method in a subprocess.
         :type command: str
         :type cwd: str | None
         :param timeout: the number of seconds to wait for expected prompts before assuming there will be no prompt
         :type timeout: int
+        :param num_tries: the number of times to attempt to run this command in case of a BrokenPipeError exception
+        :type num_tries: int
         """
-        # We use a multiprocessing.Pool here (instead of a Process) since the Pool can propagate any exceptions that
-        # occur in the subprocess back to the main process.
-        with Pool(processes=1) as pool:  # pylint: disable=not-callable
-            async_result = pool.apply_async(self._execute_git_remote_command_subprocess, args=(command, cwd, timeout))
-            async_result.wait()
+        for i in range(0, num_tries):
+            try:
+                # We use a multiprocessing.Pool here (instead of a Process) since the Pool can propagate any exceptions
+                # that occur in the subprocess back to the main process.
+                with Manager() as manager, Pool(processes=1) as pool:  # pylint: disable=not-callable
+                    # A queue is used to transfer log messages back to the main process instead of trying to log them
+                    # from the subprocess. This avoids issues around both processes potentially writing logs at the
+                    # same time and clobbering each other's log messages.
+                    log_msg_queue = manager.Queue()
+                    async_result = pool.apply_async(self._execute_git_remote_command_subprocess,
+                                                    args=(command, cwd, timeout, log_msg_queue))
 
-            # If any exception occurred in the subprocess, a call to async_result.get() will reraise that exception.
-            async_result.get()
+                    # While the subprocess is executing, watch for any logs it puts into the queue and log them
+                    # immediately.
+                    while not async_result.ready() or not log_msg_queue.empty():
+                        try:
+                            log_level, unformatted_msg, format_args = log_msg_queue.get(timeout=0.5)
+                            self._logger.log(log_level, unformatted_msg, *format_args)
+                        except queue.Empty:
+                            pass
 
-    def _execute_git_remote_command_subprocess(self, *args, **kwargs):
+                    # If any exception occurred in the subprocess, a call to async_result.get() will re-raise that
+                    # exception.
+                    async_result.get()
+                    break
+            except BrokenPipeError:
+                self._logger.exception('BrokenPipeError trying to execute command {}', command)
+                sleep(0.5)
+
+    def _execute_git_remote_command_subprocess(self, command, cwd, timeout, log_msg_queue):
         """
+        :type command: str
+        :type cwd: str|None
+        :type timeout: int
+        :type log_msg_queue: multiprocessing.queues.Queue
+
         This is the entry point for the subprocess that executes git remote commands using pexpect. Args and kwargs are
         passed directly through to self._execute_git_remote_command().
         """
-        # Reset signal handlers -- unhandled exceptions will be handled by the main process when the subprocess dies.
-        UnhandledExceptionHandler.reset_signal_handlers()
-        self._close_unneeded_network_connections()
-        self._execute_git_remote_command(*args, **kwargs)
+        try:
+            # Reset signal handlers -- unhandled exceptions will be handled by the main process when the subprocess dies.
+            UnhandledExceptionHandler.reset_signal_handlers()
+            log_msg_queue.put(('INFO', 'Closing unneeded network connections...', ()))
+            self._close_unneeded_network_connections()
+            log_msg_queue.put(('INFO', 'Closed network connections, executing git remote command...', ()))
+            self._execute_git_remote_command(command, cwd, timeout, log_msg_queue)
+        except Exception as exception:
+            log_msg_queue.put(('ERROR', 'Exception in _execute_git_remote_command_subprocess {}', (exception,)))
+            raise exception
 
     def _close_unneeded_network_connections(self):
         """
@@ -240,7 +275,7 @@ class _GitRemoteCommandExecutor(object):
             except OSError:
                 pass
 
-    def _execute_git_remote_command(self, command, cwd, timeout):
+    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue):
         """
         Execute git-related commands. This functionality is sequestered into its own method because an automated
         system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
@@ -249,6 +284,7 @@ class _GitRemoteCommandExecutor(object):
         :type command: str
         :type cwd: str|None
         :type timeout: int
+        :type log_msg_queue: multiprocessing.queues.Queue
         """
         # todo: Reenable the functionality around listening for a kill_event to abort execution of this method. This
         # todo: has been temporarily disabled due to complexity around doing this between multiple processes.
@@ -267,7 +303,6 @@ class _GitRemoteCommandExecutor(object):
         # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
         # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
         # hang in such a scenario.
-        self._logger.debug('Executing git command in forked process: {}', command)
         child = pexpect.spawn(command, cwd=cwd)
         while True:
             try:
@@ -287,16 +322,19 @@ class _GitRemoteCommandExecutor(object):
 
                     # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
                     child.sendline('yes')
-                    self._logger.info('Automatically added a host to known_hosts in command: {}', command)
+                    log_msg_queue.put(
+                        ('INFO', 'Automatically added a host to known_hosts in command: {}', (command,)))
 
             except pexpect.EOF:
                 break
             except pexpect.TIMEOUT:
-                self._logger.info('Command [{}] had no expected prompts after {} seconds.', command, timeout)
+                log_msg_queue.put(
+                    ('INFO', 'Command [{}] had no expected prompts after {} seconds.', (command, timeout)))
                 break
 
         # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
-        self._logger.debug('Output from command [{}] after {} seconds: {}', command, timeout, child.before)
+        log_msg_queue.put(
+            ('DEBUG', 'Output from command [{}] after {} seconds: {}', (command, timeout, child.before)))
 
         # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
         # if the kill event has been set in case the build is canceled during setup.
