@@ -178,3 +178,12 @@ class TestGit(BaseUnitTestCase):
         git_executor._execute_git_remote_command('fake command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
         self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
+
+    def test_execute_raises_broken_pipe_error_on_last_try(self):
+        git_executor = _GitRemoteCommandExecutor()
+        self.patch('app.project_type.git.sleep')
+        self.patch('app.project_type.git.Manager').side_effect = \
+            [BrokenPipeError(''), BrokenPipeError(''), BrokenPipeError('')]
+
+        with self.assertRaises(BrokenPipeError):
+            git_executor.execute('fake command', cwd=None, timeout=0, num_tries=3)
