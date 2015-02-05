@@ -213,6 +213,7 @@ class ClusterMaster(object):
         if build_request.is_valid():
             build = Build(build_request)
             self._all_builds_by_id[build.build_id()] = build
+            build.generate_project_type()
             self._request_queue.put(build)
             analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
                                    log_msg='Queued request for build {build_id}.')
