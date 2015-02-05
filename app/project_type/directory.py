@@ -63,3 +63,6 @@ class Directory(ProjectType):
             timings_subdirectory,
             '{}.timing.json'.format(job_name)
         )
+
+    def project_id(self):
+        return self.project_directory
