@@ -1,19 +1,16 @@
 from collections import OrderedDict
 import os
-from queue import Queue
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.serial_request_handler import SerialRequestHandler
+from app.master.build_request_handler import BuildRequestHandler
 from app.master.slave import Slave
+from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
-from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
-from app.util.ordered_set_queue import OrderedSetQueue
-from app.util.safe_thread import SafeThread
 
 
 class ClusterMaster(object):
@@ -25,26 +22,13 @@ class ClusterMaster(object):
 
     def __init__(self):
         self._logger = get_logger(__name__)
-
-        self._all_slaves_by_url = {}
-        self._all_builds_by_id = OrderedDict()  # This is an OrderedDict so we can more easily implement get_queue()
-        self._builds_waiting_for_slaves = Queue()
-
-        self._request_queue = Queue()
-        self._request_handler = SerialRequestHandler()
-
-        self._request_queue_worker_thread = SafeThread(
-            target=self._build_preparation_loop, name='RequestHandlerLoop', daemon=True)
-        self._request_queue_worker_thread.start()
-
-        self._slave_allocation_worker_thread = SafeThread(
-            target=self._slave_allocation_loop, name='SlaveAllocationLoop', daemon=True)
-        self._slave_allocation_worker_thread.start()
-
         self._master_results_path = Configuration['results_directory']
-
-        # It's important that idle slaves are only in the queue once so we use OrderedSet
-        self._idle_slaves = OrderedSetQueue()
+        self._all_slaves_by_url = {}
+        self._all_builds_by_id = OrderedDict()
+        self._build_request_handler = BuildRequestHandler()
+        self._build_request_handler.start()
+        self._slave_allocator = SlaveAllocator(self._build_request_handler)
+        self._slave_allocator.start()
 
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
@@ -132,7 +116,7 @@ class ClusterMaster(object):
         """
         slave = Slave(slave_url, num_executors)
         self._all_slaves_by_url[slave_url] = slave
-        self._add_idle_slave(slave)
+        self._slave_allocator.add_idle_slave(slave)
 
         self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
                           slave_url, num_executors, slave.id)
@@ -148,7 +132,7 @@ class ClusterMaster(object):
         """
         slave_transition_functions = {
             SlaveState.DISCONNECTED: self._disconnect_slave,
-            SlaveState.IDLE: self._add_idle_slave,
+            SlaveState.IDLE: self._slave_allocator.add_idle_slave,
             SlaveState.SETUP_COMPLETED: self._handle_setup_success_on_slave,
             SlaveState.SETUP_FAILED: self._handle_setup_failure_on_slave,
         }
@@ -172,14 +156,6 @@ class ClusterMaster(object):
         slave.current_build_id = None
         # todo: Fail/resend any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
-
-    def _add_idle_slave(self, slave):
-        """
-        Add a slave to the idle quexue
-        :type slave: Slave
-        """
-        slave.mark_as_idle()
-        self._idle_slaves.put(slave)
 
     def _handle_setup_success_on_slave(self, slave):
         """
@@ -208,21 +184,17 @@ class ClusterMaster(object):
         :rtype tuple [bool, dict [str, str]]
         """
         build_request = BuildRequest(build_params)
-
         success = False
+
         if build_request.is_valid():
             build = Build(build_request)
             self._all_builds_by_id[build.build_id()] = build
             build.generate_project_type()
-            self._request_queue.put(build)
-            analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
-                                   log_msg='Queued request for build {build_id}.')
+            self._build_request_handler.handle_build_request(build)
             response = {'build_id': build.build_id()}
             success = True
-
         elif not build_request.is_valid_type():
             response = {'error': 'Invalid build request type.'}
-
         else:
             required_params = build_request.required_parameters()
             response = {'error': 'Missing required parameter. Required parameters: {}'.format(required_params)}
@@ -296,48 +268,3 @@ class ClusterMaster(object):
             raise ItemNotReadyError('Build artifact file is not yet ready. Try again later.')
 
         return archive_file
-
-    def _build_preparation_loop(self):
-        """
-        Grabs a build off the request_queue, prepares it, and puts that build onto the builds_waiting_for_slaves queue.
-        """
-        while True:
-            build = self._request_queue.get()
-            analytics.record_event(analytics.BUILD_PREPARE_START, build_id=build.build_id(),
-                                   log_msg='Build preparation loop is handling request for build {build_id}.')
-            try:
-                self._request_handler.handle_request(build)
-                if not build.has_error:
-                    analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(),
-                                           log_msg='Build {build_id} successfully prepared and waiting for slaves.')
-                    self._builds_waiting_for_slaves.put(build)
-            except Exception as ex:  # pylint: disable=broad-except
-                build.mark_failed(str(ex))
-                self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
-
-    def _slave_allocation_loop(self):
-        """
-        Builds wait in line for more slaves. This method executes in the background on another thread and watches for
-        idle slaves, then gives them out to the waiting builds.
-        """
-        while True:
-            build_waiting_for_slave = self._builds_waiting_for_slaves.get()
-
-            while build_waiting_for_slave.needs_more_slaves():
-                claimed_slave = self._idle_slaves.get()
-
-                # Remove dead slaves from the idle queue
-                if not claimed_slave.is_alive(use_cached=False):
-                    continue
-
-                # The build may have completed while we were waiting for an idle slave, so check one more time.
-                if build_waiting_for_slave.needs_more_slaves():
-                    # Potential race condition here!  If the build completes after the if statement is checked,
-                    # a slave will be allocated needlessly (and run slave.setup(), which can be significant work).
-                    self._logger.info('Allocating slave {} to build {}.',
-                                      claimed_slave.url, build_waiting_for_slave.build_id())
-                    build_waiting_for_slave.allocate_slave(claimed_slave)
-                else:
-                    self._add_idle_slave(claimed_slave)
-
-            self._logger.info('Done allocating slaves for build {}.', build_waiting_for_slave.build_id())
