@@ -141,6 +141,11 @@ class Docker(ProjectType):
         """
         pass
 
+    def project_id(self):
+        # Docker cannot fetch multiple containers in parallel, so the project_id for all docker-project_type
+        # builds must be done serially.
+        return 'docker'
+
     def _remove_file_system_unfriendly_characters(self, unescaped_path):
         """
         Escape the string unescaped_path to be POSIX directory format compliant.

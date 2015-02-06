@@ -396,6 +396,15 @@ class ProjectType(object):
 
         return arguments_info
 
+    def project_id(self):
+        """
+        Get a string that uniquely identifies the project involved.  Build requests for the same project will have
+        their own serial request handler.  This allows us to parallelize the atomization of builds which are for
+        different projects (since their fetching and atomization commands will not collide).
+        :return: string
+        """
+        raise NotImplementedError
+
     def _run_remote_file_setup(self):
         """
         Fetches remote files
