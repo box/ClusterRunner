@@ -115,6 +115,7 @@ def compress_directories(target_dirs_to_archive_paths, tarfile_path):
 
             tar.add(target_dir, arcname=archive_name)
 
+
 def remove_invalid_path_characters(path):
     """
     :param path: the path that may contain invalid characters
