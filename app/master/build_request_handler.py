@@ -1,6 +1,7 @@
 import json
 import os
 from queue import Queue
+from threading import Lock
 
 from app.master.atom_grouper import AtomGrouper
 from app.master.build_request import BuildRequest
@@ -37,6 +38,7 @@ class BuildRequestHandler(object):
         self._request_queue = Queue()
         self._request_queue_worker_thread = SafeThread(
             target=self._build_preparation_loop, name='RequestHandlerLoop', daemon=True)
+        self._project_preparation_locks = {}
 
     def start(self):
         """
@@ -73,6 +75,28 @@ class BuildRequestHandler(object):
         """
         while True:
             build = self._request_queue.get()
+            project_id = build.project_type.project_id()
+
+            if project_id not in self._project_preparation_locks:
+                self._logger.info('Creating project lock [{}] for build {}', project_id, str(build.build_id()))
+                self._project_preparation_locks[project_id] = Lock()
+
+            project_lock = self._project_preparation_locks[project_id]
+            SafeThread(
+                target=self._prepare_build_async,
+                name='Bld{}-PreparationThread'.format(build.build_id()),
+                args=(build, project_lock)
+            ).start()
+
+    def _prepare_build_async(self, build, project_lock):
+        """
+        :type build: Build
+        :type project_lock: Lock
+        """
+        self._logger.info('Build {} is waiting for the project lock', build.build_id())
+
+        with project_lock:
+            self._logger.info('Build {} has acquired project lock', build.build_id())
             analytics.record_event(analytics.BUILD_PREPARE_START, build_id=build.build_id(),
                                    log_msg='Build preparation loop is handling request for build {build_id}.')
             try:
