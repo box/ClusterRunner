@@ -19,10 +19,19 @@ MASTER_TRIGGERED_SUBJOB = 'MASTER_TRIGGERED_SUBJOB'
 SERVICE_STARTED = 'SERVICE_STARTED'
 SUBJOB_EXECUTION_FINISH = 'SUBJOB_EXECUTION_FINISH'
 SUBJOB_EXECUTION_START = 'SUBJOB_EXECUTION_START'
+LOG_CACHE_MAX_SIZE = 10000
 
 _analytics_logger = None
 _eventlog_file = None
 _event_id_generator = Counter()
+_log_cache = collections.deque(maxlen=LOG_CACHE_MAX_SIZE)
+
+
+def write_to_log_cache(event):
+    """
+    :type event: dict
+    """
+    _log_cache.append(event)
 
 
 def initialize(eventlog_file=None):
@@ -83,7 +92,9 @@ def record_event(tag, log_msg=None, **event_data):
         event_data['__id__'] = _event_id_generator.increment()
         event_data['__tag__'] = tag
         event_data['__timestamp__'] = time.time()
-        _analytics_logger.event(json.dumps(event_data, sort_keys=True))  # pylint: disable=no-member
+        json_dumps = json.dumps(event_data, sort_keys=True)
+        _analytics_logger.event(json_dumps)  # pylint: disable=no-member
+        write_to_log_cache(event_data)
         # todo(joey): cache most recent N events so get_events() doesn't always have to load file
 
     if log_msg:
@@ -114,24 +125,63 @@ def get_events(since_timestamp=None, since_id=None):
     since_timestamp = float(since_timestamp) if since_timestamp else 0.0
     since_id = int(since_id) if since_id else 0
 
-    with open(_eventlog_file, 'r') as f:
-        # todo(joey): This is inefficient since it reads the whole log file into memory (can be several megabytes).
-        # We probably want something like http://code.activestate.com/recipes/120686/
-        reversed_log_lines = reversed(f.readlines())
+    filtered_events_from_cache = get_events_from_cache(since_timestamp, since_id)
+    if len(filtered_events_from_cache) > 0:
+        return filtered_events_from_cache
 
+    return get_events_from_file(_eventlog_file, since_timestamp, since_id)
+
+
+def get_events_from_file(eventlog_file, since_timestamp, since_id):
+    """
+    :param eventlog_file: str
+    :param since_timestamp: float
+    :param since_id: int
+    :rtype: list[dict]
+    """
+    # todo(joey): This is inefficient since it reads the whole log file into memory (can be several megabytes).
+    # We probably want something like http://code.activestate.com/recipes/120686/
+    with open(eventlog_file, 'r') as f:
+        log_lines_from_file = f.readlines()
+        reversed_events = reversed(log_lines_from_file)
+        returned_events = []
+        for log_line in reversed_events:
+            try:
+                event = json.loads(log_line, object_pairs_hook=collections.OrderedDict)
+            except ValueError:
+                continue
+
+            if is_event_in_requested_range(event, since_timestamp, since_id):
+                returned_events.append(event)
+
+        return list(reversed(returned_events))
+
+
+def get_events_from_cache(since_timestamp, since_id):
+    """
+    :type since_timestamp: float
+    :type since_id: int
+    :rtype: list[dict]
+    """
+    reversed_events = reversed(_log_cache)
     returned_events = []
-    for log_line in reversed_log_lines:
-        try:
-            event = json.loads(log_line, object_pairs_hook=collections.OrderedDict)  # OrderedDict keeps keys sorted
-        except ValueError:
-            continue  # skip this line if it's invalid json
+    for event in reversed_events:
+        if is_event_in_requested_range(event, since_timestamp, since_id):
+            returned_events.append(event)
 
-        event_timestamp = event.get('__timestamp__')
-        event_id = event.get('__id__')
+    return list(reversed(returned_events))
 
-        if event_timestamp > since_timestamp and event_id != since_id:
-            returned_events.append(event)  # this event is in the requested range so we add it to the response
-        else:
-            break  # we've gone past the start of the range so we're done
 
-    return list(reversed(returned_events))  # events were added from latest to earliest; reverse to get correct order
+def is_event_in_requested_range(event, since_timestamp, since_id):
+    """
+    :type event: dict
+    :type since_timestamp: float
+    :type since_id: int
+    :rtype: bool
+    """
+    event_timestamp = event.get('__timestamp__')
+    event_id = event.get('__id__')
+
+    return event_timestamp > since_timestamp and event_id != since_id
+
+
