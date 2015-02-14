@@ -48,7 +48,7 @@ class Slave(object):
 
         self.current_build_id = None
 
-    def setup(self, build_id, project_type_params):
+    def setup(self, build_id, project_type_params, num_executors_already_allocated):
         """
         Execute a setup command on the slave for the specified build. The command is executed asynchronously from the
         perspective of this method, but any subjobs will block until the slave finishes executing the setup command.
@@ -63,6 +63,7 @@ class Slave(object):
         slave_project_type_params = util.project_type_params_for_slave(project_type_params)
         post_data = {
             'project_type_params': slave_project_type_params,
+            'num_executors_already_allocated': num_executors_already_allocated,
         }
         self._network.post_with_digest(setup_url, post_data, Secret.get())
         self.current_build_id = build_id

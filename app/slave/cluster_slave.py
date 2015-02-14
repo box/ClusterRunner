@@ -72,7 +72,7 @@ class ClusterSlave(object):
         """
         return 'Slave service is up. <Port: {}>'.format(self.port)
 
-    def setup_build(self, build_id, project_type_params):
+    def setup_build(self, build_id, project_type_params, num_executors_already_allocated):
         """
         Usually called once per build to do build-specific setup. Will block any subjobs from executing until setup
         completes. The actual setup is performed on another thread and will unblock subjobs (via an Event) once it
@@ -82,6 +82,9 @@ class ClusterSlave(object):
         :type build_id: int
         :param project_type_params: The parameters that define the project_type this build will execute in
         :type project_type_params: dict
+        :param num_executors_already_allocated: How many executors have alreayd been allocated on other slaves for
+        this build
+        :type num_executors_already_allocated: int
         """
         self._logger.info('Executing setup for build {} (type: {}).', build_id, project_type_params.get('type'))
         self._current_build_id = build_id
@@ -101,21 +104,23 @@ class ClusterSlave(object):
         SafeThread(
             target=self._async_setup_build,
             name='Bld{}-Setup'.format(build_id),
-            args=(executors, project_type_params)
+            args=(executors, project_type_params, num_executors_already_allocated)
         ).start()
 
-    def _async_setup_build(self, executors, project_type_params):
+    def _async_setup_build(self, executors, project_type_params, num_executors_already_allocated):
         """
         Called from setup_build(). Do asynchronous setup for the build so that we can make the call to setup_build()
         non-blocking.
 
         :type executors: list[SubjobExecutor]
         :type project_type_params: dict
+        :type num_executors_already_allocated: int
         """
-        # todo(joey): It's strange that the project_type is setting up the executors, which in turn set up projects.
-        # todo(joey): I think this can be untangled a bit -- we should call executor.configure_project_type() here.
+        self._base_executor_index = num_executors_already_allocated
         try:
-            self._project_type.fetch_project(executors, project_type_params)
+            self._project_type.fetch_project()
+            for executor in executors:
+                executor.configure_project_type(project_type_params)
             self._project_type.run_job_config_setup()
 
         except SetupFailureError as ex:
@@ -291,7 +296,7 @@ class ClusterSlave(object):
         subjob_event_data = {'build_id': build_id, 'subjob_id': subjob_id, 'executor_id': executor.id}
 
         analytics.record_event(analytics.SUBJOB_EXECUTION_START, **subjob_event_data)
-        results_file = executor.execute_subjob(build_id, subjob_id, subjob_artifact_dir, atomic_commands)
+        results_file = executor.execute_subjob(build_id, subjob_id, subjob_artifact_dir, atomic_commands, self._base_executor_index)
         analytics.record_event(analytics.SUBJOB_EXECUTION_FINISH, **subjob_event_data)
 
         results_url = self._master_api.url('build', build_id, 'subjob', subjob_id, 'result')

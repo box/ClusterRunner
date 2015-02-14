@@ -84,7 +84,8 @@ class _BuildSetupHandler(_ClusterSlaveBaseHandler):
     @authenticated
     def post(self, build_id):
         project_type_params = self.decoded_body.get('project_type_params')
-        self._cluster_slave.setup_build(int(build_id), project_type_params)
+        num_executors_already_allocated = self.decoded_body.get('num_executors_already_allocated')
+        self._cluster_slave.setup_build(int(build_id), project_type_params, int(num_executors_already_allocated))
         self._write_status()
 
 

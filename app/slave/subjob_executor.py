@@ -20,6 +20,7 @@ class SubjobExecutor(object):
         self._logger = log.get_logger(__name__)
         self._current_build_id = None
         self._current_subjob_id = None
+        self._index_in_build = None
 
     def api_representation(self):
         """
@@ -48,7 +49,7 @@ class SubjobExecutor(object):
     def run_job_config_setup(self):
         self._project_type.run_job_config_setup()
 
-    def execute_subjob(self, build_id, subjob_id, subjob_artifact_dir, atomic_commands):
+    def execute_subjob(self, build_id, subjob_id, subjob_artifact_dir, atomic_commands, base_executor_index):
         """
         This is the method for executing a subjob. This performs the work required by executing the specified command,
         then archives the results into a single file and returns the filename.
@@ -57,6 +58,7 @@ class SubjobExecutor(object):
         :type subjob_id: int
         :type subjob_artifact_dir: str
         :type atomic_commands: list[str]
+        :type base_executor_index: int
         :rtype: str
         """
         self._logger.info('Executing subjob (Build {}, Subjob {})...', build_id, subjob_id)
@@ -82,6 +84,8 @@ class SubjobExecutor(object):
                 'ARTIFACT_DIR': atom_artifact_dir,
                 'ATOM_ID': atom_id,
                 'EXECUTOR_INDEX': self.id,
+                'MACHINE_EXECUTOR_INDEX': self.id,
+                'BUILD_EXECUTOR_INDEX': base_executor_index + self.id,
             }
 
             atom_artifact_dirs.append(atom_artifact_dir)

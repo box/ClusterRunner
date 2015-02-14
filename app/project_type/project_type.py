@@ -71,29 +71,18 @@ class ProjectType(object):
             config_contents = f.read()
         return config_contents
 
-    def fetch_project(self, executors=None, project_type_params=None):
+    def fetch_project(self):
         """
         Fetch the project onto the local machine.
 
         Runs once per machine per build. Runs the project_type's retrieve command (fetch, reset, etc) and produces
         a list of per-executor project_types.
-
-        :type executors: list [SubjobExecutor]
-        :type project_type_params: dict [str, str]
         """
-        if (executors is None) != (project_type_params is None):
-            raise RuntimeError('setup_build called with invalid params, either both executors and project_type_params '
-                               'should be set, or neither')
-
         self._fetch_project()
         self._logger.info('Build setup complete.')
 
         if self._remote_files:
             self._run_remote_file_setup()
-
-        # If executors were passed in, run configure_environment to do per-executor setup.
-        if executors and project_type_params:
-            self._setup_executors(executors, project_type_params)
 
     def _fetch_project(self):
         raise NotImplementedError
@@ -144,17 +133,6 @@ class ProjectType(object):
                 raise TeardownFailureError('Build teardown failed!\nCommand:\n"{}"\n\nOutput:\n{}'
                                            .format(job_config.teardown_build, output))
             self._logger.info('Build teardown completed successfully.')
-
-    def _setup_executors(self, executors, project_type_params):
-        """
-        Given the executors, run the job config setup commands.  Override this to specify different behavior per
-        project_type type.
-
-        :type executors: list [SubjobExecutor]
-        :type project_type_params: dict [str, str]
-        """
-        for executor in executors:
-            executor.configure_project_type(project_type_params)
 
     def setup_executor(self):
         """
