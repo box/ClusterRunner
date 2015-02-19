@@ -13,7 +13,7 @@ init:
 
 pylint:
 	$(call print_msg, Running pylint... )
-	pylint app
+	pylint --load-plugins=test.framework.pylint app
 
 pep8:
 	$(call print_msg, Running pep8... )
