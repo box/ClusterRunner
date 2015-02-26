@@ -5,7 +5,7 @@ import subprocess
 from subprocess import PIPE
 
 from app.util import log
-from app.util.decorators import retry_on_exception
+from app.util.decorators import retry_on_exception_exponential_backoff
 from app.util.log import get_logger
 from app.util.secret import Secret
 
@@ -39,7 +39,7 @@ class Network(object):
         return self._request('GET', *args, **kwargs)
 
     # todo: may be a bad idea to retry -- what if post was successful but just had a response error?
-    @retry_on_exception(exceptions=(requests.ConnectionError,))
+    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,))
     def post(self, *args, **kwargs):
         """
         Send a POST request to a url. Arguments to this method, unless otherwise documented below in _request(), are
@@ -62,7 +62,7 @@ class Network(object):
                          error_on_failure=error_on_failure)
 
     # todo: may be a bad idea to retry -- what if put was successful but just had a response error?
-    @retry_on_exception(exceptions=(requests.ConnectionError,))
+    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,))
     def put(self, *args, **kwargs):
         """
         Send a PUT request to a url. Arguments to this method, unless otherwise documented below in _request(), are
