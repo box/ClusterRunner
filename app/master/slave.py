@@ -5,6 +5,7 @@ from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
 from app.util import util
+import requests.exceptions
 
 
 class Slave(object):
@@ -143,8 +144,7 @@ class Slave(object):
                     self._is_alive = False
                 else:
                     self._is_alive = response_data['slave']['is_alive']
-
-        except ConnectionError:
+        except requests.exceptions.ConnectionError:
             self._logger.warning('Slave with url {} is offline.', self.url)
             self._is_alive = False
 
