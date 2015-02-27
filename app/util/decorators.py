@@ -6,22 +6,44 @@ from app.util.exceptions import AuthenticationError
 from app.util.secret import Secret
 
 
-def retry_on_exception(exceptions, num_attempts=10, retry_delay=0.1):
+def retry_on_exception_exponential_backoff(exceptions, initial_delay=0.1, total_delay=15, exponential_factor=2):
+    """
+    Retries with exponential backoff.
 
+    :param exceptions: The exceptions that we will catch and retry on.
+    :type exceptions: list[Exception]
+    :param initial_delay: num seconds that the first retry period will be
+    :type initial_delay: float
+    :param total_delay: the total number of seconds of the sum of all retry periods
+    :type total_delay: float
+    :param exponential_factor: Cannot be smaller than 1.
+    :type exponential_factor: float
+    """
     def method_decorator(function):
         @wraps(function)
         def function_with_retries(*args, **kwargs):
-            for i in range(num_attempts):
+            # If initial_delay is negative, then exponentiation would go infinitely.
+            if initial_delay <= 0:
+                raise RuntimeError('initial_delay must be greater than 0, was set to {}'.format(str(initial_delay)))
+
+            # The exponential factor must be greater than 1.
+            if exponential_factor <= 1:
+                raise RuntimeError('exponential_factor, {}, must be greater than 1'.format(exponential_factor))
+
+            delay = initial_delay
+            total_delay_so_far = 0
+
+            while True:
                 try:
-                    return_value = function(*args, **kwargs)
+                    return function(*args, **kwargs)
                 except exceptions as ex:
-                    if i == num_attempts - 1:
+                    if total_delay_so_far > total_delay:
                         raise  # final attempt failed
                     log.get_logger(__name__).warning('Call to {} raised {}("{}"). Retrying in {} seconds.',
-                                                     function.__qualname__, type(ex).__name__, ex, retry_delay)
-                    time.sleep(retry_delay)
-                else:
-                    return return_value
+                                                     function.__qualname__, type(ex).__name__, ex, delay)
+                    time.sleep(delay)
+                    total_delay_so_far += delay
+                    delay *= exponential_factor
 
         return function_with_retries
     return method_decorator
