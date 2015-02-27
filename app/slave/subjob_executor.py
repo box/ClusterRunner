@@ -83,7 +83,7 @@ class SubjobExecutor(object):
             atom_environment_vars = {
                 'ARTIFACT_DIR': atom_artifact_dir,
                 'ATOM_ID': atom_id,
-                'EXECUTOR_INDEX': self.id,
+                'EXECUTOR_INDEX': self.id,  # Deprecated, use MACHINE_EXECUTOR_INDEX
                 'MACHINE_EXECUTOR_INDEX': self.id,
                 'BUILD_EXECUTOR_INDEX': base_executor_index + self.id,
             }

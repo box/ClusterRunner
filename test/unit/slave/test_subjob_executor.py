@@ -53,6 +53,7 @@ class TestSubjobExecutor(BaseUnitTestCase):
             'BUILD_EXECUTOR_INDEX': 8
         }
 
-        executor.execute_subjob(1, 2, 'dir', atomic_commands, 6)
+        executor.execute_subjob(build_id=1, subjob_id=2, subjob_artifact_dir='dir', atomic_commands=atomic_commands,
+                                base_executor_index=6)
 
         executor._project_type.execute_command_in_project.assert_called_with('command', expected_env_vars)

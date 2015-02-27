@@ -140,7 +140,7 @@ class Build(object):
         slave.setup(
             self.build_id(),
             project_type_params=self.build_request.build_parameters(),
-            num_executors_already_allocated=self._num_executors_allocated
+            build_executor_start_index=self._num_executors_allocated
         )
 
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)

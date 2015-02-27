@@ -45,7 +45,7 @@ class TestSlave(BaseUnitTestCase):
         slave.setup(1, {'type': 'git', 'url': 'http://{}'.format(remote_path)}, 0)
 
         slave._network.post_with_digest.assert_called_with('http://{}/v1/build/1/setup'.format(self._FAKE_SLAVE_URL),
-                                                           {'num_executors_already_allocated': 0,
+                                                           {'build_executor_start_index': 0,
                                                             'project_type_params': {
                                                                 'url': 'ssh://{}{}/repos/master/{}'.format(
                                                                     self._fake_hostname,
