@@ -1,9 +1,10 @@
+import builtins
 from genty import genty, genty_dataset
 import http.client
 import requests
 import requests.models
 from threading import Event
-from unittest.mock import ANY, call, MagicMock, mock_open
+from unittest.mock import ANY, call, MagicMock, Mock, mock_open, patch
 
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import BuildTeardownError, ClusterSlave, SlaveState
@@ -114,7 +115,7 @@ class TestClusterSlave(BaseUnitTestCase):
         subjob_done_event, teardown_done_event = self._mock_network_post_and_put(expected_results_api_url,
                                                                                  expected_idle_api_url)
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave.setup_build(build_id=123, project_type_params={'type': 'Fake'})
+        slave.setup_build(build_id=123, project_type_params={'type': 'Fake'}, build_executor_start_index=0)
         slave.start_working_on_subjob(build_id=123, subjob_id=321,
                                       subjob_artifact_dir='', atomic_commands=[])
         # The timeout for this wait() is arbitrary, but it should be generous so the test isn't flaky on slow machines.
@@ -156,7 +157,7 @@ class TestClusterSlave(BaseUnitTestCase):
         project_type_mock.teardown_build.side_effect = self.no_args_side_effect(teardown_event.wait)
 
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave.setup_build(build_id=123, project_type_params={'type': 'Fake'})
+        slave.setup_build(build_id=123, project_type_params={'type': 'Fake'}, build_executor_start_index=0)
         self.assertTrue(setup_complete_event.wait(timeout=5), 'Build setup should complete very quickly.')
 
         # Start the first thread that does build teardown. This thread will block on teardown_build().
@@ -184,7 +185,7 @@ class TestClusterSlave(BaseUnitTestCase):
         if not is_setup_successful:
             slave._project_type.fetch_project.side_effect = SetupFailureError
 
-        slave._async_setup_build(executors=[], project_type_params={})
+        slave._async_setup_build(executors=[], project_type_params={}, build_executor_start_index=0)
 
         self.mock_network.put_with_digest.assert_called_once_with(
             expected_slave_data_url, request_params={'slave': {'state': expected_slave_state}},
@@ -195,10 +196,28 @@ class TestClusterSlave(BaseUnitTestCase):
         slave.connect_to_master(self._FAKE_MASTER_URL)
         project_type_mock = self.patch('app.slave.cluster_slave.util.create_project_type').return_value
         slave._project_type = project_type_mock
-        slave._async_setup_build([], [])
+        slave._async_setup_build([], {}, 0)
 
-        project_type_mock.fetch_project.assert_called_once_with([], [])
+        project_type_mock.fetch_project.assert_called_once_with()
         self.assertTrue(project_type_mock.run_job_config_setup.called)
+
+    def test_setup_build_sets_base_executor_index(self):
+        slave = self._create_cluster_slave()
+        slave.setup_build(build_id=123, project_type_params={'type': 'Fake'}, build_executor_start_index=8)
+        self.assertEqual(8, slave._base_executor_index, 'Build setup should set _base_executor_index')
+
+    def test_execute_subjob_passes_base_executor_index_to_executor(self):
+        slave = self._create_cluster_slave()
+        slave._base_executor_index = 12
+        slave._master_api = Mock()
+        executor = Mock()
+        slave._idle_executors = Mock()
+
+        with patch.object(builtins, 'open', mock_open(read_data='asdf')):
+            slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, subjob_artifact_dir='',
+                                  atomic_commands=[])
+
+        executor.execute_subjob.assert_called_with(1, 2, '', [], 12)
 
     def _create_cluster_slave(self, **kwargs):
         """

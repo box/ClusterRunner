@@ -84,7 +84,8 @@ class _BuildSetupHandler(_ClusterSlaveBaseHandler):
     @authenticated
     def post(self, build_id):
         project_type_params = self.decoded_body.get('project_type_params')
-        self._cluster_slave.setup_build(int(build_id), project_type_params)
+        build_executor_start_index = self.decoded_body.get('build_executor_start_index')
+        self._cluster_slave.setup_build(int(build_id), project_type_params, int(build_executor_start_index))
         self._write_status()
 
 

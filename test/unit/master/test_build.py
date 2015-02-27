@@ -40,7 +40,8 @@ class TestBuild(BaseUnitTestCase):
         build.allocate_slave(mock_slave)
 
         # assert
-        mock_slave.setup.assert_called_once_with(build.build_id(), project_type_params={'setup': fake_setup_command})
+        mock_slave.setup.assert_called_once_with(build.build_id(), build_executor_start_index=0,
+                                                 project_type_params={'setup': fake_setup_command})
 
     def test_build_doesnt_use_more_than_max_executors(self):
         subjobs = self._create_subjobs()
