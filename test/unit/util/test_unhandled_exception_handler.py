@@ -1,7 +1,7 @@
 from contextlib import suppress
 import sys
 from threading import Thread
-from unittest.mock import call, MagicMock
+from unittest.mock import call, mock_open, MagicMock
 
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from test.framework.comparators import AnyStringMatching
@@ -131,3 +131,11 @@ class TestUnhandledExceptionHandler(BaseUnitTestCase):
 
         self.assertTrue(exception_raised, 'Exception should be raised when UnhandledExceptionHandler is initialized on '
                                           'a non-main thread.')
+
+    def test_application_info_dump_signal_handler_writes_to_file(self):
+        open_mock = mock_open()
+        self.patch('app.util.unhandled_exception_handler.open', new=open_mock, create=True)
+        self.exception_handler._application_info_dump_signal_handler(UnhandledExceptionHandler.SIGINFO, MagicMock())
+
+        handle = open_mock()
+        assert handle.write.called

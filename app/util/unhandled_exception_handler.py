@@ -21,10 +21,11 @@ class UnhandledExceptionHandler(Singleton):
     HANDLED_EXCEPTION_EXIT_CODE = 1
     EXCEPTION_DURING_TEARDOWN_EXIT_CODE = 2
 
-    _SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
+    SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
+    _SIGINFO_DEBUG_LOG = '/tmp/clusterrunner.debug.log'
 
     _signal_names = {
-        _SIGINFO: 'SIGINFO',
+        SIGINFO: 'SIGINFO',
         signal.SIGINT: 'SIGINT',
         signal.SIGTERM: 'SIGTERM',
     }
@@ -43,7 +44,7 @@ class UnhandledExceptionHandler(Singleton):
         # singleton is only ever initialized on the main thread.
         signal.signal(signal.SIGTERM, self._application_teardown_signal_handler)
         signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
-        signal.signal(self._SIGINFO, self._application_info_dump_signal_handler)
+        signal.signal(self.SIGINFO, self._application_info_dump_signal_handler)
 
     @classmethod
     def reset_signal_handlers(cls):
@@ -51,7 +52,9 @@ class UnhandledExceptionHandler(Singleton):
         Reset all signal handlers to their default values. This is useful in forked subprocesses since we often do not
         want to inherit all the signal handlers.
         """
-        for signal_num in cls._signal_names:
+        signals_to_reset = dict(cls._signal_names)
+        signals_to_reset.pop(cls.SIGINFO, None)  # Leave the SIGINFO handler for forked subprocesses
+        for signal_num in signals_to_reset:
             signal.signal(signal_num, signal.SIG_DFL)  # SIG_DFL restores the default behavior for each signal
 
     def add_teardown_callback(self, callback, *callback_args, **callback_kwargs):
@@ -89,7 +92,10 @@ class UnhandledExceptionHandler(Singleton):
         :type frame: frame
         """
         self._logger.info('{} signal received. Dumping application info.', self._signal_names[sig])
-        self._logger.notice(app_info.get_app_info_string())
+        app_info_string = app_info.get_app_info_string()
+        self._logger.notice(app_info_string)
+        with open(self._SIGINFO_DEBUG_LOG, 'a') as f:
+            f.write("{}\n".format(app_info_string))
 
     def __enter__(self):
         """
