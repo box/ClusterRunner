@@ -13,7 +13,7 @@ class StopSubcommand(Subcommand):
     # The commands that can be used to identify a clusterrunner process (for accurate killing).
     _command_whitelist_keywords = ['clusterrunner', 'main.py master', 'main.py slave']
     # The number of seconds to wait between performing a SIGTERM and a SIGKILL
-    _sigterm_sigkill_grace_period_sec = 2
+    SIGTERM_SIGKILL_GRACE_PERIOD_SEC = 2
 
     def run(self, log_level):
         """
@@ -62,23 +62,38 @@ class StopSubcommand(Subcommand):
 
         if not matched_proc_command:
             self._logger.info(
-                "PID {0} is running, but command '{1}' is not a clusterrunner command".format(pid, proc_command))
+                "PID {0} is running, but command '{1}' is not a clusterrunner command".format(proc.pid, proc_command))
             return
 
         # Try killing gracefully with SIGTERM first. Then give process some time to gracefully shutdown. If it
         # doesn't, perform a SIGKILL.
         # @TODO: use util.timeout functionality once it gets merged
-        os.kill(int(pid), signal.SIGTERM)
+        procs_to_kill = proc.children(recursive=True) + [proc]
+        self.kill_running_procs(procs_to_kill, signal.SIGTERM)
         sigterm_start = time.time()
 
-        while (time.time()-sigterm_start) <= self._sigterm_sigkill_grace_period_sec:
-            if not psutil.pid_exists(int(pid)):
+        while (time.time()-sigterm_start) <= self.SIGTERM_SIGKILL_GRACE_PERIOD_SEC:
+            if not any([proc_to_kill.is_running() for proc_to_kill in procs_to_kill]):
                 break
             time.sleep(0.1)
 
-        if psutil.pid_exists(int(pid)):
-            self._logger.info("SIGTERM signal to PID {0} failed. Killing with SIGKILL".format(pid))
-            os.kill(int(pid), signal.SIGKILL)
+        if any([proc_to_kill.is_running() for proc_to_kill in procs_to_kill]):
+            self.kill_running_procs(procs_to_kill, signal.SIGKILL)
             return
+        else:
+            self._logger.info("Killed all running clusterrunner processes with SIGTERM")
 
-        self._logger.info("Killed process with PID {0} with SIGTERM".format(pid))
+    def kill_running_procs(self, procs_to_kill, sig):
+        """
+        :type procs_to_kill: list[psutil.Process]
+        :type sig: int
+        """
+        known_signal_to_str = {
+            signal.SIGTERM: 'SIGTERM',
+            signal.SIGKILL: 'SIGKILL'
+        }
+        running_procs = [proc for proc in procs_to_kill if proc.is_running()]
+        for proc in running_procs:
+            self._logger.info("Sending {0} to PID {1}".format(
+                known_signal_to_str.get(sig, "signal " + str(sig)), proc.pid))
+            os.kill(proc.pid, sig)
