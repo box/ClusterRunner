@@ -26,22 +26,16 @@ class TestBuild(BaseUnitTestCase):
         self.mock_fs = mock_util.fs
 
     def test_allocate_slave_calls_slave_setup(self):
-        # arrange
         subjobs = self._create_subjobs()
-
         mock_project_type = self._create_mock_project_type()
-        fake_setup_command = 'docker pull my:leg'
         mock_slave = self._create_mock_slave()
-
-        # act
-        build = Build(BuildRequest({'setup': fake_setup_command}))
+        build = Build(Mock(spec_set=BuildRequest))
         build._project_type = mock_project_type
+
         build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
 
-        # assert
-        mock_slave.setup.assert_called_once_with(build.build_id(), build_executor_start_index=0,
-                                                 project_type_params={'setup': fake_setup_command})
+        mock_slave.setup.assert_called_once_with(build)
 
     def test_build_doesnt_use_more_than_max_executors(self):
         subjobs = self._create_subjobs()
