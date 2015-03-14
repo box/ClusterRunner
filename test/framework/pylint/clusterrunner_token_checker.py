@@ -1,16 +1,17 @@
-from pylint.checkers import BaseRawChecker
-from pylint.interfaces import IRawChecker
 import tokenize
 
+from pylint.checkers import BaseChecker
+from pylint.interfaces import ITokenChecker
 
-class ClusterRunnerRawChecker(BaseRawChecker):
+
+class ClusterRunnerTokenChecker(BaseChecker):
     """
-    Contains raw (token-based) lint checkers for ClusterRunner.
+    Contains token-based lint checkers for ClusterRunner.
     This checker should be registered in its package's __init__.py.
     """
-    __implements__ = IRawChecker
+    __implements__ = ITokenChecker
 
-    name = 'clusterrunner_raw_checker'
+    name = 'clusterrunner_token_checker'
     msgs = {
         'CR001': (
             'Comment contains disallowed string "DO NOT COMMIT"',

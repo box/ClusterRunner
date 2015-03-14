@@ -55,7 +55,7 @@ class DockerContainer(object):
             output, _ = docker_process.communicate()
             exit_code = docker_process.returncode
 
-        if type(output) is bytes:
+        if isinstance(output, bytes):
             output = output.decode()
 
         return output, exit_code

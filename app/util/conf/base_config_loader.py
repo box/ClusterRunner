@@ -156,17 +156,17 @@ class BaseConfigLoader(object):
         :type config: Configuration
         """
         default_value = config.get(key)
-        if type(default_value) is int:
+        if isinstance(default_value, int):
             config.set(key, int(value))
-        elif type(default_value) is bool:
+        elif isinstance(default_value, bool):
             value_mapping = {'True': True, 'False': False}
             if value not in value_mapping.keys():
                 raise _InvalidConfigError('The value for {} should be True or False, but it is "{}"'.format(key, value))
             config.set(key, value_mapping[value])
-        elif type(default_value) is list:
+        elif isinstance(default_value, list):
             # The ConfigObj library converts comma delimited strings to lists.  In the case on a single element, we
             # need to do the conversion ourselves.
-            if type(value) is not list:
+            if not isinstance(value, list):
                 value = [value]
             config.set(key, value)
         else:  # Could be str or NoneType, we assume it should be a str
