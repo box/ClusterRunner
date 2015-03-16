@@ -57,6 +57,7 @@ class Git(ProjectType):
 
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
+    # todo: Deprecate the "branch" parameter and create a new one named "ref" to replace it.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
                  hash='FETCH_HEAD', config=None, job_name=None, remote_files=None):
         """
@@ -90,6 +91,7 @@ class Git(ProjectType):
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
         self._git_remote_command_executor = _GitRemoteCommandExecutor()
+        self._local_ref = None
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
         fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
@@ -125,7 +127,7 @@ class Git(ProjectType):
 
         # The user-specified branch is overwritten with a locally created ref so that slaves working on a job can
         # continue to fetch the same HEAD, even if the master resets the user-specified branch for another build.
-        param_overrides['branch'] = self._branch
+        param_overrides['branch'] = self._local_ref
 
         return param_overrides
 
@@ -160,10 +162,10 @@ class Git(ProjectType):
         ).strip()
 
         # Save this hash as a local ref. Named local refs are necessary for slaves to fetch correctly from the master.
-        local_ref = 'refs/clusterrunner/' + self._hash
-        update_ref_command = 'git update-ref {} {}'.format(local_ref, self._hash)
+        # The local ref will be passed on to slaves instead of the user-specified branch.
+        self._local_ref = 'refs/clusterrunner/' + self._hash
+        update_ref_command = 'git update-ref {} {}'.format(self._local_ref, self._hash)
         self._execute_in_repo_and_raise_on_failure(update_ref_command, 'Could not update local ref.')
-        self._branch = local_ref  # this will be passed on to slaves instead of the user-specified branch
 
         # The '--' option acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
         reset_command = 'git reset --hard {} --'.format(self._hash)
