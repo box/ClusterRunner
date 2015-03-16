@@ -11,6 +11,5 @@ install:
   - make init
 
 script:
-  - export PYTHONPATH=.:$PYTHONPATH  # this is needed to get our custom pylint plugin to load correctly on Travis
   - export CR_VERBOSE=1  # turns on stdout logging for master and slave services during functional tests
   - make $TARGETS

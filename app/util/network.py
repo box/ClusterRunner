@@ -118,7 +118,7 @@ class Network(object):
         # ClusterBaseHandler. The reason we nest this in another dict instead of sending the json string directly is
         # that if files are included in a post request, the type of the data argument *must* be a dict.
         data_to_send = data
-        if should_encode_body and type(data_to_send) is dict:
+        if should_encode_body and isinstance(data_to_send, dict):
             data_to_send = {ENCODED_BODY: self.encode_body(data_to_send)}
 
         resp = self._session.request(method, url, data=data_to_send, *args, **kwargs)

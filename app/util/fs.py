@@ -54,7 +54,7 @@ def write_file(file_contents, file_path):
     file_dir, _ = os.path.split(file_path)
     create_dir(file_dir)
 
-    if type(file_contents) is bytes:
+    if isinstance(file_contents, bytes):
         open_kwargs = {}
         file_mode = 'wb'
     else:
