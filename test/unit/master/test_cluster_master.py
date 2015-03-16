@@ -11,6 +11,9 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 @genty
 class TestClusterMaster(BaseUnitTestCase):
+    # todo: This test class leaks threads. Every time we instantiate a ClusterMaster object we start up two threads
+    # todo: that will live for the rest of the nosetests run. We should 1) enable ClusterMaster to shut down the
+    # todo: threads that it starts and 2) make tests fail that leak threads.
 
     def setUp(self):
         super().setUp()
@@ -79,7 +82,8 @@ class TestClusterMaster(BaseUnitTestCase):
         build.validate_update_params = Mock(return_value=(True, update_params))
         build.update_state = Mock()
 
-        self.assertRaises(ItemNotFoundError, master.handle_request_to_update_build, invalid_build_id, update_params)
+        with self.assertRaises(ItemNotFoundError):
+            master.handle_request_to_update_build(invalid_build_id, update_params)
 
     def test_updating_slave_to_disconnected_state_should_mark_slave_as_dead(self):
         master = ClusterMaster()
@@ -128,17 +132,32 @@ class TestClusterMaster(BaseUnitTestCase):
         build_id = 1
         slave_url = "url"
         build = Build(BuildRequest({}))
-        build.handle_subjob_payload = Mock()
-        build.mark_subjob_complete = Mock()
-        build.execute_next_subjob_on_slave = Mock()
+        build._is_canceled = True
+        self.patch_object(build, '_handle_subjob_payload')
+        self.patch_object(build, '_mark_subjob_complete')
+        self.patch_object(build, 'execute_next_subjob_or_teardown_slave')
+
         master = ClusterMaster()
         master._all_builds_by_id[build_id] = build
         master._all_slaves_by_url[slave_url] = Mock()
-        build._is_canceled = True
 
         master.handle_result_reported_from_slave(slave_url, build_id, 1)
 
-        self.assertEqual(build.handle_subjob_payload.call_count, 0, "Build is canceled, should not handle payload")
-        self.assertEqual(build.mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
-        self.assertEqual(build.execute_next_subjob_on_slave.call_count, 0,
+        self.assertEqual(build._handle_subjob_payload.call_count, 0, "Build is canceled, should not handle payload")
+        self.assertEqual(build._mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
+        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, 0,
                          "Build is canceled, should not do next subjob")
+
+    def test_exception_raised_during_complete_subjob_does_not_prevent_slave_teardown(self):
+        slave_url = 'raphael.turtles.gov'
+        mock_build = Mock(spec_set=Build, build_id=lambda: 777, is_finished=False)
+        mock_build.complete_subjob.side_effect = [RuntimeError('Write failed')]
+
+        master = ClusterMaster()
+        master._all_builds_by_id[mock_build.build_id()] = mock_build
+        master._all_slaves_by_url[slave_url] = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, 'Write failed'):
+            master.handle_result_reported_from_slave(slave_url, mock_build.build_id(), subjob_id=888)
+
+        self.assertEqual(mock_build.execute_next_subjob_or_teardown_slave.call_count, 1)

@@ -124,6 +124,17 @@ class BaseUnitTestCase(TestCase):
         self._patched_items[mock] = patcher, allow_repatch
         return mock
 
+    def patch_object(self, target, attribute, **kwargs):
+        """
+        Replace the named attribute on the given object with a mock.
+
+        :type target: object
+        :type attribute: str
+        :rtype: MagicMock
+        """
+        patcher = patch.object(target, attribute, **kwargs)
+        return patcher.start()
+
     def unpatch(self, target):
         """
         Unpatch the specified target, restoring the original method or value. This is useful when something has already
