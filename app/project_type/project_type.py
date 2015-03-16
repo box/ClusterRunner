@@ -15,20 +15,6 @@ from app.util.conf.configuration import Configuration
 
 class ProjectType(object):
 
-    @classmethod
-    def params_for_slave(cls, project_type_params):
-        """
-        Modifies a set of project type params for use on a slave machine.  Override in subclasses to enable slave-
-        specific behavior
-        :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
-            'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
-            arguments for that ProjectType subclass.
-        :type project_type_params: dict
-        :return: A modified set of project type params
-        :rtype: dict [str, str]
-        """
-        return project_type_params
-
     def __init__(self, config=None, job_name=None, remote_files=None):
         """
         :param config: A yaml string representing a cluster_runner.yaml file
@@ -44,6 +30,16 @@ class ProjectType(object):
 
         self._logger = log.get_logger(__name__)
         self._kill_event = Event()
+
+    def slave_param_overrides(self):
+        """
+        Produce a set of values to override original project type params for use on a slave machine. Override in
+        subclasses to enable slave-specific behavior.
+
+        :return: A set of values to override original project type params
+        :rtype: dict[str, str]
+        """
+        return {}
 
     def job_config(self):
         """
@@ -88,13 +84,20 @@ class ProjectType(object):
         raise NotImplementedError
 
     def _execute_and_raise_on_failure(self, command, message, cwd=None):
+        """
+        :rtype: string
+        """
         output, exit_code = self.execute_command_in_project(command, cwd=cwd)
         # If the command was intentionally killed, do not raise an error
         if exit_code != 0 and not self._kill_event.is_set():
             raise RuntimeError('{} Command: "{}"\nOutput: "{}"'.format(message, command, output))
+        return output
 
     def _execute_in_project_and_raise_on_failure(self, command, message):
-        self._execute_and_raise_on_failure(command, message, self.project_directory)
+        """
+        :rtype: string
+        """
+        return self._execute_and_raise_on_failure(command, message, self.project_directory)
 
     def teardown_build(self, timeout=None):
         """

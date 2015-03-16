@@ -4,7 +4,6 @@ from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
-from app.util import util
 import requests.exceptions
 
 
@@ -48,25 +47,24 @@ class Slave(object):
 
         self.current_build_id = None
 
-    def setup(self, build_id, project_type_params, build_executor_start_index):
+    def setup(self, build):
         """
-        Execute a setup command on the slave for the specified build. The command is executed asynchronously from the
-        perspective of this method, but any subjobs will block until the slave finishes executing the setup command.
+        Execute a setup command on the slave for the specified build. The setup process executes asynchronously on the
+        slave and the slave will alert the master when setup is complete and it is ready to start working on subjobs.
 
-        :param build_id: The build id that this setup command is for.
-        :type build_id: int
-
-        :param project_type_params: The parameters that define the project type this build will execute in
-        :type project_type_params: dict
+        :param build: The build to set up this slave to work on
+        :type build: Build
         """
-        setup_url = self._slave_api.url('build', build_id, 'setup')
-        slave_project_type_params = util.project_type_params_for_slave(project_type_params)
+        slave_project_type_params = build.build_request.build_parameters().copy()
+        slave_project_type_params.update(build.project_type.slave_param_overrides())
+
+        setup_url = self._slave_api.url('build', build.build_id(), 'setup')
         post_data = {
             'project_type_params': slave_project_type_params,
-            'build_executor_start_index': build_executor_start_index,
+            'build_executor_start_index': build.num_executors_allocated,
         }
         self._network.post_with_digest(setup_url, post_data, Secret.get())
-        self.current_build_id = build_id
+        self.current_build_id = build.build_id()
 
     def teardown(self):
         """

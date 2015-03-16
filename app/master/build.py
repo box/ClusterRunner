@@ -136,13 +136,7 @@ class Build(object):
         :type slave: Slave
         """
         self._slaves_allocated.append(slave)
-
-        slave.setup(
-            self.build_id(),
-            project_type_params=self.build_request.build_parameters(),
-            build_executor_start_index=self._num_executors_allocated
-        )
-
+        slave.setup(self)
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
 
     def all_subjobs(self):
@@ -323,6 +317,13 @@ class Build(object):
         :rtype: ProjectType
         """
         return self._project_type
+
+    @property
+    def num_executors_allocated(self):
+        """
+        :rtype: int
+        """
+        return self._num_executors_allocated
 
     @property
     def artifacts_archive_file(self):

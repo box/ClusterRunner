@@ -53,16 +53,3 @@ def create_project_type(project_type_params):
 
     # Not yet implemented other project types
     return None
-
-
-def project_type_params_for_slave(project_type_params):
-    """
-    :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
-        'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor arguments
-        for that ProjectType subclass.
-    :type project_type_params: dict
-    :return: A modified set of project type params
-    :rtype: dict [str, str]
-    """
-    project_type_class = get_project_type_subclass(project_type_params['type'])
-    return project_type_class.params_for_slave(project_type_params)

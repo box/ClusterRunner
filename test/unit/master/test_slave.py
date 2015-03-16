@@ -1,7 +1,8 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 
+from app.master.build import Build
+from app.master.build_request import BuildRequest
 from app.master.slave import Slave
-from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -36,22 +37,33 @@ class TestSlave(BaseUnitTestCase):
                          'Master should not send teardown command to slave when slave has disconnected.')
 
     def test_git_project_params_are_modified_for_slave(self):
-        remote_path = 'central.sourcecode.example.com/company/project'
-        base_directory = '/home/cr_user/.clusterrunner'
-        Configuration['repo_directory'] = '{}/repos/master'.format(base_directory)
         slave = self._create_slave()
         slave._network.post_with_digest = Mock()
 
-        slave.setup(1, {'type': 'git', 'url': 'http://{}'.format(remote_path)}, 0)
+        build_request = BuildRequest({
+            'type': 'git',
+            'url': 'http://original-user-specified-url',
+        })
+        mock_git = Mock(slave_param_overrides=Mock(return_value={
+            'url': 'ssh://new-url-for-clusterrunner-master',
+            'extra': 'something_extra',
+        }))
+        mock_build = MagicMock(spec=Build, num_executors_allocated=777, build_request=build_request,
+                               build_id=Mock(return_value=888), project_type=mock_git)
 
-        slave._network.post_with_digest.assert_called_with('http://{}/v1/build/1/setup'.format(self._FAKE_SLAVE_URL),
-                                                           {'build_executor_start_index': 0,
-                                                            'project_type_params': {
-                                                                'url': 'ssh://{}{}/repos/master/{}'.format(
-                                                                    self._fake_hostname,
-                                                                    base_directory,
-                                                                    remote_path),
-                                                                'type': 'git'}}, Secret.get())
+        slave.setup(mock_build)
+
+        slave._network.post_with_digest.assert_called_with(
+            'http://{}/v1/build/888/setup'.format(self._FAKE_SLAVE_URL),
+            {
+                'build_executor_start_index': 777,
+                'project_type_params': {
+                    'type': 'git',
+                    'url': 'ssh://new-url-for-clusterrunner-master',
+                    'extra': 'something_extra'}
+            },
+            Secret.get()
+        )
 
     def test_is_alive_returns_cached_value_if_use_cache_is_true(self):
         slave = self._create_slave()

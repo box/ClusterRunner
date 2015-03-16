@@ -25,25 +25,6 @@ class Git(ProjectType):
     CLONE_DEPTH = 50
     DIRECTORY_PERMISSIONS = 0o700
 
-    @classmethod
-    def params_for_slave(cls, project_type_params):
-        """
-        Produces a modified set of project type params for use on a slave machine. We modify the repo url so the slave
-        clones or fetches from the master directly. This should be faster than cloning/fetching from the original git
-        remote.
-        :param project_type_params: The parameters for creating an ProjectType instance -- the dict should include the
-            'type' key, which specifies the ProjectType subclass name, and key/value pairs matching constructor
-            arguments for that ProjectType subclass.
-        :type project_type_params: dict
-        :return: A modified set of project type params
-        :rtype: dict
-        """
-        master_repo_path = cls.get_full_repo_directory(project_type_params['url'])
-        master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], master_repo_path)
-        project_type_params = project_type_params.copy()
-        project_type_params['url'] = master_repo_url
-        return project_type_params
-
     @staticmethod
     def get_full_repo_directory(url):
         """
@@ -76,8 +57,9 @@ class Git(ProjectType):
 
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
+    # todo: Deprecate the "branch" parameter and create a new one named "ref" to replace it.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash=None, config=None, job_name=None, remote_files=None):
+                 hash='FETCH_HEAD', config=None, job_name=None, remote_files=None):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -92,7 +74,7 @@ class Git(ProjectType):
         :type remote: str
         :param branch: The git branch name on the remote to fetch
         :type branch: str
-        :param hash: The hash to reset hard on. If both hash and branch are set, we only use the hash.
+        :param hash: The hash to reset hard on. If hash is not set, we use the FETCH_HEAD of <branch>.
         :type hash: str
         :param config: a yaml string representing the project_type's config
         :type config: str|None
@@ -109,6 +91,7 @@ class Git(ProjectType):
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
         self._git_remote_command_executor = _GitRemoteCommandExecutor()
+        self._local_ref = None
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
         fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
@@ -127,6 +110,26 @@ class Git(ProjectType):
 
         os.symlink(actual_project_directory, build_project_directory)
         self.project_directory = build_project_directory
+
+    def slave_param_overrides(self):
+        """
+        Produce a set of values to override original project type params for use on a slave machine.
+
+        :return: A set of values to override original project type params
+        :rtype: dict[str, str]
+        """
+        param_overrides = super().slave_param_overrides()
+
+        # We modify the repo url so the slave clones or fetches from the master directly. This should be faster than
+        # cloning/fetching from the original git remote.
+        master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], self._repo_directory)
+        param_overrides['url'] = master_repo_url  # This causes the slave to clone directly from the master.
+
+        # The user-specified branch is overwritten with a locally created ref so that slaves working on a job can
+        # continue to fetch the same HEAD, even if the master resets the user-specified branch for another build.
+        param_overrides['branch'] = self._local_ref
+
+        return param_overrides
 
     def _fetch_project(self):
         """
@@ -149,25 +152,38 @@ class Git(ProjectType):
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
         # is equal to self._branch, otherwise the git fetch will exit with a non-zero exit code.
-        # Must specify the colon in 'branch:branch' so that the branch will be created locally. This is
-        # important because it allows the slave hosts to do a git fetch from the master for this branch.
-        fetch_command = 'git fetch --update-head-ok {0} {1}:{1}'.format(self._remote, self._branch)
+        fetch_command = 'git fetch --update-head-ok {} {}'.format(self._remote, self._branch)
         self._git_remote_command_executor.execute(fetch_command, cwd=self._repo_directory)
 
-        commit_hash = self._hash or 'FETCH_HEAD'
+        # Validate and convert the user-specified hash/refspec to a full git hash
+        self._hash = self._execute_in_repo_and_raise_on_failure(
+            'git rev-parse {}'.format(self._hash),
+            'Could not rev-parse "{}" to a commit hash.'.format(self._hash)
+        ).strip()
+
+        # Save this hash as a local ref. Named local refs are necessary for slaves to fetch correctly from the master.
+        # The local ref will be passed on to slaves instead of the user-specified branch.
+        self._local_ref = 'refs/clusterrunner/' + self._hash
+        update_ref_command = 'git update-ref {} {}'.format(self._local_ref, self._hash)
+        self._execute_in_repo_and_raise_on_failure(update_ref_command, 'Could not update local ref.')
 
         # The '--' option acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
-        reset_command = 'git reset --hard {} --'.format(commit_hash)
+        reset_command = 'git reset --hard {} --'.format(self._hash)
         self._execute_in_repo_and_raise_on_failure(reset_command, 'Could not reset Git repo.')
 
         self._execute_in_repo_and_raise_on_failure('git clean -dfx', 'Could not clean Git repo.')
 
     def _execute_in_repo_and_raise_on_failure(self, command, message):
-        self._execute_and_raise_on_failure(command, message, self._repo_directory)
+        """
+        :rtype: string
+        """
+        return self._execute_and_raise_on_failure(command, message, self._repo_directory)
 
     def execute_command_in_project(self, *args, **kwargs):
         """
         Execute a command inside the repo. See superclass for parameter documentation.
+
+        :rtype: (string, int)
         """
         # There is a scenario where self.project_directory doesn't exist yet (when a certain repo has never been
         # fetched before on this particular machine). In order to avoid having python barf during this scenario,
