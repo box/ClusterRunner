@@ -199,7 +199,7 @@ class ClusterMaster(object):
             required_params = build_request.required_parameters()
             response = {'error': 'Missing required parameter. Required parameters: {}'.format(required_params)}
 
-        return success, response
+        return success, response  # todo: refactor to use exception instead of boolean
 
     def handle_request_to_update_build(self, build_id, update_params):
         """
@@ -234,8 +234,10 @@ class ClusterMaster(object):
         slave = self._all_slaves_by_url[slave_url]
         # If the build has been canceled, don't work on the next subjob.
         if not build.is_finished:
-            build.complete_subjob(subjob_id, payload)
-            build.execute_next_subjob_on_slave(slave)
+            try:
+                build.complete_subjob(subjob_id, payload)
+            finally:
+                build.execute_next_subjob_or_teardown_slave(slave)
 
     def get_build(self, build_id):
         """

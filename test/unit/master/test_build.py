@@ -46,13 +46,13 @@ class TestBuild(BaseUnitTestCase):
 
         build = Build(BuildRequest({'setup': fake_setup_command}))
         build._project_type = mock_project_type
-        build.execute_next_subjob_on_slave = MagicMock()
+        build.execute_next_subjob_or_teardown_slave = MagicMock()
 
         build.prepare(subjobs, self._create_job_config(max_executors=expected_num_executors))
         [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
         [build.begin_subjob_executions_on_slave(mock_slave) for mock_slave in mock_slaves]
 
-        self.assertEqual(build.execute_next_subjob_on_slave.call_count, expected_num_executors,
+        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, expected_num_executors,
                          'Build should start executing as many subjobs as its max_executors setting.')
 
     def test_build_doesnt_use_more_than_max_executors_per_slave(self):
@@ -65,7 +65,7 @@ class TestBuild(BaseUnitTestCase):
 
         build = Build(BuildRequest({'setup': fake_setup_command}))
         build._project_type = mock_project_type
-        build.execute_next_subjob_on_slave = MagicMock()
+        build.execute_next_subjob_or_teardown_slave = MagicMock()
 
         build.prepare(subjobs, self._create_job_config(max_executors_per_slave=max_executors_per_slave))
         [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
@@ -75,12 +75,12 @@ class TestBuild(BaseUnitTestCase):
             build.begin_subjob_executions_on_slave(mock_slaves[i])
             expected_current_num_executors_used += max_executors_per_slave
             self.assertEqual(
-                build.execute_next_subjob_on_slave.call_count, expected_current_num_executors_used,
+                build.execute_next_subjob_or_teardown_slave.call_count, expected_current_num_executors_used,
                 'After allocating {} slaves, build with max_executors_per_slave set to {} should only be using {} '
                 'executors.'.format(i + 1, max_executors_per_slave, expected_current_num_executors_used))
 
         self.assertEqual(
-            build.execute_next_subjob_on_slave.call_count, expected_total_num_executors_used,
+            build.execute_next_subjob_or_teardown_slave.call_count, expected_total_num_executors_used,
             'Build should start executing as many subjobs per slave as its max_executors_per_slave setting.')
 
     def test_build_status_returns_requested_after_build_creation(self):
@@ -218,7 +218,7 @@ class TestBuild(BaseUnitTestCase):
         build._unstarted_subjobs = Queue()
         build._slaves_allocated = [slave]
 
-        build.execute_next_subjob_on_slave(slave)
+        build.execute_next_subjob_or_teardown_slave(slave)
 
         slave.teardown.assert_called_with()
 
@@ -288,8 +288,8 @@ class TestBuild(BaseUnitTestCase):
         slave.free_executor = Mock(return_value=0)
         build._slaves_allocated.append(slave)
 
-        build.execute_next_subjob_on_slave(slave)
-        build.execute_next_subjob_on_slave(slave)
+        build.execute_next_subjob_or_teardown_slave(slave)
+        build.execute_next_subjob_or_teardown_slave(slave)
 
         self.assertEqual(slave.teardown.call_count, 1, "Teardown should only be called once")
 

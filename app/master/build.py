@@ -170,12 +170,12 @@ class Build(object):
                 break
             slave.claim_executor()
             self._num_executors_in_use += 1
-            self.execute_next_subjob_on_slave(slave)
+            self.execute_next_subjob_or_teardown_slave(slave)
 
-    def execute_next_subjob_on_slave(self, slave):
+    def execute_next_subjob_or_teardown_slave(self, slave):
         """
         Grabs an unstarted subjob off the queue and sends it to the specified slave to be executed. If the unstarted
-        subjob queue is empty, we mark the slave as idle.
+        subjob queue is empty, we teardown the slave to free it up for other builds.
 
         :type slave: Slave
         """
@@ -201,8 +201,14 @@ class Build(object):
         :type subjob_id: int
         :type payload: dict
         """
-        self._handle_subjob_payload(subjob_id, payload)
-        self._mark_subjob_complete(subjob_id)
+        try:
+            self._handle_subjob_payload(subjob_id, payload)
+            self._mark_subjob_complete(subjob_id)
+
+        except Exception:
+            self._logger.exception('Error while completing subjob; marking build as failed.')
+            self.mark_failed('Error occurred while completing subjob {}.'.format(subjob_id))
+            raise
 
     def _handle_subjob_payload(self, subjob_id, payload):
         if not payload:
