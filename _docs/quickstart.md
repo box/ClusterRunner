@@ -18,7 +18,7 @@ The easiest way to try out ClusterRunner is on a single machine - with a master 
 
 {% highlight bash %}
 # Grab the demo project
-~ $ git clone git@github.com:boxengservices/ClusterRunnerDemo.git ~/ClusterRunnerDemo/
+~ $ git clone https://github.com/boxengservices/ClusterRunnerDemo.git ~/ClusterRunnerDemo/
 ~ $ cd ~/ClusterRunnerDemo
 
 # Run the tests for our "Simple" job
