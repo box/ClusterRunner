@@ -28,6 +28,7 @@ Pick a set of instructions based on your operating system.
 We suggest you add an alias for the clusterrunner binary to your shell startup file in order to easily execute ClusterRunner.
 
 {% highlight bash %}
+# Add this line to your ~/.bash_profile:
 ~ $ alias clusterrunner='~/.clusterrunner/dist/clusterrunner'
 {% endhighlight %}
 
