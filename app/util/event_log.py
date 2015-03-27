@@ -208,7 +208,8 @@ class EventLog:
                 since_timestamp=since_timestamp,
                 since_id=since_id
             )
-        return events if condition_met else None
+
+        return events
 
     def _should_try_get_event_from_log_cache(self, since_id=None,
                                              since_timestamp=None):
