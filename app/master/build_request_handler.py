@@ -6,7 +6,8 @@ from threading import Lock
 from app.master.atom_grouper import AtomGrouper
 from app.master.build_request import BuildRequest
 from app.master.subjob import Subjob
-from app.master.time_based_atom_grouper import TimeBasedAtomGrouper
+# from app.master.time_based_atom_grouper import TimeBasedAtomGrouper
+from app.master.time_based_atom_grouper_2 import TimeBasedAtomGrouper2
 from app.project_type.project_type import ProjectType
 from app.util import analytics
 from app.util.log import get_logger
@@ -192,7 +193,7 @@ class BuildRequestHandler(object):
                     self._logger.warning('Failed to load timing data from file that exists {}', timing_file_path)
 
         if atom_time_map is not None and len(atom_time_map) > 0:
-            atom_grouper = TimeBasedAtomGrouper(atoms, max_executors, atom_time_map, project_directory)
+            atom_grouper = TimeBasedAtomGrouper2(atoms, max_executors, atom_time_map, project_directory)
         else:
             atom_grouper = AtomGrouper(atoms, max_executors)
 
