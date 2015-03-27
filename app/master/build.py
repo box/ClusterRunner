@@ -5,7 +5,7 @@ from threading import Lock
 import uuid
 
 from app.master.build_artifact import BuildArtifact
-from app.util import util
+from app.util import analytics, util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
 from app.util.exceptions import ItemNotFoundError
@@ -138,6 +138,7 @@ class Build(object):
         self._slaves_allocated.append(slave)
         slave.setup(self)
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
+        analytics.record_event(analytics.BUILD_SETUP_START, build_id=self.build_id(), slave_id=slave.id)
 
     def all_subjobs(self):
         """
@@ -164,6 +165,7 @@ class Build(object):
 
         :type slave: Slave
         """
+        analytics.record_event(analytics.BUILD_SETUP_FINISH, build_id=self.build_id(), slave_id=slave.id)
         for slave_executor_count in range(slave.num_executors):
             if (self._num_executors_in_use >= self._max_executors
                     or slave_executor_count >= self._max_executors_per_slave):

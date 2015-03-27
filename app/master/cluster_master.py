@@ -126,7 +126,6 @@ class ClusterMaster(object):
         """
         Execute logic to transition the specified slave to the given state.
 
-
         :type slave: Slave
         :type new_slave_state: SlaveState
         """
