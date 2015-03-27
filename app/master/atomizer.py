@@ -23,7 +23,7 @@ class Atomizer(object):
         :param project_type: The ProjectType instance in which to execute the atomizer commands
         :type project_type: ProjectType
         :return: The list of environment variable "export" atom commands
-        :rtype: list[str]
+        :rtype: list[Atom]
         """
         atoms_list = []
         for atomizer_dict in self._atomizer_dicts:
@@ -35,11 +35,23 @@ class Atomizer(object):
                     raise AtomizerError('Atomizer command failed!')
 
                 # Convert atomizer command output into environment variable export commands.
-                new_atoms = ['export {}="{}";'.format(atomizer_var_name, atom_value)
+                new_atoms = [Atom('export {}="{}";'.format(atomizer_var_name, atom_value))
                              for atom_value in atomizer_output.strip().splitlines()]
                 atoms_list.extend(new_atoms)
 
         return atoms_list
+
+
+class Atom(object):
+    def __init__(self, command_string, expected_time=None, actual_time=None):
+        """
+        :type command_string: str
+        :type expected_time: float
+        :type actual_time: float
+        """
+        self.command_string = command_string
+        self.expected_time = expected_time
+        self.actual_time = actual_time
 
 
 class AtomizerError(Exception):

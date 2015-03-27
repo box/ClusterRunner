@@ -2,7 +2,7 @@ class AtomGrouper(object):
     def __init__(self, atoms, max_processes):
         """
         :param atoms: the list of atoms
-        :type atoms: list
+        :type atoms: list[Atom]
         :param max_processes: the maximum number of processes requested for this job
         :type max_processes: int
         """
@@ -16,11 +16,6 @@ class AtomGrouper(object):
         For now we are going with the default implementation, which is one atom per grouping.
 
         :return: a list of lists of atoms
-        :rtype: list[list[str]]
+        :rtype: list[list[Atom]]
         """
-        groupings = []
-
-        for atom in self._atoms:
-            groupings.append([atom])
-
-        return groupings
+        return [[atom] for atom in self._atoms]
