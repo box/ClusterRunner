@@ -17,9 +17,14 @@ from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 class BaseUnitTestCase(TestCase):
 
     _base_setup_called = False
+    _base_teardown_called = False
     # This allows test classes (e.g., TestNetwork) to disable network-related patches for testing the patched code.
     _do_network_mocks = True
     _fake_hostname = 'fake_hostname'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.addCleanup(self._assert_base_setup_and_teardown_were_called)
 
     def setUp(self):
         super().setUp()
@@ -67,15 +72,20 @@ class BaseUnitTestCase(TestCase):
         self._base_setup_called = True
 
     def tearDown(self):
-        # We require super().setUp() to be called for all BaseTestCase subclasses.
-        self.assertTrue(self._base_setup_called,
-                        '{} must call super().setUp() in its setUp() method.'.format(self.__class__.__name__))
-
+        super().tearDown()
         # Pop all log handlers off the stack so that we start fresh on the next test. This includes the TestHandler
         # pushed in setUp() and any handlers that may have been pushed during test execution.
         with suppress(AssertionError):  # AssertionError is raised once all handlers have been popped off the stack.
             while True:
                 logbook.Handler.stack_manager.pop_application()
+
+        self._base_teardown_called = True
+
+    def _assert_base_setup_and_teardown_were_called(self):
+        self.assertTrue(self._base_setup_called,
+                        '{} must call super().setUp() in its setUp() method.'.format(self.__class__.__name__))
+        self.assertTrue(self._base_teardown_called,
+                        '{} must call super().tearDown() in its tearDown() method.'.format(self.__class__.__name__))
 
     def patch(self, target, allow_repatch=False, **kwargs):
         """
