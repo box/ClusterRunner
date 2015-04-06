@@ -1,4 +1,5 @@
 from app.util.event_log import EventLog
+from app.util.exceptions import ItemNotReadyError
 
 BUILD_REQUEST_QUEUED = 'BUILD_REQUEST_QUEUED'
 BUILD_PREPARE_START = 'BUILD_PREPARE_START'
@@ -14,13 +15,6 @@ SUBJOB_EXECUTION_START = 'SUBJOB_EXECUTION_START'
 _event_log = None
 
 
-def write_to_log_cache(event):
-    """
-    :type event: dict
-    """
-    # _log_cache.append(event)
-
-
 def initialize(eventlog_file=None):
     """
     Initialize the analytics output. This will cause analytics events to be output to either a file or stdout.
@@ -33,7 +27,7 @@ def initialize(eventlog_file=None):
     """
     global _event_log
 
-    _event_log = EventLog(filename=eventlog_file, disable_logging=eventlog_file is None)
+    _event_log = EventLog(filename=eventlog_file)
 
 
 def record_event(tag, log_msg=None, **event_data):
@@ -65,9 +59,9 @@ def get_events(since_timestamp=None, since_id=None):
     :return: The list of events in the given range
     :rtype: list[dict] | None
     """
-    if isinstance(_event_log, EventLog):
+    if _event_log:
         since_timestamp = float(since_timestamp) if since_timestamp else since_timestamp
         since_id = int(since_id) if since_id else since_id
         return _event_log.get_events(since_timestamp=since_timestamp, since_id=since_id)
     else:
-        return None
+        raise ItemNotReadyError('Analytics was not initialized. Call initialize first')

@@ -12,19 +12,17 @@ from app.util.counter import Counter
 
 
 LOG_CACHE_EXPIRE_TIME_IN_HOURS = 5
-LOG_CACHE_THRESHOLD = 10000
+LOG_CACHE_THRESHOLD = 100000
 
 
 class EventLog:
-    def __init__(self, filename=None, disable_logging=False):
+    def __init__(self, filename=None):
         """
         :param filename: The name of the logfile
         :type filename: str | None
-        :param disable_logging: Flag for disabling logging
-        :type disable_logging: bool
         """
         self.filename = filename
-        self.logging_disabled = disable_logging
+        self.logging_disabled = filename is None
         self._analytics_logger = None
         self._event_id_generator = Counter()
         self._log_cache = collections.deque()
@@ -36,7 +34,7 @@ class EventLog:
         """
         if not self.logging_disabled:
             self._initialize_event_handler()
-            self._analytics_logger = self._initalize_analytics_logger()
+            self._analytics_logger = self._initialize_analytics_logger()
 
     def _initialize_event_handler(self):
         # only output raw log message -- no timestamp or log level
@@ -48,7 +46,7 @@ class EventLog:
         )
         handler.push_application()
 
-    def _initalize_analytics_logger(self):
+    def _initialize_analytics_logger(self):
         """
         Initializes the analytics
         """
@@ -95,8 +93,8 @@ class EventLog:
         :param tag: A string identifier that describes the event being logged (e.g., "REQUEST_SENT")
         :type tag: str
         :param log_msg: A message that will also be logged to the human-readable log (not the event log). It will be
-            string formatted with tthe event_data dict.  This is a convenience for logging to both human- and
-            machin-readable logs.
+            string formatted with the event_data dict.  This is a convenience for logging to both human- and
+            machine-readable logs.
         :type log_msg: str
         :param event_data: Free-form key value pairs that make up the event
         :type event_data: dict
@@ -131,37 +129,27 @@ class EventLog:
     def _expire_stale_items_in_cache(self):
         """
         Expires stale items in the cache. An item in the cache is considered stale if the timestamp is
-        significantly older than the most recent item. This expiration time is determined by the constant,
+        significantly older than the current time. This expiration time is determined by the constant,
         LOG_CACHE_EXPIRE_TIME_IN_HOURS.
 
         Since we do not want to artificially impose limits on the log cache, we will not expire items
         if the total length of the log cache is less than LOG_CACHE_THRESHOLD.
         """
-        while len(self._log_cache) > LOG_CACHE_THRESHOLD and self.oldest_cache_event_is_stale():
+        while len(self._log_cache) > LOG_CACHE_THRESHOLD and self._oldest_cache_event_is_stale():
             self._log_cache.popleft()
 
-    def oldest_cache_event_is_stale(self):
+    def _oldest_cache_event_is_stale(self):
         """
-        Returns whether the time stamp of the event data is stale in comparison with the start time.
-        The time is considered stale if it is is older than start_time + LOG_CACHE_EXPIRE_TIME_IN_HOURS
+        Returns whether the time stamp of the oldest event is stale in comparison with the current time.
+        The time is considered stale if it is is older than oldest time + LOG_CACHE_EXPIRE_TIME_IN_HOURS
 
         :rtype: bool
         """
-        if len(self._log_cache) == 0:
-            return False
-        else:
-            latest = self._latest_timestamp_in_cache()
+        try:
             oldest = self._oldest_timestamp_in_cache()
-            return oldest + LOG_CACHE_EXPIRE_TIME_IN_HOURS * 60 * 60 < latest
-
-    def _latest_timestamp_in_cache(self):
-        """
-        :rtype: float | None
-        """
-        if len(self._log_cache) == 0:
-            return None
-        else:
-            return self._log_cache[-1]['__timestamp__']
+            return oldest + LOG_CACHE_EXPIRE_TIME_IN_HOURS * 60 * 60 < time.time()
+        except TypeError:
+            return False
 
     def _oldest_timestamp_in_cache(self):
         """
