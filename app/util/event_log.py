@@ -160,6 +160,12 @@ class EventLog:
         else:
             return self._log_cache[0]['__timestamp__']
 
+    def _oldest_id_in_cache(self):
+        if len(self._log_cache) == 0:
+            return None
+        else:
+            return self._log_cache[0]['__id__']
+
     def get_events(self, since_timestamp=None, since_id=None):
         """
         Retrieve all events from the current eventlog since the given timestamp or event id.
@@ -178,35 +184,29 @@ class EventLog:
 
         if since_timestamp is not None and since_id is not None:
             raise ValueError('since_timestamp and since_id can not be used at the same time')
-        events = []
-        condition_met = False
-        if self._should_try_get_event_from_log_cache():
+        if self._should_try_get_event_from_log_cache(since_id=since_id, since_timestamp=since_timestamp):
             # use the events from cache, but failover to fetch from the file
-            events, condition_met = self._get_events_from_reversed_generator(
+            return self._get_events_from_reversed_generator(
                 generator=self._reversed_log_cache_event_generator(),
                 since_timestamp=since_timestamp,
                 since_id=since_id
             )
-
-        if not condition_met or not events:
-            # if we didnt get back events from the cache, use the filesystem as
-            # as the source of truth
-            events, condition_met = self._get_events_from_reversed_generator(
+        else:
+            return self._get_events_from_reversed_generator(
                 generator=self._reversed_log_file_event_generator(),
                 since_timestamp=since_timestamp,
                 since_id=since_id
             )
 
-        return events
-
     def _should_try_get_event_from_log_cache(self, since_id=None,
                                              since_timestamp=None):
-        if since_id is None and since_timestamp is None:
-            return True
-        elif since_timestamp and since_timestamp <= self._oldest_timestamp_in_cache():
+        if len(self._log_cache) == 0:
             return False
         else:
-            return True
+            has_timestamp = since_timestamp is None or since_timestamp >= self._oldest_timestamp_in_cache()
+            has_id = since_id is None or since_id > self._oldest_id_in_cache()
+
+            return has_timestamp and has_id
 
     def _get_events_from_reversed_generator(self, generator=None, since_timestamp=None,
                                             since_id=None):
@@ -215,23 +215,20 @@ class EventLog:
         :param since_timestamp:
         :param since_id:
         :return:
-        :rtype: (list[dict], bool)
+        :rtype: list[dict]
         """
         generator = generator or self._reversed_log_cache_event_generator()
         returned_events = []
-        condition_met = False
         for event in generator:
             event_timestamp = event.get('__timestamp__')
             event_id = event.get('__id__')
             if since_timestamp and event_timestamp <= since_timestamp or \
                since_id and event_id == since_id:
-                condition_met = True
                 break
+            else:
+                returned_events.append(event)
 
-            returned_events.append(event)
-
-        condition_met = condition_met or since_id is None and since_timestamp is None
-        return list(reversed(returned_events)), condition_met
+        return list(reversed(returned_events))
 
     def _reversed_log_cache_event_generator(self):
         # what's the return type of a generator?
