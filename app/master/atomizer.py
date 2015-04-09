@@ -1,3 +1,4 @@
+from app.master.atom import Atom
 from app.util import log
 
 
@@ -23,7 +24,7 @@ class Atomizer(object):
         :param project_type: The ProjectType instance in which to execute the atomizer commands
         :type project_type: ProjectType
         :return: The list of environment variable "export" atom commands
-        :rtype: list[str]
+        :rtype: list[app.master.atom.Atom]
         """
         atoms_list = []
         for atomizer_dict in self._atomizer_dicts:
@@ -34,8 +35,7 @@ class Atomizer(object):
                                        '\n{}', atomizer_command, atomizer_var_name, exit_code, atomizer_output)
                     raise AtomizerError('Atomizer command failed!')
 
-                # Convert atomizer command output into environment variable export commands.
-                new_atoms = ['export {}="{}";'.format(atomizer_var_name, atom_value)
+                new_atoms = [Atom(atomizer_var_name, atom_value)
                              for atom_value in atomizer_output.strip().splitlines()]
                 atoms_list.extend(new_atoms)
 

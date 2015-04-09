@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from operator import itemgetter
 
 from app.master.atom_grouper import AtomGrouper
 
@@ -57,7 +56,7 @@ class TimeBasedAtomGrouper(object):
     def __init__(self, atoms, max_executors, atom_time_map, project_directory):
         """
         :param atoms: the list of atoms for this build
-        :type atoms: list[str]
+        :type atoms: list[app.master.atom.Atom]
         :param max_executors: the maximum number of executors for this build
         :type max_executors: int
         :param atom_time_map: a dictionary containing the historic times for atoms for this particular job
@@ -74,18 +73,19 @@ class TimeBasedAtomGrouper(object):
         Group the atoms into subjobs using historic timing data.
 
         :return: a list of lists of atoms
-        :rtype: list[list[str]]
+        :rtype: list[list[app.master.atom.Atom]]
         """
         # 1). Coalesce the atoms with historic atom times, and also get total estimated runtime
         try:
-            new_atoms_with_times_list, total_estimated_runtime \
-                = self._coalesce_new_atoms_with_historic_times(self._atoms, self._atom_time_map, self._project_directory)
+            total_estimated_runtime = self._set_expected_atom_times(
+                self._atoms, self._atom_time_map, self._project_directory)
         except _AtomTimingDataError:
             grouper = AtomGrouper(self._atoms, self._max_executors)
             return grouper.groupings()
 
-        # 2). Sort them by time, and add them to an OrderedDict
-        sorted_atom_times_left = OrderedDict(sorted(new_atoms_with_times_list, key=itemgetter(1), reverse=True))
+        # 2). Sort them by decreasing time, and add them to an OrderedDict
+        atoms_by_decreasing_time = sorted(self._atoms, key=lambda atom: atom.expected_time, reverse=True)
+        sorted_atom_times_left = OrderedDict([(atom, atom.expected_time) for atom in atoms_by_decreasing_time])
 
         # 3). Group them!
 
@@ -100,31 +100,29 @@ class TimeBasedAtomGrouper(object):
         subjobs.extend(small_subjobs)
         return subjobs
 
-    def _coalesce_new_atoms_with_historic_times(self, new_atoms, old_atoms_with_times, project_directory):
+    def _set_expected_atom_times(self, new_atoms, old_atoms_with_times, project_directory):
         """
-        Combine the historic timing data from previous atoms (for the same job) with the new atoms generated for this
-        job.
+        Set the expected runtime (new_atom.expected_time) of each atom in new_atoms using historic timing data.
 
         Additionally, return the total estimated serial-runtime for this build. Although this seems like an odd thing
         for this method to return, it is done here for efficiency. There can be thousands of atoms, and iterating
         through them multiple times seems inefficient.
 
         :param new_atoms: the list of atoms that will be run in this build
-        :type new_atoms: list[str]
+        :type new_atoms: list[app.master.atom.Atom]
         :param old_atoms_with_times: a dictionary containing the historic times for atoms for this particular job
         :type old_atoms_with_times: dict[str, float]
         :type project_directory: str
-        :return: the coalesced new atoms with timing data in a list, the total estimated runtime in seconds
-        :rtype: list[list[str, float]], float
+        :return: the total estimated runtime in seconds
+        :rtype: float
         """
-        coalesced_atoms_with_times = []
         atoms_without_timing_data = []
         total_time = 0
         max_atom_time = 0
 
         # Generate list for atoms that have timing data
         for new_atom in new_atoms:
-            new_atom_directory_stripped = new_atom.replace(project_directory, '')
+            new_atom_directory_stripped = new_atom.command_string.replace(project_directory, '')
 
             # When matching up new atoms with stored atom timing data, we use the project-directory-stripped
             # atom string for matching.
@@ -132,26 +130,25 @@ class TimeBasedAtomGrouper(object):
                 atoms_without_timing_data.append(new_atom)
                 continue
 
-            atom_time = old_atoms_with_times[new_atom_directory_stripped]
+            new_atom.expected_time = old_atoms_with_times[new_atom_directory_stripped]
 
             # Discover largest single atom time to use as conservative estimates for atoms with unknown times
-            if max_atom_time < atom_time:
-                max_atom_time = atom_time
+            if max_atom_time < new_atom.expected_time:
+                max_atom_time = new_atom.expected_time
 
             # We want to return the atom with the project directory still in it, as this data will directly be
             # sent to the slave to be run.
-            coalesced_atoms_with_times.append([new_atom, atom_time])
-            total_time += atom_time
+            total_time += new_atom.expected_time
 
         # For the atoms without historic timing data, assign them the largest atom time we have
         for new_atom in atoms_without_timing_data:
-            coalesced_atoms_with_times.append([new_atom, max_atom_time])
+            new_atom.expected_time = max_atom_time
 
         if len(new_atoms) == len(atoms_without_timing_data):
             raise _AtomTimingDataError
 
         total_time += (max_atom_time * len(atoms_without_timing_data))
-        return coalesced_atoms_with_times, total_time
+        return total_time
 
     def _group_atoms_into_sized_buckets(self, sorted_atom_time_dict, target_group_time, max_groups_to_create):
         """
@@ -165,7 +162,7 @@ class TimeBasedAtomGrouper(object):
 
         :param sorted_atom_time_dict: the sorted (longest first), double-ended queue containing [atom, time] pairs.
             This OrderedDict will have elements removed from this method.
-        :type sorted_atom_time_dict: OrderedDict[list[string, float]]
+        :type sorted_atom_time_dict: OrderedDict[app.master.atom.Atom, float]
         :param target_group_time: how long each subjob should approximately take
         :type target_group_time: float
         :param max_groups_to_create: the maximum number of subjobs to create. Once max_groups_to_create limit is
@@ -173,7 +170,7 @@ class TimeBasedAtomGrouper(object):
             is no limit.
         :type max_groups_to_create: int|None
         :return: the groups of grouped atoms, with each group taking an estimated target_group_time
-        :rtype: list[list[str]]
+        :rtype: list[list[app.master.atom.Atom]]
         """
         subjobs = []
         subjob_time_so_far = 0
