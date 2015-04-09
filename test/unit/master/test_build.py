@@ -222,6 +222,20 @@ class TestBuild(BaseUnitTestCase):
 
         slave.teardown.assert_called_with()
 
+    def test_teardown_called_on_slave_when_slave_in_shutdown_mode(self):
+        build = Build(BuildRequest({}))
+        slave = Slave('', 1)
+        slave.teardown = MagicMock()
+        slave._is_shutdown = True
+        slave.free_executor = MagicMock(return_value=0)
+        build._unstarted_subjobs = Queue()
+        build._unstarted_subjobs.put(Mock(spec=Subjob))
+        build._slaves_allocated = [slave]
+
+        build.execute_next_subjob_or_teardown_slave(slave)
+
+        slave.teardown.assert_called_with()
+
     def test_cancel_depletes_queue_and_sets_canceled(self):
         build = Build(BuildRequest({}))
         build._unstarted_subjobs = Queue()

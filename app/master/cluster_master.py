@@ -131,6 +131,7 @@ class ClusterMaster(object):
         """
         slave_transition_functions = {
             SlaveState.DISCONNECTED: self._disconnect_slave,
+            SlaveState.SHUTDOWN: self._shutdown_slave,
             SlaveState.IDLE: self._slave_allocator.add_idle_slave,
             SlaveState.SETUP_COMPLETED: self._handle_setup_success_on_slave,
             SlaveState.SETUP_FAILED: self._handle_setup_failure_on_slave,
@@ -143,6 +144,15 @@ class ClusterMaster(object):
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
 
+    def _shutdown_slave(self, slave):
+        """
+        Puts slave in shutdown mode so it cannot receive new builds. The slave will be killed when finished with any
+        running builds.
+        :type slave: Slave
+        """
+        slave.set_shutdown_mode()
+        self._logger.info('Slave on {} was put in shutdown mode. (id: {})', slave.url, slave.id)
+
     def _disconnect_slave(self, slave):
         """
         Mark a slave dead.
@@ -151,8 +161,7 @@ class ClusterMaster(object):
         """
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
-        slave.set_is_alive(False)
-        slave.current_build_id = None
+        slave.disconnect()
         # todo: Fail/resend any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 

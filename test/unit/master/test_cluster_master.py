@@ -119,6 +119,17 @@ class TestClusterMaster(BaseUnitTestCase):
 
         fake_build.begin_subjob_executions_on_slave.assert_called_once_with(slave)
 
+    def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
+        master = ClusterMaster()
+        slave_url = 'raphael.turtles.gov'
+        master.connect_new_slave(slave_url, 10)
+        slave = master.get_slave(slave_url=slave_url)
+        slave.set_shutdown_mode = Mock()
+
+        master.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
+
+        slave.set_shutdown_mode.assert_called_once_with()
+
     def test_updating_slave_to_nonexistent_state_should_raise_bad_request_error(self):
         master = ClusterMaster()
         slave_url = 'raphael.turtles.gov'

@@ -145,8 +145,10 @@ class _EventlogHandler(_ClusterSlaveBaseHandler):
 
 
 class _KillHandler(_ClusterSlaveBaseHandler):
+    @authenticated
     def post(self):
         self._write_status()
+        # self._cluster_slave.kill()
         kill_thread = SafeThread(
             name='kill-thread',
             target=self._cluster_slave.kill,

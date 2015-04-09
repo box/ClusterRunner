@@ -2,6 +2,7 @@ import http.client
 import os
 import tornado.web
 
+from app.slave.cluster_slave import SlaveState
 from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
@@ -41,7 +42,8 @@ class ClusterMasterApplication(ClusterApplication):
                     ]),
                     RouteNode(r'queue', _QueueHandler),
                     RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
-                        RouteNode(r'(\d+)', _SlaveHandler, 'slave')
+                        RouteNode(r'(\d+)', _SlaveHandler, 'slave'),
+                        RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown')
                     ]),
                     RouteNode(r'eventlog', _EventlogHandler)
                 ])
@@ -253,3 +255,15 @@ class _EventlogHandler(_ClusterMasterBaseHandler):
         self.write({
             'events': analytics.get_events(since_timestamp, since_id),
         })
+
+
+class _SlaveShutdownHandler(_ClusterMasterBaseHandler):
+    @authenticated
+    def post(self):
+        shutdown_all = self.decoded_body.get('shutdown_all')
+        slaves_to_shutdown = self._cluster_master.all_slaves_by_id().keys() if shutdown_all else\
+            [int(slave_id) for slave_id in self.decoded_body.get('slaves')]
+
+        for slave_id in slaves_to_shutdown:
+            slave = self._cluster_master.get_slave(slave_id)
+            self._cluster_master.handle_slave_state_update(slave, SlaveState.SHUTDOWN)

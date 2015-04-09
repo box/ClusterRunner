@@ -5,6 +5,7 @@ from threading import Lock
 import uuid
 
 from app.master.build_artifact import BuildArtifact
+from app.master.slave import ShutdownSlaveError
 from app.util import analytics, util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -42,6 +43,7 @@ class Build(object):
 
         self._project_type = None
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
+        self._subjob_assignment_lock = Lock()  # prevents subjobs from being skipped
         self._slaves_allocated = []
         self._num_executors_allocated = 0
         self._num_executors_in_use = 0
@@ -182,20 +184,32 @@ class Build(object):
         :type slave: Slave
         """
         try:
-            subjob = self._unstarted_subjobs.get(block=False)
-            self._logger.debug('Sending subjob {} (build {}) to slave {}.',
-                               subjob.subjob_id(), subjob.build_id(), slave.url)
-            slave.start_subjob(subjob)
+            # This lock prevents the scenario where a subjob is pulled from the queue but cannot be assigned to this
+            # slave because it is shutdown, so we put it back on the queue but in the meantime another slave enters
+            # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
+            # build would be stuck.
+            with self._subjob_assignment_lock:
+                subjob = self._unstarted_subjobs.get(block=False)
+                self._logger.debug('Sending subjob {} (build {}) to slave {}.',
+                                   subjob.subjob_id(), subjob.build_id(), slave.url)
+                try:
+                    slave.start_subjob(subjob)
+                except ShutdownSlaveError:
+                    self._unstarted_subjobs.put(subjob)
+                    self._free_slave_executor(slave)
 
         except Empty:
-            num_executors_in_use = slave.free_executor()
-            if num_executors_in_use == 0:
-                try:
-                    self._slaves_allocated.remove(slave)
-                except ValueError:
-                    pass  # We have already deallocated this slave, no need to teardown
-                else:
-                    slave.teardown()
+            self._free_slave_executor(slave)
+
+    def _free_slave_executor(self, slave):
+        num_executors_in_use = slave.free_executor()
+        if num_executors_in_use == 0:
+            try:
+                self._slaves_allocated.remove(slave)
+            except ValueError:
+                pass  # We have already deallocated this slave, no need to teardown
+            else:
+                slave.teardown()
 
     def complete_subjob(self, subjob_id, payload=None):
         """
