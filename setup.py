@@ -16,7 +16,7 @@ buildOptions = {
     'create_shared_zip': True,
     'include_in_shared_zip': True,
     'include_files': [('conf/default_clusterrunner.conf', 'conf/default_clusterrunner.conf')],
-    'optimize': 2,
+    'optimize': 1,  # This should not be set to 2 because that removes docstrings needed for command line help.
 }
 
 base = 'Console'
