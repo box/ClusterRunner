@@ -15,8 +15,8 @@ provide useful information about your build.
 
 <div class="note info">
     <p>If you're using a CI tool to
-    <a href="http://localhost:4000/docs/ci-integration/#publish-build-results-in-ci">process your build
-    results</a>, it's unlikely you'll need to interact with these build results manually.</p>
+    <a href="/docs/ci-integration/#publish-build-results-in-ci">process your build results</a>,
+    it's unlikely you'll need to interact with these build results manually.</p>
 </div>
 
 ## Directory Structure
