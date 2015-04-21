@@ -226,7 +226,7 @@ class TestBuild(BaseUnitTestCase):
         build = Build(BuildRequest({}))
         slave = Slave('', 1)
         slave.teardown = MagicMock()
-        slave._is_shutdown = True
+        slave._is_in_shutdown_mode = True
         slave.free_executor = MagicMock(return_value=0)
         build._unstarted_subjobs = Queue()
         build._unstarted_subjobs.put(Mock(spec=Subjob))

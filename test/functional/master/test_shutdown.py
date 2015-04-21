@@ -9,7 +9,7 @@ class TestShutdown(BaseFunctionalTestCase):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
 
-        master.shutdown_all_slaves()
+        master.graceful_shutdown_all_slaves()
 
         slaves_response = master.get_slaves()
         slaves = slaves_response['slaves']
@@ -23,7 +23,7 @@ class TestShutdown(BaseFunctionalTestCase):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
 
-        master.shutdown_slaves_by_id([1])
+        master.graceful_shutdown_slaves_by_id([1])
 
         slaves_response = master.get_slaves()
         slaves = slaves_response['slaves']
@@ -48,7 +48,7 @@ class TestShutdown(BaseFunctionalTestCase):
         master.block_until_build_started(build_id, timeout=10)
 
         # Shutdown one on the slaves and test if the build can still complete
-        master.shutdown_slaves_by_id([1])
+        master.graceful_shutdown_slaves_by_id([1])
 
         master.block_until_build_finished(build_id, timeout=30)
 

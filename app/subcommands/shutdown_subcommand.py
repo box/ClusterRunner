@@ -13,9 +13,9 @@ class ShutdownSubcommand(Subcommand):
         master_url = master_url or '{}:{}'.format(Configuration['hostname'], Configuration['port'])
         client = ClusterMasterAPIClient(master_url)
         if all_slaves:
-            client.shutdown_all_slaves()
+            client.graceful_shutdown_all_slaves()
         elif slave_ids and len(slave_ids) > 0:
-            client.shutdown_slaves_by_id(slave_ids)
+            client.graceful_shutdown_slaves_by_id(slave_ids)
         else:
             self._logger.error('No slaves specified to shutdown.')
             exit(1)

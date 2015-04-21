@@ -89,7 +89,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
 
     def block_until_build_started(self, build_id, timeout=None, build_in_progress_callback=None):
         """
-        Poll the build status endpoint until the build has started or finished.
+        Poll the build status endpoint until the build is no longer queued.
 
         :param build_id: The id of the build to wait for
         :type build_id: int
@@ -151,24 +151,28 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         poll.wait_for(is_build_finished, timeout_seconds=timeout)
 
     def get_slaves(self):
+        """
+        Return a dictionary of slaves connected to the master.
+        :rtype: dict
+        """
         slave_url = self._api.url('slave')
         response = self._network.get(slave_url)
         return response.json()
 
-    def shutdown_slaves_by_id(self, slave_ids):
+    def graceful_shutdown_slaves_by_id(self, slave_ids):
         """
         :type slave_ids: list[int]
         :rtype: requests.Response
         """
-        return self._shutdown_slaves({'slaves': slave_ids})
+        return self._graceful_shutdown_slaves({'slaves': slave_ids})
 
-    def shutdown_all_slaves(self):
+    def graceful_shutdown_all_slaves(self):
         """
         :rtype: request.Response
         """
-        return self._shutdown_slaves({'shutdown_all': True})
+        return self._graceful_shutdown_slaves({'shutdown_all': True})
 
-    def _shutdown_slaves(self, body):
+    def _graceful_shutdown_slaves(self, body):
         """
         :type body: dict
         :rtype: requests.Response

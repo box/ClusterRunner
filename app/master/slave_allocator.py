@@ -2,7 +2,7 @@ from app.util.log import get_logger
 from app.util.ordered_set_queue import OrderedSetQueue
 from app.util.safe_thread import SafeThread
 
-from app.master.slave import ShutdownSlaveError
+from app.master.slave import SlaveMarkedForShutdownError
 
 
 class SlaveAllocator(object):
@@ -66,5 +66,5 @@ class SlaveAllocator(object):
         try:
             slave.mark_as_idle()
             self._idle_slaves.put(slave)
-        except ShutdownSlaveError:
+        except SlaveMarkedForShutdownError:
             pass

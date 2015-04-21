@@ -2,7 +2,7 @@ from unittest.mock import Mock, MagicMock
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.slave import DeadSlaveError, ShutdownSlaveError, Slave
+from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave
 from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -108,10 +108,10 @@ class TestSlave(BaseUnitTestCase):
 
     def test_mark_as_idle_raises_when_slave_is_in_shutdown_mode(self):
         slave = self._create_slave()
-        slave._is_shutdown = True
+        slave._is_in_shutdown_mode = True
         slave.kill = Mock()
 
-        self.assertRaises(ShutdownSlaveError, slave.mark_as_idle)
+        self.assertRaises(SlaveMarkedForShutdownError, slave.mark_as_idle)
         slave.kill.assert_called_once_with()
 
     def test_start_subjob_raises_if_slave_is_dead(self):
@@ -122,9 +122,9 @@ class TestSlave(BaseUnitTestCase):
 
     def test_start_subjob_raises_if_slave_is_shutdown(self):
         slave = self._create_slave()
-        slave._is_shutdown = True
+        slave._is_in_shutdown_mode = True
 
-        self.assertRaises(ShutdownSlaveError, slave.start_subjob, Mock())
+        self.assertRaises(SlaveMarkedForShutdownError, slave.start_subjob, Mock())
 
     def test_set_shutdown_mode_should_set_is_shutdown_and_not_kill_slave_if_slave_has_a_build(self):
         slave = self._create_slave()
@@ -133,7 +133,7 @@ class TestSlave(BaseUnitTestCase):
 
         slave.set_shutdown_mode()
 
-        self.assertTrue(slave._is_shutdown)
+        self.assertTrue(slave._is_in_shutdown_mode)
         assert not slave.kill.called
 
     def test_set_shutdown_mode_should_kill_slave_if_slave_has_no_build(self):

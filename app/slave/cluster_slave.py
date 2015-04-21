@@ -2,7 +2,6 @@ from enum import Enum
 from queue import Queue
 import requests
 import sys
-from threading import Lock
 import time
 
 from app.project_type.project_type import SetupFailureError
@@ -52,7 +51,6 @@ class ClusterSlave(object):
         self._project_type = None  # this will be instantiated during build setup
         self._current_build_id = None
         self._build_teardown_coin = None
-        self._build_teardown_lock = Lock()  # to prevent multiple teardown attempts from raising errors
 
     def api_representation(self):
         """
@@ -175,20 +173,15 @@ class ClusterSlave(object):
         for executor in self.executors_by_id.values():
             executor.kill()
 
-        # This lock keeps multiple teardown attempts from racing each other and throwing exceptions.
-        with self._build_teardown_lock:
-            if not self._project_type:
-                return  # There is no build to tear down! (Slave is idle.)
+        if not self._build_teardown_coin.spend() or not self._project_type:  # Order matters! Spend the coin first.
+            return  # There is no build to tear down or teardown is already in progress.
 
-            if not self._build_teardown_coin.spend():
-                raise BuildTeardownError('Build teardown process was requested more than once for the same build.')
-
-            self._logger.info('Executing teardown for build {}.', self._current_build_id)
-            # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
-            self._project_type.teardown_build(timeout=timeout)
-            self._logger.info('Build teardown complete for build {}.', self._current_build_id)
-            self._current_build_id = None
-            self._project_type = None
+        self._logger.info('Executing teardown for build {}.', self._current_build_id)
+        # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
+        self._project_type.teardown_build(timeout=timeout)
+        self._logger.info('Build teardown complete for build {}.', self._current_build_id)
+        self._current_build_id = None
+        self._project_type = None
 
     def _send_master_idle_notification(self):
         if not self._is_master_responsive():
@@ -199,7 +192,7 @@ class ClusterSlave(object):
         self._logger.info('Notifying master that this slave is ready for new builds.')
         self._notify_master_of_state_change(SlaveState.IDLE)
 
-    def disconnect_from_master(self):
+    def _disconnect_from_master(self):
         """
         Perform internal bookkeeping, as well as notify the master, that this slave is disconnecting itself
         from the slave pool.
@@ -236,7 +229,7 @@ class ClusterSlave(object):
         # We disconnect from the master before build_teardown so that the master stops sending subjobs. (Teardown
         # callbacks are executed in the reverse order that they're added, so we add the build_teardown callback first.)
         UnhandledExceptionHandler.singleton().add_teardown_callback(self._do_build_teardown_and_reset, timeout=30)
-        UnhandledExceptionHandler.singleton().add_teardown_callback(self.disconnect_from_master)
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self._disconnect_from_master)
 
     def _is_master_responsive(self):
         """
@@ -328,7 +321,9 @@ class ClusterSlave(object):
                                       secret=Secret.get(), error_on_failure=True)
 
     def kill(self):
-        # TODO(dtran): Kill the threads and this server more gracefully
+        """
+        Exits without error.
+        """
         sys.exit(0)
 
 
@@ -342,7 +337,3 @@ class SlaveState(str, Enum):
     IDLE = 'IDLE'  # The slave is waiting for a build.
     SETUP_COMPLETED = 'SETUP_COMPLETE'  # The slave has completed a build's setup and is waiting for subjobs.
     SETUP_FAILED = 'SETUP_FAILED'  # A build's setup did not complete successfully, the slave is now stuck.
-
-
-class BuildTeardownError(Exception):
-    pass

@@ -24,7 +24,7 @@ class Slave(object):
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
         self._is_alive = True
-        self._is_shutdown = False
+        self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
         self._logger = log.get_logger(__name__)
 
@@ -36,7 +36,7 @@ class Slave(object):
             'num_executors_in_use': self.num_executors_in_use(),
             'current_build_id': self.current_build_id,
             'is_alive': self.is_alive(),
-            'is_in_shutdown_mode': self._is_shutdown,
+            'is_in_shutdown_mode': self._is_in_shutdown_mode,
         }
 
     def mark_as_idle(self):
@@ -50,9 +50,9 @@ class Slave(object):
 
         self.current_build_id = None
 
-        if self._is_shutdown:
+        if self._is_in_shutdown_mode:
             self.kill()
-            raise ShutdownSlaveError
+            raise SlaveMarkedForShutdownError
 
     def setup(self, build):
         """
@@ -90,9 +90,9 @@ class Slave(object):
         if not self.is_alive():
             raise DeadSlaveError('Tried to start a subjob on a dead slave! ({}, id: {})'.format(self.url, self.id))
 
-        if self._is_shutdown:
-            raise ShutdownSlaveError('Tried to start a subjob on a slave in shutdown mode. ({}, id: {})'
-                                     .format(self.url, self.id))
+        if self._is_in_shutdown_mode:
+            raise SlaveMarkedForShutdownError('Tried to start a subjob on a slave in shutdown mode. ({}, id: {})'
+                                              .format(self.url, self.id))
 
         SafeThread(target=self._async_start_subjob, args=(subjob,)).start()
 
@@ -173,7 +173,7 @@ class Slave(object):
         Mark this slave as being in shutdown mode.  Slaves in shutdown mode will not get new subjobs and will be
         killed when they finish teardown, or killed immediately if they are not processing a build.
         """
-        self._is_shutdown = True
+        self._is_in_shutdown_mode = True
         if self.current_build_id is None:
             self.kill()
 
@@ -181,17 +181,17 @@ class Slave(object):
         """
         Whether the slave is in shutdown mode.
         """
-        return self._is_shutdown
+        return self._is_in_shutdown_mode
 
     def kill(self):
         """
         Instructs the slave process to kill itself.
         """
-        setup_url = self._slave_api.url('kill')
-        self._network.post_with_digest(setup_url, {}, Secret.get())
-        self.disconnect()
+        kill_url = self._slave_api.url('kill')
+        self._network.post_with_digest(kill_url, {}, Secret.get())
+        self.mark_dead()
 
-    def disconnect(self):
+    def mark_dead(self):
         """
         Marks the slave dead.
         """
@@ -205,7 +205,7 @@ class DeadSlaveError(Exception):
     """
 
 
-class ShutdownSlaveError(Exception):
+class SlaveMarkedForShutdownError(Exception):
     """
     Tried an operation which could have added additional work to a slave which is in shutdown mode.
     """

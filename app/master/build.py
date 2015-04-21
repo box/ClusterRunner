@@ -5,7 +5,7 @@ from threading import Lock
 import uuid
 
 from app.master.build_artifact import BuildArtifact
-from app.master.slave import ShutdownSlaveError
+from app.master.slave import SlaveMarkedForShutdownError
 from app.util import analytics, util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -194,8 +194,10 @@ class Build(object):
                                    subjob.subjob_id(), subjob.build_id(), slave.url)
                 try:
                     slave.start_subjob(subjob)
-                except ShutdownSlaveError:
+                except SlaveMarkedForShutdownError:
                     self._unstarted_subjobs.put(subjob)
+                    # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
+                    # Since the slave has been marked for shutdown, we need to free the executor.
                     self._free_slave_executor(slave)
 
         except Empty:

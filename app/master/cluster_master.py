@@ -131,7 +131,7 @@ class ClusterMaster(object):
         """
         slave_transition_functions = {
             SlaveState.DISCONNECTED: self._disconnect_slave,
-            SlaveState.SHUTDOWN: self._shutdown_slave,
+            SlaveState.SHUTDOWN: self._graceful_shutdown_slave,
             SlaveState.IDLE: self._slave_allocator.add_idle_slave,
             SlaveState.SETUP_COMPLETED: self._handle_setup_success_on_slave,
             SlaveState.SETUP_FAILED: self._handle_setup_failure_on_slave,
@@ -144,7 +144,16 @@ class ClusterMaster(object):
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
 
-    def _shutdown_slave(self, slave):
+    def set_shutdown_mode_on_slaves(self, slave_ids):
+        """
+        :type slave_ids: list[int]
+        """
+        # Find all the slaves first so if an invalid slave_id is specified, we 404 before shutting any of them down.
+        slaves = [self.get_slave(slave_id) for slave_id in slave_ids]
+        for slave in slaves:
+            self.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
+
+    def _graceful_shutdown_slave(self, slave):
         """
         Puts slave in shutdown mode so it cannot receive new builds. The slave will be killed when finished with any
         running builds.
@@ -161,7 +170,7 @@ class ClusterMaster(object):
         """
         # Mark slave dead. We do not remove it from the list of all slaves. We also do not remove it from idle_slaves;
         # that will happen during slave allocation.
-        slave.disconnect()
+        slave.mark_dead()
         # todo: Fail/resend any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 

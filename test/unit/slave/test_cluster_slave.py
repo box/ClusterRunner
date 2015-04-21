@@ -7,9 +7,10 @@ from threading import Event
 from unittest.mock import ANY, call, MagicMock, Mock, mock_open, patch
 
 from app.project_type.project_type import SetupFailureError
-from app.slave.cluster_slave import BuildTeardownError, ClusterSlave, SlaveState
+from app.slave.cluster_slave import ClusterSlave, SlaveState
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
+from app.util.single_use_coin import SingleUseCoin
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -63,7 +64,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave.disconnect_from_master()
+        slave._disconnect_from_master()
 
         # expect a connect call and a connectivity call, and if the master is responsive also expect a disconnect call
         expected_network_calls = [
@@ -88,6 +89,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave(num_executors=3)
         slave.connect_to_master(self._FAKE_MASTER_URL)
+        slave._build_teardown_coin = SingleUseCoin()
         self.trigger_graceful_app_shutdown()
 
         expected_disconnect_call = call.mock_network.put_with_digest(disconnect_api_url, request_params=ANY,
