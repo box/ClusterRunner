@@ -22,7 +22,7 @@ class Subjob(object):
         :param job_config: the job's configuration from cluster_runner.yaml
         :type job_config: JobConfig
         :param atoms: the atom project_type strings
-        :type atoms: list [str]
+        :type atoms: list[app.master.atom.Atom]
         :return:
         """
         self._logger = get_logger(__name__)
@@ -44,7 +44,12 @@ class Subjob(object):
         }
 
     def get_atoms(self):
-        return [{'id': idx, 'atom': atom} for idx, atom in enumerate(self._atoms)]
+        return [{
+            'id': idx,
+            'atom': atom.command_string,
+            'expected_time': atom.expected_time,
+            'actual_time': atom.actual_time,
+        } for idx, atom in enumerate(self._atoms)]
 
     def build_id(self):
         """
@@ -66,7 +71,7 @@ class Subjob(object):
         :rtype: list[str]
         """
         job_command = self.job_config.command
-        return ['{} {}'.format(atom, job_command) for atom in self._atoms]
+        return ['{} {}'.format(atom.command_string, job_command) for atom in self._atoms]
 
     def _timings_file_path(self, atom_id, result_root=None):
         """
@@ -104,8 +109,9 @@ class Subjob(object):
                     # Strip out the project directory from atom timing data in order to have all
                     # atom timing data be relative and project directory agnostic (the project
                     # directory will be a generated unique path for every build).
-                    atom = atom.replace(self.project_type.project_directory, '')
-                    timings[atom] = float(f.readline())
+                    atom_key = atom.command_string.replace(self.project_type.project_directory, '')
+                    atom.actual_time = float(f.readline())
+                    timings[atom_key] = atom.actual_time
             else:
                 self._logger.warning('No timing data for subjob {} atom {}.',
                                      self._subjob_id, atom_id)

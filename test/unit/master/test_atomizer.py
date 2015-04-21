@@ -18,11 +18,13 @@ class TestAtomizer(BaseUnitTestCase):
 
         atomizer = Atomizer([{'TEST_FILE': _FAKE_ATOMIZER_COMMAND}])
         actual_atoms = atomizer.atomize_in_project(mock_project)
+        actual_atom_commands = [atom.command_string for atom in actual_atoms]
 
-        expected_atoms = ['export TEST_FILE="./test_a.py";',
-                          'export TEST_FILE="./test_b.py";',
-                          'export TEST_FILE="./test_c.py";']
-        self.assertListEqual(expected_atoms, actual_atoms, 'List of actual atoms should match list of expected atoms.')
+        expected_atom_commands = ['export TEST_FILE="./test_a.py";',
+                                  'export TEST_FILE="./test_b.py";',
+                                  'export TEST_FILE="./test_c.py";']
+        self.assertListEqual(expected_atom_commands, actual_atom_commands,
+                             'List of actual atoms should match list of expected atoms.')
         mock_project.execute_command_in_project.assert_called_once_with(_FAKE_ATOMIZER_COMMAND)
 
     def test_atomizer_raises_exception_when_atomize_command_fails(self):
