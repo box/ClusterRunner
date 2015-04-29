@@ -55,6 +55,18 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
     PHPUnit:
     """
 
+    _VALID_CONFIG_WITH_EMPTY_COMMANDS = """
+    PHPUnit:
+        commands:
+            - echo "first"
+            -
+            - # some YAML comment
+            -
+            - echo "last"
+        atomizers:
+            - ENV_VAR: echo "atom"
+    """
+
     _NO_COMMAND_INVALID_CONFIG = """
     PHPUnit:
         max_executors: 5
@@ -62,6 +74,14 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
             - echo "I don't know what I'm doing."
         atomizers:
             - VARNAME: sleep 123
+    """
+
+    _INVALID_CONFIG_WITH_EMPTY_COMMANDS = """
+    PHPUnit:
+        commands:
+            -
+        atomizers:
+            - ENV_VAR: echo "atom"
     """
 
     _BACKGROUND_TASK_CONFIG = """
@@ -77,22 +97,30 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
             - echo "go"
     """
 
-    @genty_dataset(
-        name=('name', 'Best Job Ever'),
-        max_executors=('max_executors', 21),
-        setup_build=('setup_build', 'echo "This is setup! Woo!" && sleep 1 '),
-        command=('command', 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/my_hard_work.txt '),
-        atomizer=('atomizer', [{'THE_THING': 'printf \'something with a number %d\\n\' {1..50}'}])
-    )
-    def test_all_conf_properties_are_correctly_parsed(self, conf_method_name, expected_value):
-        config = ClusterRunnerConfig(self._COMPLETE_VALID_CONFIG)
-        job_config = config.get_job_config()
-        actual_value = getattr(job_config, conf_method_name)
-        if isinstance(actual_value, Atomizer):
-            actual_value = actual_value._atomizer_dicts  # special case comparison for atomizer
 
-        self.assertEqual(actual_value, expected_value,
-                         'The output of {}() should match the expected value.'.format(conf_method_name))
+    @genty_dataset(
+        complete_valid_config=(_COMPLETE_VALID_CONFIG, {
+            'name': 'Best Job Ever',
+            'max_executors': 21,
+            'setup_build': 'echo "This is setup! Woo!" && sleep 1 ',
+            'command': 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/my_hard_work.txt ',
+            'atomizer': [{'THE_THING': 'printf \'something with a number %d\\n\' {1..50}'}],
+        }),
+        valid_config_with_empty_command=(_VALID_CONFIG_WITH_EMPTY_COMMANDS, {
+            'command': 'echo "first" && echo "last" ',
+            'atomizer': [{'ENV_VAR': 'echo "atom"'}],
+        }),
+    )
+    def test_valid_conf_properties_are_correctly_parsed(self, config_string, expected_loaded_config):
+        config = ClusterRunnerConfig(config_string)
+        job_config = config.get_job_config()
+        for method_name, expected_value in expected_loaded_config.items():
+            actual_value = getattr(job_config, method_name)
+            if isinstance(actual_value, Atomizer):
+                actual_value = actual_value._atomizer_dicts  # special case comparison for atomizer
+
+            self.assertEqual(actual_value, expected_value,
+                             'The output of {}() should match the expected value.'.format(method_name))
 
     @genty_dataset(
         ('max_executors', sys.maxsize),
@@ -110,6 +138,7 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
         valid_config=(_COMPLETE_VALID_CONFIG, True),
         empty_config=(_EMPTY_CONFIG, False),
         invalid_config=(_NO_COMMAND_INVALID_CONFIG, False),
+        invalid_config_with_empty_commands=(_INVALID_CONFIG_WITH_EMPTY_COMMANDS, False),
     )
     def test_valid_configs_are_detected(self, config_contents, is_expected_valid):
         config = ClusterRunnerConfig(config_contents)

@@ -150,7 +150,7 @@ class ClusterRunnerConfig(object):
         """
         Combines a list of commands into a single bash string
         :param commands: a list of commands, optionally ending with semicolons
-        :type commands: list[str]
+        :type commands: list[str|None]
         :return: returns the concatenated shell command on success, or None if there was an error
         :rtype: string|None
         """
@@ -161,6 +161,9 @@ class ClusterRunnerConfig(object):
         # A semicolon (or a double ampersand) is invalid syntax after a single ampersand.
         sanitized_commands = []
         for command in commands:
+            if command is None:
+                # skip `None` command in the commands list
+                continue
             stripped_command = command.strip().rstrip(';')
             # If the command ends with an ampersand (single or double) we can leave the command alone (empty postfix)
             postfix = ' ' if stripped_command.strip().endswith('&') else ' && '
