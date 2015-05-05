@@ -6,7 +6,7 @@ from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
 from app.web_framework.cluster_application import ClusterApplication
-from app.web_framework.cluster_base_handler import ClusterBaseHandler
+from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler, ClusterBaseHandler
 from app.web_framework.route_node import RouteNode
 
 
@@ -50,7 +50,7 @@ class ClusterMasterApplication(ClusterApplication):
         super().__init__(handlers)
 
 
-class _ClusterMasterBaseHandler(ClusterBaseHandler):
+class _ClusterMasterBaseAPIHandler(ClusterBaseAPIHandler):
     def initialize(self, route_node=None, cluster_master=None):
         """
         :type route_node: RouteNode | None
@@ -60,11 +60,11 @@ class _ClusterMasterBaseHandler(ClusterBaseHandler):
         super().initialize(route_node)
 
 
-class _RootHandler(_ClusterMasterBaseHandler):
+class _RootHandler(_ClusterMasterBaseAPIHandler):
     pass
 
 
-class _APIVersionOneHandler(_ClusterMasterBaseHandler):
+class _APIVersionOneHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
         response = {
             'master': self._cluster_master.api_representation(),
@@ -72,7 +72,7 @@ class _APIVersionOneHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _VersionHandler(_ClusterMasterBaseHandler):
+class _VersionHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
         response = {
             'version': Configuration['version'],
@@ -80,7 +80,7 @@ class _VersionHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _QueueHandler(_ClusterMasterBaseHandler):
+class _QueueHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
         response = {
             'queue': [build.api_representation() for build in self._cluster_master.active_builds()]
@@ -88,7 +88,7 @@ class _QueueHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _SubjobsHandler(_ClusterMasterBaseHandler):
+class _SubjobsHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id):
         build = self._cluster_master.get_build(int(build_id))
         response = {
@@ -97,7 +97,7 @@ class _SubjobsHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _SubjobHandler(_ClusterMasterBaseHandler):
+class _SubjobHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id, subjob_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -107,7 +107,7 @@ class _SubjobHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _SubjobResultHandler(_ClusterMasterBaseHandler):
+class _SubjobResultHandler(_ClusterMasterBaseAPIHandler):
     def post(self, build_id, subjob_id):
         slave_url = self.decoded_body.get('slave')
         slave = self._cluster_master.get_slave(slave_url=slave_url)
@@ -128,7 +128,7 @@ class _SubjobResultHandler(_ClusterMasterBaseHandler):
         self.write({'status': 'not implemented'})
 
 
-class _AtomsHandler(_ClusterMasterBaseHandler):
+class _AtomsHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id, subjob_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -138,7 +138,7 @@ class _AtomsHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _AtomHandler(_ClusterMasterBaseHandler):
+class _AtomHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id, subjob_id, atom_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -149,7 +149,7 @@ class _AtomHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _BuildsHandler(_ClusterMasterBaseHandler):
+class _BuildsHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self):
         build_params = self.decoded_body
@@ -164,7 +164,7 @@ class _BuildsHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _BuildHandler(_ClusterMasterBaseHandler):
+class _BuildHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def put(self, build_id):
         update_params = self.decoded_body
@@ -179,7 +179,7 @@ class _BuildHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _BuildResultRedirectHandler(_ClusterMasterBaseHandler):
+class _BuildResultRedirectHandler(_ClusterMasterBaseAPIHandler):
     """
     Redirect to the actual build results file download URL.
     """
@@ -187,11 +187,11 @@ class _BuildResultRedirectHandler(_ClusterMasterBaseHandler):
         self.redirect('/v1/build/{}/artifacts.tar.gz'.format(build_id))
 
 
-class _BuildResultHandler(tornado.web.StaticFileHandler):
+class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
     """
-    Download an artifact for the specified build. Note this class inherits from StaticFileHandler, so the semantics
-    of this handler are a bit different than the other handlers in this file that inherit from
-    _ClusterMasterBaseHandler.
+    Download an artifact for the specified build. Note this class inherits from ClusterBaseHandler and
+    StaticFileHandler, so the semantics of this handler are a bit different than the other handlers in this file that
+    inherit from _ClusterMasterBaseHandler.
 
     From the Tornado docs: "for heavy traffic it will be more efficient to use a dedicated static file server".
     """
@@ -212,7 +212,7 @@ class _BuildResultHandler(tornado.web.StaticFileHandler):
         return super().get(path=artifact_filename)
 
 
-class _SlavesHandler(_ClusterMasterBaseHandler):
+class _SlavesHandler(_ClusterMasterBaseAPIHandler):
     def post(self):
         slave_url = self.decoded_body.get('slave')
         num_executors = int(self.decoded_body.get('num_executors'))
@@ -226,7 +226,7 @@ class _SlavesHandler(_ClusterMasterBaseHandler):
         self.write(response)
 
 
-class _SlaveHandler(_ClusterMasterBaseHandler):
+class _SlaveHandler(_ClusterMasterBaseAPIHandler):
     def get(self, slave_id):
         slave = self._cluster_master.get_slave(int(slave_id))
         response = {
@@ -245,7 +245,7 @@ class _SlaveHandler(_ClusterMasterBaseHandler):
         })
 
 
-class _EventlogHandler(_ClusterMasterBaseHandler):
+class _EventlogHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
         # all arguments are optional, so default to None
         since_timestamp = self.get_query_argument('since_timestamp', None)
