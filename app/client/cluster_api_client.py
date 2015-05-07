@@ -42,6 +42,18 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         )
         return response.json()
 
+    def get_build_artifacts(self, build_id):
+        """
+        Make a GET call to the master to get artifact for a build.
+        :param build_id: The id of the build we want to get the artifact of
+        :type build_id: int
+        :return: tuple of (the artifact tarball, status code)
+        :rtype: tuple of (bytes, int)
+        """
+        artifacts_url = self._api.url('build', build_id, 'artifacts.tar.gz')
+        response = self._network.get(artifacts_url)
+        return response.content, response.status_code
+
     def cancel_build(self, build_id):
         """
         PUT a request to the master to cancel a build.
