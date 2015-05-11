@@ -89,61 +89,61 @@ class TestDeploySubcommand(BaseUnitTestCase):
         registered_hosts = ['host_1', 'host_2']
         slaves_to_validate = ['host_1', 'host_2']
 
-        def rsa_key(*args, **kwargs):
+        def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
-                return 'rsa_key_1'
+                return 'host_id_1'
             elif args[0] == 'host_2':
-                return 'rsa_key_2'
+                return 'host_id_2'
             else:
                 return 'blah'
 
-        old_rsa_key = Network.rsa_key
-        Network.rsa_key = rsa_key
+        old_host_id = Network.get_host_id
+        Network.get_host_id = get_host_id
         deploy_subcommand = DeploySubcommand()
         non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
-        Network.rsa_key = old_rsa_key
+        Network.get_host_id = old_host_id
         self.assertEquals(0, len(non_registered))
 
     def test_non_registered_slaves_returns_non_registered_slaves(self):
         registered_hosts = ['host_1', 'host_3']
         slaves_to_validate = ['host_1', 'host_2', 'host_3', 'host_4']
 
-        def rsa_key(*args, **kwargs):
+        def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
-                return 'rsa_key_1'
+                return 'host_id_1'
             elif args[0] == 'host_2':
-                return 'rsa_key_2'
+                return 'host_id_2'
             elif args[0] == 'host_3':
-                return 'rsa_key_3'
+                return 'host_id_3'
             elif args[0] == 'host_4':
-                return 'rsa_key_4'
+                return 'host_id_4'
             else:
                 return 'blah'
 
-        self.patch('app.util.network.Network.rsa_key', new=rsa_key)
+        self.patch('app.util.network.Network.get_host_id', new=get_host_id)
         deploy_subcommand = DeploySubcommand()
         non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
         self.assertEquals(len(non_registered), 2)
         self.assertTrue('host_2' in non_registered)
         self.assertTrue('host_4' in non_registered)
 
-    def test_non_registered_slaves_returns_empty_list_with_slaves_with_same_rsa_keys_but_different_names(self):
+    def test_non_registered_slaves_returns_empty_list_with_slaves_with_same_host_ids_but_different_names(self):
         registered_hosts = ['host_1_alias', 'host_2_alias']
         slaves_to_validate = ['host_1', 'host_2']
 
-        def rsa_key(*args, **kwargs):
+        def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
-                return 'rsa_key_1'
+                return 'host_id_1'
             elif args[0] == 'host_2':
-                return 'rsa_key_2'
+                return 'host_id_2'
             elif args[0] == 'host_1_alias':
-                return 'rsa_key_1'
+                return 'host_id_1'
             elif args[0] == 'host_2_alias':
-                return 'rsa_key_2'
+                return 'host_id_2'
             else:
                 return 'blah'
 
-        self.patch('app.util.network.Network.rsa_key', new=rsa_key)
+        self.patch('app.util.network.Network.get_host_id', new=get_host_id)
         deploy_subcommand = DeploySubcommand()
         non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
         self.assertEquals(0, len(non_registered))
@@ -153,8 +153,8 @@ class TestDeploySubcommand(BaseUnitTestCase):
             slaves_to_validate=['slave_host_1', 'slave_host_2'],
             connected_slaves=['slave_host_1', 'slave_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'rsa_key_1',
-                'slave_host_2': 'rsa_key_1',
+                'slave_host_1': 'host_1_id',
+                'slave_host_2': 'host_2_id',
             },
             is_valid=True,
         ),
@@ -162,7 +162,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
             slaves_to_validate=['slave_host_1', 'slave_host_2'],
             connected_slaves=['slave_host_3', 'slave_host_2'],
             host_name_to_uid={
-                'slave_host_2': 'rsa_key_2',
+                'slave_host_2': 'host_2_id',
             },
             is_valid=False,
         ),
@@ -170,17 +170,17 @@ class TestDeploySubcommand(BaseUnitTestCase):
             slaves_to_validate=['slave_host_1'],
             connected_slaves=['slave_host_1', 'slave_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'rsa_key_1',
+                'slave_host_1': 'host_1_id',
             },
             is_valid=False,
         ),
-        valid_deployment_different_host_names_with_same_rsa_key=genty_args(
+        valid_deployment_different_host_names_with_same_host_id=genty_args(
             slaves_to_validate=['slave_host_1', 'slave_host_2'],
             connected_slaves=['slave_host_1_alias', 'slave_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'rsa_key_1',
-                'slave_host_1_alias': 'rsa_key_1',
-                'slave_host_2': 'rsa_key_2',
+                'slave_host_1': 'host_1_id',
+                'slave_host_1_alias': 'host_1_id',
+                'slave_host_2': 'host_2_id',
             },
             is_valid=True,
         ),
@@ -192,13 +192,13 @@ class TestDeploySubcommand(BaseUnitTestCase):
             host_name_to_uid,
             is_valid,
     ):
-        def rsa_key(host):
+        def get_host_id(host):
             if host in host_name_to_uid:
                 return host_name_to_uid[host]
             else:
                 return str(uuid.uuid4())
 
-        self.patch('app.util.network.Network.rsa_key', new=rsa_key)
+        self.patch('app.util.network.Network.get_host_id', new=get_host_id)
 
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._registered_slave_hostnames = MagicMock(return_value=connected_slaves)
