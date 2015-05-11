@@ -1,8 +1,15 @@
+from functools import partial
+from unittest.mock import MagicMock
+import uuid
+
+from genty import genty, genty_dataset, genty_args
+
 from app.subcommands.deploy_subcommand import DeploySubcommand
 from app.util.network import Network
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
+@genty
 class TestDeploySubcommand(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
@@ -140,3 +147,66 @@ class TestDeploySubcommand(BaseUnitTestCase):
         deploy_subcommand = DeploySubcommand()
         non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
         self.assertEquals(0, len(non_registered))
+
+    @genty_dataset(
+        valid_deployment=genty_args(
+            slaves_to_validate=['slave_host_1', 'slave_host_2'],
+            connected_slaves=['slave_host_1', 'slave_host_2'],
+            host_name_to_uid={
+                'slave_host_1': 'rsa_key_1',
+                'slave_host_2': 'rsa_key_1',
+            },
+            is_valid=True,
+        ),
+        host_mismatch=genty_args(
+            slaves_to_validate=['slave_host_1', 'slave_host_2'],
+            connected_slaves=['slave_host_3', 'slave_host_2'],
+            host_name_to_uid={
+                'slave_host_2': 'rsa_key_2',
+            },
+            is_valid=False,
+        ),
+        number_of_slaves_not_match=genty_args(
+            slaves_to_validate=['slave_host_1'],
+            connected_slaves=['slave_host_1', 'slave_host_2'],
+            host_name_to_uid={
+                'slave_host_1': 'rsa_key_1',
+            },
+            is_valid=False,
+        ),
+        valid_deployment_different_host_names_with_same_rsa_key=genty_args(
+            slaves_to_validate=['slave_host_1', 'slave_host_2'],
+            connected_slaves=['slave_host_1_alias', 'slave_host_2'],
+            host_name_to_uid={
+                'slave_host_1': 'rsa_key_1',
+                'slave_host_1_alias': 'rsa_key_1',
+                'slave_host_2': 'rsa_key_2',
+            },
+            is_valid=True,
+        ),
+    )
+    def test_validate_deployment_checks_each_slave_is_connected(
+            self,
+            slaves_to_validate,
+            connected_slaves,
+            host_name_to_uid,
+            is_valid,
+    ):
+        def rsa_key(host):
+            if host in host_name_to_uid:
+                return host_name_to_uid[host]
+            else:
+                return str(uuid.uuid4())
+
+        self.patch('app.util.network.Network.rsa_key', new=rsa_key)
+
+        deploy_subcommand = DeploySubcommand()
+        deploy_subcommand._registered_slave_hostnames = MagicMock(return_value=connected_slaves)
+        deploy_subcommand._SLAVE_REGISTRY_TIMEOUT_SEC = 1
+        deploy_subcommand._non_registered_slaves = MagicMock()
+        validate = partial(deploy_subcommand._validate_successful_deployment, 'master_host_url', slaves_to_validate)
+        if not is_valid:
+            with self.assertRaises(SystemExit):
+                validate()
+        else:
+            validate()

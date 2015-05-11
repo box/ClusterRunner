@@ -201,7 +201,13 @@ class DeploySubcommand(Subcommand):
         network = Network()
 
         def all_slaves_registered():
-            return len(self._registered_slave_hostnames(slave_api_url, network)) == len(slaves_to_validate)
+            registered_slave_uids = set(
+                [Network.rsa_key(x) for x in self._registered_slave_hostnames(slave_api_url, network)]
+            )
+            slaves_to_validate_uids = set(
+                [Network.rsa_key(x) for x in slaves_to_validate]
+            )
+            return registered_slave_uids == slaves_to_validate_uids
 
         if not wait_for(
                 boolean_predicate=all_slaves_registered,
