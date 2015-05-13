@@ -34,7 +34,7 @@ class DeployTarget(object):
         """
         parent_dest_dir = os.path.dirname(dest_dir)
         self._shell_client.exec_command('rm -rf {0}; mkdir -p {0}'.format(dest_dir), error_on_failure=True)
-        self._shell_client.copy(source_tar, '{}/clusterrunner.tgz'.format(parent_dest_dir))
+        self._shell_client.copy(source_tar, '{}/clusterrunner.tgz'.format(parent_dest_dir), error_on_failure=True)
         self._shell_client.exec_command(
             command='tar zxvf {}/clusterrunner.tgz -C {}'.format(parent_dest_dir, dest_dir),
             error_on_failure=True

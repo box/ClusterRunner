@@ -51,7 +51,7 @@ class ShellClient(object):
         """
         raise NotImplementedError('blocking command execution not implemented')
 
-    def copy(self, source, destination):
+    def copy(self, source, destination, error_on_failure=False):
         """
         Copies the item from the source to the destination
         :param source:
@@ -60,7 +60,18 @@ class ShellClient(object):
         :type destination: str
         :return:
         """
-        return self._copy_on_client(source, destination)
+        res = self._copy_on_client(source, destination)
+        if error_on_failure and not res.is_success():
+            error_message = 'Copy from "{}" to "{}" failed with:\nerror: {}\noutput: {}\nexit code: {}'.format(
+                source,
+                destination,
+                res.raw_error,
+                res.raw_output,
+                res.returncode,
+            )
+            raise RuntimeError(error_message)
+        else:
+            return res
 
     def _copy_on_client(self, source, destination):
         """
