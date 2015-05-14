@@ -103,16 +103,14 @@ class BaseConfigLoader(object):
         if self.CONFIG_FILE_SECTION:
             self._load_section_from_config_file(config, config_filename, self.CONFIG_FILE_SECTION)
 
-    def _load_section_from_config_file(self, config, config_filename, section):
+    def _get_config_file_whitelisted_keys(self):
         """
-        Load a config file and copy all the values in a particular section to the Configuration singleton
-        :type config: Configuration
-        :type config_filename: str
-        :type section: str
+        Return the list of keys that we allow to be specified in a config file. Subclasses can override this method but
+        should in general append values to the list returned by their superclass.
+
+        :rtype: list[str]
         """
-        # Only keys from this list will be loaded from a conf file.  If the conf file contains other keys we will
-        # error to alert the user.
-        config_key_validation = [
+        return [
             'secret',
             'base_directory',
             'log_level',
@@ -129,6 +127,14 @@ class BaseConfigLoader(object):
             'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
         ]
+
+    def _load_section_from_config_file(self, config, config_filename, section):
+        """
+        Load a config file and copy all the values in a particular section to the Configuration singleton
+        :type config: Configuration
+        :type config_filename: str
+        :type section: str
+        """
         try:
             config_parsed = ConfigFile(config_filename).read_config_from_disk()
         except FileNotFoundError:
@@ -139,12 +145,14 @@ class BaseConfigLoader(object):
             config_parsed = ConfigFile(config_filename).read_config_from_disk()
 
         if section not in config_parsed:
-            raise _InvalidConfigError('The config file {} does not contain a [{}] section'
-                                      .format(config_filename, section))
+            raise InvalidConfigError('The config file {} does not contain a [{}] section'
+                                     .format(config_filename, section))
+
         clusterrunner_config = config_parsed[section]
+        whitelisted_file_keys = self._get_config_file_whitelisted_keys()
         for key in clusterrunner_config:
-            if key not in config_key_validation:
-                raise _InvalidConfigError('The config file contains an invalid key: {}'.format(key))
+            if key not in whitelisted_file_keys:
+                raise InvalidConfigError('The config file contains an invalid key: {}'.format(key))
             value = clusterrunner_config[key]
 
             self._cast_and_set(key, value, config)
@@ -156,19 +164,23 @@ class BaseConfigLoader(object):
         :type config: Configuration
         """
         default_value = config.get(key)
-        if isinstance(default_value, int):
+
+        if isinstance(default_value, bool):  # bool is a subclass of int so should be checked first
+            value_mapping = {'true': True, 'false': False}
+            if not isinstance(value, str) and not value.lower() in value_mapping.keys():
+                raise InvalidConfigError('The value for {} should be True or False, but it is "{}"'.format(key, value))
+            config.set(key, value_mapping[value.lower()])
+
+        elif isinstance(default_value, int):
             config.set(key, int(value))
-        elif isinstance(default_value, bool):
-            value_mapping = {'True': True, 'False': False}
-            if value not in value_mapping.keys():
-                raise _InvalidConfigError('The value for {} should be True or False, but it is "{}"'.format(key, value))
-            config.set(key, value_mapping[value])
+
         elif isinstance(default_value, list):
             # The ConfigObj library converts comma delimited strings to lists.  In the case on a single element, we
             # need to do the conversion ourselves.
             if not isinstance(value, list):
                 value = [value]
             config.set(key, value)
+
         else:  # Could be str or NoneType, we assume it should be a str
             # Hacky: If the value starts with ~, we assume it's a path that needs to be expanded
             if value.startswith('~'):
@@ -176,7 +188,7 @@ class BaseConfigLoader(object):
             config.set(key, value)
 
 
-class _InvalidConfigError(Exception):
+class InvalidConfigError(Exception):
     """
     An exception with the content of the configuration file.
     """
