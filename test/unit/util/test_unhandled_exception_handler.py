@@ -28,6 +28,16 @@ class TestUnhandledExceptionHandler(BaseUnitTestCase):
         exception_was_logged = self.log_handler.has_error('Unhandled exception handler caught exception.')
         self.assertTrue(exception_was_logged, 'Exception handler should log exceptions.')
 
+    def test_handles_platform_does_not_support_SIGINFO(self):
+        UnhandledExceptionHandler.reset_singleton()
+        mock_signal = self.patch('app.util.unhandled_exception_handler.signal')
+
+        def register_signal_handler(sig, _):
+            if sig == UnhandledExceptionHandler.SIGINFO:
+                raise ValueError
+        mock_signal.signal.side_effect = register_signal_handler
+        UnhandledExceptionHandler.singleton()
+
     def test_exceptions_in_teardown_callbacks_are_caught_and_logged(self):
         an_evil_callback = MagicMock(side_effect=Exception)
         self.exception_handler.add_teardown_callback(an_evil_callback)

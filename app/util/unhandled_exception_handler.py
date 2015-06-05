@@ -44,7 +44,11 @@ class UnhandledExceptionHandler(Singleton):
         # singleton is only ever initialized on the main thread.
         signal.signal(signal.SIGTERM, self._application_teardown_signal_handler)
         signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
-        signal.signal(self.SIGINFO, self._application_info_dump_signal_handler)
+        try:
+            signal.signal(self.SIGINFO, self._application_info_dump_signal_handler)
+        except ValueError:
+            self._logger.warning('Failed at registering signal handler for SIGINFO. This is expected if ClusterRunner'
+                                 'is running on Windows.')
 
     @classmethod
     def reset_signal_handlers(cls):
