@@ -4,7 +4,7 @@ import time
 
 from app.master.subjob import Subjob
 import app.util.fs as fs_util  # todo(joey): Rename util.py so we don't have package names conflicting with module names
-from app.util import log, util
+from app.util import analytics, log, util
 
 
 class SubjobExecutor(object):
@@ -90,7 +90,14 @@ class SubjobExecutor(object):
 
             atom_artifact_dirs.append(atom_artifact_dir)
 
-            self._execute_atom_command(atomic_command, atom_environment_vars, atom_artifact_dir)
+            job_name = self._project_type.job_name
+            atom_event_data = {'build_id': build_id, 'atom_id': atom_id, 'job_name': job_name, 'subjob_id': subjob_id}
+            analytics.record_event(analytics.ATOM_START, **atom_event_data)
+
+            exit_code = self._execute_atom_command(atomic_command, atom_environment_vars, atom_artifact_dir)
+
+            atom_event_data['exit_code'] = exit_code
+            analytics.record_event(analytics.ATOM_FINISH, **atom_event_data)
 
         # Generate mapping of atom directories (for archiving) to paths in the archive file
         targets_to_archive_paths = {atom_dir: os.path.basename(os.path.normpath(atom_dir))
@@ -116,11 +123,12 @@ class SubjobExecutor(object):
     def _execute_atom_command(self, atomic_command, atom_environment_vars, atom_artifact_dir):
         """
         Run the main command for this atom. Output the command, console output and exit code to
-        files in the atom artifact directory.
+        files in the atom artifact directory. Return the exit code.
 
         :type atomic_command: str
         :type atom_environment_vars: dict[str, str]
         :type atom_artifact_dir: str
+        :rtype: int
         """
         fs_util.create_dir(atom_artifact_dir)
 
@@ -139,3 +147,5 @@ class SubjobExecutor(object):
 
         time_output_path = os.path.join(atom_artifact_dir, Subjob.TIMING_FILE)
         fs_util.write_file('{:.2f}\n'.format(elapsed_time), time_output_path)
+
+        return exit_code
