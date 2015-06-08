@@ -31,6 +31,10 @@ class ProjectType(object):
         self._logger = log.get_logger(__name__)
         self._kill_event = Event()
 
+    @property
+    def job_name(self):
+        return self._job_name
+
     def slave_param_overrides(self):
         """
         Produce a set of values to override original project type params for use on a slave machine. Override in
