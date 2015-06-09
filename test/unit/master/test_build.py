@@ -1,4 +1,5 @@
 from queue import Queue
+from os.path import abspath, join
 import sys
 from threading import Event
 from unittest.mock import MagicMock, Mock
@@ -153,7 +154,7 @@ class TestBuild(BaseUnitTestCase):
         self.assertEqual(build._status(), BuildStatus.FINISHED)
 
     def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
-        Configuration['results_directory'] = '/tmp/results'
+        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
         build = Build(BuildRequest({}))
         build._project_type = self._create_mock_project_type()
         subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
@@ -162,11 +163,12 @@ class TestBuild(BaseUnitTestCase):
         payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
         build.complete_subjob(subjob.subjob_id(), payload=payload)
 
-        self.mock_fs.write_file.assert_called_once_with('Heroes in a half shell.', '/tmp/results/1/turtles.txt')
-        self.mock_fs.extract_tar.assert_called_once_with('/tmp/results/1/turtles.txt', delete=True)
+        expected_payload_sys_path = join(Configuration['results_directory'], '1', 'turtles.txt')
+        self.mock_fs.write_file.assert_called_once_with('Heroes in a half shell.', expected_payload_sys_path)
+        self.mock_fs.extract_tar.assert_called_once_with(expected_payload_sys_path, delete=True)
 
     def test_exception_is_raised_if_problem_occurs_writing_subjob(self):
-        Configuration['results_directory'] = '/tmp/results'
+        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
         build = Build(BuildRequest({}))
         build._project_type = self._create_mock_project_type()
         subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
