@@ -224,7 +224,9 @@ class BaseUnitTestCase(TestCase):
         for disabled_reason, patch_targets in blacklisted_methods.items():
             for patch_target in patch_targets:
                 # Suppress UnitTestPatchError, which happens if target has already been patched (no safeguard needed).
-                with suppress(UnitTestPatchError):
+                # Suppress AttributeError, which happens if trying to patch a target that is not available. (e.g.
+                # os.chown on Windows)
+                with suppress(UnitTestPatchError, AttributeError):
                     self._blackist_target(patch_target, disabled_reason)
 
     def _blackist_target(self, patch_target, disabled_reason):
