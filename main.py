@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import os
-import signal
 import sys
 import threading
 import time
@@ -239,8 +238,8 @@ def _start_app_force_kill_countdown(seconds):
         logger = log.get_logger(__name__)
         logger.error('ClusterRunner did not exit within {} seconds. App debug info:\n\n{}.',
                      seconds, app_info.get_app_info_string())
-        logger.critical('ClusterRunner seems to be hanging unexpectedly. Sending SIGKILL to self. Farewell!')
-        os.kill(os.getpid(), signal.SIGKILL)
+        logger.critical('ClusterRunner seems to be hanging unexpectedly. Hard killing the process. Farewell!')
+        os._exit(1)
 
     # Execute on a daemon thread so that the countdown itself will not prevent the app from exiting naturally.
     threading.Thread(target=log_app_debug_info_and_force_kill_after_delay, name='SuicideThread', daemon=True).start()
