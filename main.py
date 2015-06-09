@@ -137,7 +137,7 @@ def _parse_args(args):
 
 def _add_project_type_subparsers(build_parser):
     """
-    Iterate through each project type (e.g., docker, git, etc.) and add a separate parser with the appropriate
+    Iterate through each project type (e.g., git, etc.) and add a separate parser with the appropriate
     arguments.
 
     :type build_parser: ArgumentParser
