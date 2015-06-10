@@ -229,7 +229,12 @@ class ProjectType(object):
             try:
                 # todo: os.killpg sends a SIGTERM to all processes in the process group. If the immediate child process
                 # ("sh") dies but its child processes do not, we will leave them running orphaned.
-                os.killpg(pipe.pid, signal.SIGTERM)
+                try:
+                    os.killpg(pipe.pid, signal.SIGTERM)
+                except AttributeError:
+                    self._logger.warning('os.killpg is not available. This is expected if ClusterRunner is running'
+                                         'on Windows. Using os.kill instead.')
+                    os.kill(pipe.pid, signal.SIGTERM)
             except (PermissionError, ProcessLookupError) as ex:  # os.killpg will raise if process has already ended
                 self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: "{}".',
                                      pipe.pid, type(ex).__name__, ex)
