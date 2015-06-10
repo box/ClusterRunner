@@ -10,15 +10,6 @@ The only field that is consistently required for ALL types is the "type" field.
 
 Possible formats of valid incoming build requests:
 
-Docker:
-{
-    "type": "docker",
-    "image": "pod4101-automation1102.dev.box.net:webapp_v5_dev/latest",
-    "project_directory": "/box/www/current",
-    [OPTIONAL] "user": "jenkins",
-    [OPTIONAL] "host": "pod4101-tester.dev.box.net"
-}
-
 Git repo:
 {
     "type": "repo",

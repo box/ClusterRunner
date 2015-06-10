@@ -143,7 +143,7 @@ class BuildRequestHandler(object):
         """
         :type build_id: int
         :type job_config: JobConfig
-        :param project_type: the docker, directory, or git repo project_type that this build is running in
+        :param project_type: the directory, or git repo project_type that this build is running in
         :type project_type: project_type.project_type.ProjectType
         :rtype: list[Subjob]
         """

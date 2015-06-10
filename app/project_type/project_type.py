@@ -112,7 +112,6 @@ class ProjectType(object):
         """
         self.run_job_config_teardown(timeout=timeout)
         self._logger.info('ProjectType teardown complete.')
-        # TODO: run _teardown_executors for each executor if this is a Docker project_type, like _setup_executors above
 
     def run_job_config_setup(self):
         """
