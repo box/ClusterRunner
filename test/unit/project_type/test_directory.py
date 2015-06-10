@@ -1,3 +1,6 @@
+import os
+from os.path import join, splitdrive
+
 from genty import genty, genty_dataset
 
 from app.project_type.directory import Directory
@@ -8,20 +11,40 @@ from app.util.conf.configuration import Configuration
 @genty
 class TestDirectory(BaseUnitTestCase):
 
+    # os.getcwd() but without mount point or leading os.sep
+    # e.g. '/var/bar' would become 'var/bar' on POSIX and 'c:\\temp\\foo' would become 'temp\\foo'
+    _CWD_SYS_PATH_WITHOUT_SEP = splitdrive(os.getcwd())[1][len(os.sep):]
+    _TIMINGS_DIR_SYS_PATH = join(os.getcwd(), 'var', 'besttimingserver')
+
     def setUp(self):
         super().setUp()
-        Configuration['timings_directory'] = '/var/besttimingsever'
-        self.patch_abspath('app.project_type.directory.os.path.abspath', cwd='/usr/my_fake_cwd/')
+        Configuration['timings_directory'] = self._TIMINGS_DIR_SYS_PATH
 
+    # Using `os.path.join` here instead of hard coding the path so the test is cross-platform.
     @genty_dataset(
         relative_project_dir=(
-            'my_code/a_smart_project/',
+            join('my_code', 'a_smart_project'),
             'UnitTests',
-            '/var/besttimingsever/usr/my_fake_cwd/my_code/a_smart_project/UnitTests.timing.json'),
+            join(
+                _TIMINGS_DIR_SYS_PATH,
+                _CWD_SYS_PATH_WITHOUT_SEP,
+                'my_code',
+                'a_smart_project',
+                'UnitTests.timing.json',
+            ),
+        ),
         absolute_project_dir=(
-            '/Users/me/neato project',
+            join(os.getcwd(), 'Users', 'me', 'neato project'),
             'Functional Tests',
-            '/var/besttimingsever/Users/me/neato project/Functional Tests.timing.json'),
+            join(
+                _TIMINGS_DIR_SYS_PATH,
+                _CWD_SYS_PATH_WITHOUT_SEP,
+                'Users',
+                'me',
+                'neato project',
+                'Functional Tests.timing.json',
+            ),
+        ),
     )
     def test_timing_file_path(self, project_directory, fake_job_name, expected_timing_file_path):
 
