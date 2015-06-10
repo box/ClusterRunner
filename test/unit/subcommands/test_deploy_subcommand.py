@@ -1,4 +1,5 @@
 from functools import partial
+from os.path import join, expanduser
 from unittest.mock import MagicMock
 import uuid
 
@@ -34,56 +35,59 @@ class TestDeploySubcommand(BaseUnitTestCase):
         self.assertTrue(mock_DeployTarget_instance.deploy_binary.called)
         self.assertTrue(mock_DeployTarget_instance.deploy_conf.called)
 
-    def test_deploy_binaries_and_conf_doesnt_deploy_conf_if_localhost_with_same_in_use_conf(self):
-        self.patch('os.path.expanduser').return_value = '/home'
-        mock_DeployTarget = self.patch('app.subcommands.deploy_subcommand.DeployTarget')
-        mock_DeployTarget_instance = mock_DeployTarget.return_value
-        deploy_subcommand = DeploySubcommand()
-        deploy_subcommand._deploy_binaries_and_conf(
-            'localhost', 'username', 'exec', '/path/to/exec', '/home/.clusterrunner/clusterrunner.conf')
-        self.assertFalse(mock_DeployTarget_instance.deploy_conf.called)
-
-    def test_deploy_binaries_and_conf_deploys_conf_if_localhost_with_diff_in_use_conf(self):
-        self.patch('os.path.expanduser').return_value = '/home'
+    @genty_dataset(
+        # expect to deploy the binary but not the conf when the current executable path is not the same
+        # as the target executable path but the current conf path is the same as the target conf path
+        same_conf_path_different_exe_path=genty_args(
+            current_executable=join(expanduser('~'), '.clusterrunner', 'dist', 'clusterrunner2'),
+            in_use_conf_path=join(expanduser('~'), '.clusterrunner', 'clusterrunner.conf'),
+            expect_deploy_conf=False,
+            expect_deploy_binary=True,
+        ),
+        # expect not to deploy the binary or the conf when the current executable path is the same
+        # as the target executable path and the current conf path is the same as the target conf path
+        same_conf_path_same_exe_path=genty_args(
+            current_executable=join(expanduser('~'), '.clusterrunner', 'dist', 'clusterrunner'),
+            in_use_conf_path=join(expanduser('~'), '.clusterrunner', 'clusterrunner.conf'),
+            expect_deploy_conf=False,
+            expect_deploy_binary=False,
+        ),
+        # expect to deploy the conf but not the binary when the current conf path is not the same
+        # as the target conf path but the current binary path is the same as the target binary path
+        different_conf_path_same_exe_path=genty_args(
+            current_executable=join(expanduser('~'), '.clusterrunner', 'dist', 'clusterrunner'),
+            in_use_conf_path=join(expanduser('~'), '.clusterrunner', 'clusterrunner2.conf'),
+            expect_deploy_conf=True,
+            expect_deploy_binary=False,
+        ),
+        # expect to deploy the binary and the conf when the current executable path is not the same
+        # as the target executable path and the current conf path is not the same as the target conf path
+        different_conf_path_different_exe_path=genty_args(
+            current_executable=join(expanduser('~'), '.clusterrunner', 'dist', 'clusterrunner2'),
+            in_use_conf_path=join(expanduser('~'), '.clusterrunner', 'clusterrunner2.conf'),
+            expect_deploy_conf=True,
+            expect_deploy_binary=True,
+        ),
+    )
+    def test_deploy_binaries_and_conf_behaves_properly_if_conf_or_binary_is_in_use_on_localhost(
+            self,
+            current_executable,
+            in_use_conf_path,
+            expect_deploy_conf,
+            expect_deploy_binary,
+    ):
         mock_DeployTarget = self.patch('app.subcommands.deploy_subcommand.DeployTarget')
         mock_DeployTarget_instance = mock_DeployTarget.return_value
         deploy_subcommand = DeploySubcommand()
         deploy_subcommand._deploy_binaries_and_conf(
             'localhost',
             'username',
-            'exec',
-            '/path/to/exec',
-            '/home/.clusterrunner/clusterrunner_prime.conf'
+            current_executable,
+            join(expanduser('~'), '.clusterrunner', 'clusterrunner.tgz'),
+            in_use_conf_path
         )
-        self.assertTrue(mock_DeployTarget_instance.deploy_conf.called)
-
-    def test_deploy_binaries_and_conf_deploys_binaries_if_localhost_and_different_executable_path_in_use(self):
-        self.patch('os.path.expanduser').return_value = '/home'
-        mock_DeployTarget = self.patch('app.subcommands.deploy_subcommand.DeployTarget')
-        mock_DeployTarget_instance = mock_DeployTarget.return_value
-        deploy_subcommand = DeploySubcommand()
-        deploy_subcommand._deploy_binaries_and_conf(
-            'localhost',
-            'username',
-            '/home/.clusterrunner/dist/clusterrunner_rime',
-            '/home/.clusterrunner/clusterrunner.tgz',
-            '/clusterrunner.conf'
-        )
-        self.assertTrue(mock_DeployTarget_instance.deploy_binary.called)
-
-    def test_deploy_binaries_and_conf_doesnt_deploy_binaries_if_localhost_and_same_executable_path_in_use(self):
-        self.patch('os.path.expanduser').return_value = '/home'
-        mock_DeployTarget = self.patch('app.subcommands.deploy_subcommand.DeployTarget')
-        mock_DeployTarget_instance = mock_DeployTarget.return_value
-        deploy_subcommand = DeploySubcommand()
-        deploy_subcommand._deploy_binaries_and_conf(
-            'localhost',
-            'username',
-            '/home/.clusterrunner/dist/clusterrunner',
-            '/home/.clusterrunner/clusterrunner.tgz',
-            '/clusterrunner.conf'
-        )
-        self.assertFalse(mock_DeployTarget_instance.deploy_binary.called)
+        self.assertEqual(expect_deploy_binary, mock_DeployTarget_instance.deploy_binary.called)
+        self.assertEqual(expect_deploy_conf, mock_DeployTarget_instance.deploy_conf.called)
 
     def test_non_registered_slaves_returns_empty_list_if_all_registered(self):
         registered_hosts = ['host_1', 'host_2']
