@@ -35,9 +35,8 @@ class Directory(ProjectType):
         self._logger.debug('Project directory is {}'.format(project_directory))
 
     def _fetch_project(self):
-        check_command = 'test -d "{}"'.format(self.project_directory)
-        output, exit_code = self.execute_command_in_project(check_command, cwd='/')
-        if exit_code != 0:
+        dir_exists = os.path.isdir(self.project_directory)
+        if not dir_exists:
             raise RuntimeError('Could not find the directory "{}" on {}. Directory build mode is not supported on '
                                'clusters with remote slaves.'.format(self.project_directory, node()))
 
