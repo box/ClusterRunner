@@ -219,7 +219,7 @@ class _SlavesHandler(_ClusterMasterBaseAPIHandler):
     def post(self):
         slave_url = self.decoded_body.get('slave')
         num_executors = int(self.decoded_body.get('num_executors'))
-        response = self._cluster_master.connect_new_slave(slave_url, num_executors)
+        response = self._cluster_master.connect_slave(slave_url, num_executors)
         self._write_status(response, status_code=201)
 
     def get(self):

@@ -19,6 +19,7 @@ class TestClusterMaster(BaseUnitTestCase):
         super().setUp()
         self.patch('app.util.fs.create_dir')
         self.patch('app.util.fs.async_delete')
+        self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),
@@ -26,9 +27,9 @@ class TestClusterMaster(BaseUnitTestCase):
     )
     def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
         master = ClusterMaster()
-        master.connect_new_slave('raphael.turtles.gov', 10)
-        master.connect_new_slave('leonardo.turtles.gov', 10)
-        master.connect_new_slave('donatello.turtles.gov', 10)
+        master.connect_slave('raphael.turtles.gov', 10)
+        master.connect_slave('leonardo.turtles.gov', 10)
+        master.connect_slave('donatello.turtles.gov', 10)
 
         with self.assertRaises(ItemNotFoundError):
             master.get_slave(**get_slave_kwargs)
@@ -39,16 +40,16 @@ class TestClusterMaster(BaseUnitTestCase):
     )
     def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
         master = ClusterMaster()
-        master.connect_new_slave('raphael.turtles.gov', 10)
+        master.connect_slave('raphael.turtles.gov', 10)
 
         with self.assertRaises(ValueError):
             master.get_slave(**get_slave_kwargs)
 
     def test_get_slave_returns_expected_value_given_valid_arguments(self):
         master = ClusterMaster()
-        master.connect_new_slave('raphael.turtles.gov', 10)
-        master.connect_new_slave('leonardo.turtles.gov', 10)
-        master.connect_new_slave('donatello.turtles.gov', 10)
+        master.connect_slave('raphael.turtles.gov', 10)
+        master.connect_slave('leonardo.turtles.gov', 10)
+        master.connect_slave('donatello.turtles.gov', 10)
 
         actual_slave_by_id = master.get_slave(slave_id=2)
         actual_slave_by_url = master.get_slave(slave_url='leonardo.turtles.gov')
@@ -56,6 +57,48 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(2, actual_slave_by_id.id, 'Retrieved slave should have the same id as requested.')
         self.assertEqual('leonardo.turtles.gov', actual_slave_by_url.url,
                          'Retrieved slave should have the same url as requested.')
+
+    def test_connect_slave_adds_new_slave_if_slave_never_connected_before(self):
+        master = ClusterMaster()
+
+        master.connect_slave('never-before-seen.turtles.gov', 10)
+
+        self.assertEqual(1, len(master.all_slaves_by_id()), 'Exactly one slave should be registered with the master.')
+        self.assertIsNotNone(master.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
+                             'Registered slave does not have the expected url.')
+
+    def test_connect_slave_with_existing_dead_slave_marks_it_as_alive(self):
+        master = ClusterMaster()
+        master.connect_slave('existing-slave.turtles.gov', 10)
+        existing_slave = master.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
+        existing_slave.set_is_alive(False)
+        existing_slave_id = existing_slave.id
+
+        connect_response = master.connect_slave('existing-slave.turtles.gov', 10)
+
+        self.assertEqual(str(existing_slave_id), connect_response['slave_id'],
+                         'The re-connected slave should not have generated a new slave id.')
+        self.assertTrue(existing_slave.is_alive(use_cached=True),
+                        'The re-connected slave should have been marked as alive once reconnected.')
+        self.assertEquals(2, self.mock_slave_allocator.add_idle_slave.call_count,
+                        'Expected slave to be added to the idle slaves list.')
+
+    def test_connect_slave_with_existing_slave_running_build_gets_added_to_idle_slaves_list_and_cancels_build(self):
+        master = ClusterMaster()
+        master.connect_slave('running-slave.turtles.gov', 10)
+        build_mock = MagicMock(spec_set=Build)
+        master._all_builds_by_id[1] = build_mock
+        existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
+        existing_slave.current_build_id = 1
+        existing_slave_id = existing_slave.id
+
+        connect_response = master.connect_slave('running-slave.turtles.gov', 10)
+
+        self.assertEqual(str(existing_slave_id), connect_response['slave_id'],
+                         'The re-connected slave should not have generated a new slave id.')
+        self.assertEqual(2, self.mock_slave_allocator.add_idle_slave.call_count,
+                         'Expected slave to be added to the idle slaves list.')
+        self.assertTrue(build_mock.cancel.called, 'The build was not cancelled.')
 
     def test_update_build_with_valid_params_succeeds(self):
         build_id = 1
@@ -88,7 +131,7 @@ class TestClusterMaster(BaseUnitTestCase):
     def test_updating_slave_to_disconnected_state_should_mark_slave_as_dead(self):
         master = ClusterMaster()
         slave_url = 'raphael.turtles.gov'
-        master.connect_new_slave(slave_url, num_executors=10)
+        master.connect_slave(slave_url, num_executors=10)
         slave = master.get_slave(slave_url=slave_url)
         self.assertTrue(slave.is_alive())
 
@@ -99,7 +142,7 @@ class TestClusterMaster(BaseUnitTestCase):
     def test_updating_slave_to_disconnected_state_should_reset_slave_current_build_id(self):
         master = ClusterMaster()
         slave_url = 'raphael.turtles.gov'
-        master.connect_new_slave(slave_url, num_executors=10)
+        master.connect_slave(slave_url, num_executors=10)
         slave = master.get_slave(slave_url=slave_url)
         slave.current_build_id = 4
 
@@ -112,7 +155,7 @@ class TestClusterMaster(BaseUnitTestCase):
         fake_build = MagicMock()
         master.get_build = MagicMock(return_value=fake_build)
         slave_url = 'raphael.turtles.gov'
-        master.connect_new_slave(slave_url, 10)
+        master.connect_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
 
         master.handle_slave_state_update(slave, SlaveState.SETUP_COMPLETED)
@@ -122,7 +165,7 @@ class TestClusterMaster(BaseUnitTestCase):
     def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
         master = ClusterMaster()
         slave_url = 'raphael.turtles.gov'
-        master.connect_new_slave(slave_url, 10)
+        master.connect_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
         slave.set_shutdown_mode = Mock()
 
@@ -133,7 +176,7 @@ class TestClusterMaster(BaseUnitTestCase):
     def test_updating_slave_to_nonexistent_state_should_raise_bad_request_error(self):
         master = ClusterMaster()
         slave_url = 'raphael.turtles.gov'
-        master.connect_new_slave(slave_url, 10)
+        master.connect_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
 
         with self.assertRaises(BadRequestError):
