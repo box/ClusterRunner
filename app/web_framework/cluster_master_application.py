@@ -41,7 +41,10 @@ class ClusterMasterApplication(ClusterApplication):
                     ]),
                     RouteNode(r'queue', _QueueHandler),
                     RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
-                        RouteNode(r'(\d+)', _SlaveHandler, 'slave')
+                        RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
+                            RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown')
+                        ]),
+                        RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown')
                     ]),
                     RouteNode(r'eventlog', _EventlogHandler)
                 ])
@@ -253,3 +256,21 @@ class _EventlogHandler(_ClusterMasterBaseAPIHandler):
         self.write({
             'events': analytics.get_events(since_timestamp, since_id),
         })
+
+
+class _SlaveShutdownHandler(_ClusterMasterBaseAPIHandler):
+    @authenticated
+    def post(self, slave_id):
+        slaves_to_shutdown = [int(slave_id)]
+
+        self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)
+
+
+class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
+    @authenticated
+    def post(self):
+        shutdown_all = self.decoded_body.get('shutdown_all')
+        slaves_to_shutdown = self._cluster_master.all_slaves_by_id().keys() if shutdown_all else\
+            [int(slave_id) for slave_id in self.decoded_body.get('slaves')]
+
+        self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)

@@ -34,7 +34,7 @@ class BuildRunner(object):
         :type request_params: dict
         :type secret: str
         """
-        self._master_url = self._ensure_url_has_scheme(master_url)
+        self._master_url = master_url
         self._request_params = request_params
         self._secret = secret
         self._build_id = None
@@ -170,17 +170,6 @@ class BuildRunner(object):
             time.sleep(1)
 
         raise _BuildRunnerError('Build timed out after {} seconds.'.format(timeout))
-
-    def _ensure_url_has_scheme(self, url):
-        """
-        If url does not start with 'http' or 'https', add 'http://' to the beginning.
-        :type url: str
-        :rtype: str
-        """
-        url = url.strip()
-        if not url.startswith('http'):
-            url = 'http://' + url
-        return url
 
 
 class _BuildRunnerError(Exception):

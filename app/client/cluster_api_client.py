@@ -14,9 +14,20 @@ class ClusterAPIClient(object):
         :param base_api_url: The base API url of the service (e.g., 'http://localhost:43000')
         :type base_api_url: str
         """
-        self._api = UrlBuilder(base_api_url)
+        self._api = UrlBuilder(self._ensure_url_has_scheme(base_api_url))
         self._network = Network()
         self._logger = log.get_logger(__name__)
+
+    def _ensure_url_has_scheme(self, url):
+        """
+        If url does not start with 'http' or 'https', add 'http://' to the beginning.
+        :type url: str
+        :rtype: str
+        """
+        url = url.strip()
+        if not url.startswith('http'):
+            url = 'http://' + url
+        return url
 
 
 class ClusterMasterAPIClient(ClusterAPIClient):
@@ -88,9 +99,9 @@ class ClusterMasterAPIClient(ClusterAPIClient):
                                             'URL: {}, Content:{}'.format(build_status_url, response_data))
         return response_data
 
-    def block_until_build_finished(self, build_id, timeout=None, build_in_progress_callback=None):
+    def block_until_build_started(self, build_id, timeout=None, build_in_progress_callback=None):
         """
-        Poll the build status endpoint until the build is finished or until the timeout is reached.
+        Poll the build status endpoint until the build is no longer queued.
 
         :param build_id: The id of the build to wait for
         :type build_id: int
@@ -100,16 +111,92 @@ class ClusterMasterAPIClient(ClusterAPIClient):
             yet finished. This would be useful, for example, for logging build progress.
         :type build_in_progress_callback: callable
         """
+        self.block_until_build_status(
+            build_id,
+            [BuildStatus.BUILDING, BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED],
+            timeout,
+            build_in_progress_callback
+        )
+
+    def block_until_build_finished(self, build_id, timeout=None, build_in_progress_callback=None):
+        """
+        Poll the build status endpoint until the build has finished.
+
+        :param build_id: The id of the build to wait for
+        :type build_id: int
+        :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
+        :type timeout: int | None
+        :param build_in_progress_callback: A callback that will be called with the response data if the build has not
+            yet finished. This would be useful, for example, for logging build progress.
+        :type build_in_progress_callback: callable
+        """
+        self.block_until_build_status(
+            build_id,
+            [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED],
+            timeout,
+            build_in_progress_callback
+        )
+
+    def block_until_build_status(self, build_id, build_statuses, timeout=None, build_in_progress_callback=None):
+        """
+        Poll the build status endpoint until the build status matches a set of allowed statuses
+
+        :param build_id: The id of the build to wait for
+        :type build_id: int
+        :param build_statuses: A list of build statuses which we are waiting for.
+        :type build_statuses: list[str]
+        :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
+        :type timeout: int | None
+        :param build_in_progress_callback: A callback that will be called with the response data if the build has not
+            yet finished. This would be useful, for example, for logging build progress.
+        :type build_in_progress_callback: callable
+        """
         def is_build_finished():
             response_data = self.get_build_status(build_id)
             build_data = response_data['build']
-            if build_data['status'] in (BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED):
+            if build_data['status'] in build_statuses:
                 return True
             if build_in_progress_callback:
                 build_in_progress_callback(build_data)
             return False
 
         poll.wait_for(is_build_finished, timeout_seconds=timeout)
+
+    def get_slaves(self):
+        """
+        Return a dictionary of slaves connected to the master.
+        :rtype: dict
+        """
+        slave_url = self._api.url('slave')
+        response = self._network.get(slave_url)
+        return response.json()
+
+    def graceful_shutdown_slaves_by_id(self, slave_ids):
+        """
+        :type slave_ids: list[int]
+        :rtype: requests.Response
+        """
+        return self._graceful_shutdown_slaves({'slaves': slave_ids})
+
+    def graceful_shutdown_all_slaves(self):
+        """
+        :rtype: request.Response
+        """
+        return self._graceful_shutdown_slaves({'shutdown_all': True})
+
+    def _graceful_shutdown_slaves(self, body):
+        """
+        :type body: dict
+        :rtype: requests.Response
+        """
+        shutdown_url = self._api.url('slave', 'shutdown')
+        response = self._network.post_with_digest(
+            shutdown_url,
+            body,
+            Secret.get(),
+            error_on_failure=True
+        )
+        return response
 
 
 class ClusterSlaveAPIClient(ClusterAPIClient):

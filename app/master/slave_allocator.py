@@ -2,6 +2,8 @@ from app.util.log import get_logger
 from app.util.ordered_set_queue import OrderedSetQueue
 from app.util.safe_thread import SafeThread
 
+from app.master.slave import SlaveMarkedForShutdownError
+
 
 class SlaveAllocator(object):
     """
@@ -39,8 +41,8 @@ class SlaveAllocator(object):
             while build_waiting_for_slave.needs_more_slaves():
                 claimed_slave = self._idle_slaves.get()
 
-                # Remove dead slaves from the idle queue
-                if not claimed_slave.is_alive(use_cached=False):
+                # Remove dead and shutdown slaves from the idle queue
+                if claimed_slave.is_shutdown() or not claimed_slave.is_alive(use_cached=False):
                     continue
 
                 # The build may have completed while we were waiting for an idle slave, so check one more time.
@@ -61,5 +63,8 @@ class SlaveAllocator(object):
 
         :type slave: Slave
         """
-        slave.mark_as_idle()
-        self._idle_slaves.put(slave)
+        try:
+            slave.mark_as_idle()
+            self._idle_slaves.put(slave)
+        except SlaveMarkedForShutdownError:
+            pass

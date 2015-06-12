@@ -97,7 +97,7 @@ JobWithSetupAndTeardown:
     teardown_build:
         - echo "Doing build teardown."
         - sleep 1
-        - ALL_SUBJOB_FILES=$(ls $PROJECT_DIR/subjob_file_*.txt)
+        - ALL_SUBJOB_FILES=$(ls $PROJECT_DIR/subjob_file_*.txt || mktemp -t clusterrunner)
         - echo "teardown." | tee -a $ALL_SUBJOB_FILES
 
 """,

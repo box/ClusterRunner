@@ -2,7 +2,7 @@ from unittest.mock import Mock, MagicMock
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.slave import Slave
+from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave
 from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -99,6 +99,58 @@ class TestSlave(BaseUnitTestCase):
         is_slave_alive = slave.is_alive(use_cached=False)
 
         self.assertTrue(is_slave_alive)
+
+    def test_mark_as_idle_raises_when_executors_are_in_use(self):
+        slave = self._create_slave()
+        slave._num_executors_in_use.increment()
+
+        self.assertRaises(Exception, slave.mark_as_idle)
+
+    def test_mark_as_idle_raises_when_slave_is_in_shutdown_mode(self):
+        slave = self._create_slave()
+        slave._is_in_shutdown_mode = True
+        slave.kill = Mock()
+
+        self.assertRaises(SlaveMarkedForShutdownError, slave.mark_as_idle)
+        slave.kill.assert_called_once_with()
+
+    def test_start_subjob_raises_if_slave_is_dead(self):
+        slave = self._create_slave()
+        slave._is_alive = False
+
+        self.assertRaises(DeadSlaveError, slave.start_subjob, Mock())
+
+    def test_start_subjob_raises_if_slave_is_shutdown(self):
+        slave = self._create_slave()
+        slave._is_in_shutdown_mode = True
+
+        self.assertRaises(SlaveMarkedForShutdownError, slave.start_subjob, Mock())
+
+    def test_set_shutdown_mode_should_set_is_shutdown_and_not_kill_slave_if_slave_has_a_build(self):
+        slave = self._create_slave()
+        slave.current_build_id = 1
+        slave.kill = Mock()
+
+        slave.set_shutdown_mode()
+
+        self.assertTrue(slave._is_in_shutdown_mode)
+        assert not slave.kill.called
+
+    def test_set_shutdown_mode_should_kill_slave_if_slave_has_no_build(self):
+        slave = self._create_slave()
+        slave.kill = Mock()
+
+        slave.set_shutdown_mode()
+
+        slave.kill.assert_called_once_with()
+
+    def test_kill_should_post_to_slave_api(self):
+        slave = self._create_slave()
+        slave._network.post_with_digest = Mock()
+
+        slave.kill()
+
+        assert slave._network.post_with_digest.called
 
     def _create_slave(self, **kwargs):
         """

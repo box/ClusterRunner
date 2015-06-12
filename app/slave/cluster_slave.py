@@ -173,11 +173,9 @@ class ClusterSlave(object):
         for executor in self.executors_by_id.values():
             executor.kill()
 
-        if not self._project_type:
-            return  # There is no build to tear down! (Slave is idle.)
-
-        if not self._build_teardown_coin.spend():
-            raise BuildTeardownError('Build teardown process was requested more than once for the same build.')
+        # Order matters! Spend the coin if it has been initialized.
+        if not self._build_teardown_coin or not self._build_teardown_coin.spend() or not self._project_type:
+            return  # There is no build to tear down or teardown is already in progress.
 
         self._logger.info('Executing teardown for build {}.', self._current_build_id)
         # todo: Catch exceptions raised during teardown_build so we don't skip notifying master of idle/disconnect.
@@ -324,7 +322,9 @@ class ClusterSlave(object):
                                       secret=Secret.get(), error_on_failure=True)
 
     def kill(self):
-        # TODO(dtran): Kill the threads and this server more gracefully
+        """
+        Exits without error.
+        """
         sys.exit(0)
 
 
@@ -333,11 +333,8 @@ class SlaveState(str, Enum):
     An enum of possible slave states. Also inherits from string to allow comparisons with other strings (which is
     useful when including these values in API responses).
     """
-    DISCONNECTED = 'DISCONNECTED'
-    IDLE = 'IDLE'
-    SETUP_COMPLETED = 'SETUP_COMPLETE'
-    SETUP_FAILED = 'SETUP_FAILED'
-
-
-class BuildTeardownError(Exception):
-    pass
+    DISCONNECTED = 'DISCONNECTED'  # The master is not in communication with the slave.
+    SHUTDOWN = 'SHUTDOWN'  # The slave will not accept additional builds, and will disconnect when finished.
+    IDLE = 'IDLE'  # The slave is waiting for a build.
+    SETUP_COMPLETED = 'SETUP_COMPLETE'  # The slave has completed a build's setup and is waiting for subjobs.
+    SETUP_FAILED = 'SETUP_FAILED'  # A build's setup did not complete successfully, the slave is now stuck.

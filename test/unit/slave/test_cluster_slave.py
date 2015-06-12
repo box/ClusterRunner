@@ -7,9 +7,10 @@ from threading import Event
 from unittest.mock import ANY, call, MagicMock, Mock, mock_open, patch
 
 from app.project_type.project_type import SetupFailureError
-from app.slave.cluster_slave import BuildTeardownError, ClusterSlave, SlaveState
+from app.slave.cluster_slave import ClusterSlave, SlaveState
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
+from app.util.single_use_coin import SingleUseCoin
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -88,6 +89,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave(num_executors=3)
         slave.connect_to_master(self._FAKE_MASTER_URL)
+        slave._build_teardown_coin = SingleUseCoin()
         self.trigger_graceful_app_shutdown()
 
         expected_disconnect_call = call.mock_network.put_with_digest(disconnect_api_url, request_params=ANY,
@@ -145,7 +147,7 @@ class TestClusterSlave(BaseUnitTestCase):
         self.mock_network.put_with_digest = fake_network_post_and_put
         return subjob_done_event, teardown_done_event
 
-    def test_executing_build_teardown_multiple_times_will_raise_exception(self):
+    def test_executing_build_teardown_multiple_times_will_not_raise_exception(self):
         self.mock_network.post().status_code = http.client.OK
         slave = self._create_cluster_slave()
         project_type_mock = self.patch('app.slave.cluster_slave.util.create_project_type').return_value
@@ -154,7 +156,7 @@ class TestClusterSlave(BaseUnitTestCase):
         project_type_mock.fetch_project.side_effect = self.no_args_side_effect(setup_complete_event.set)
         # This test uses teardown_event to cause a thread to block on the teardown_build() call.
         teardown_event = Event()
-        project_type_mock.teardown_build.side_effect = self.no_args_side_effect(teardown_event.wait)
+        project_type_mock.teardown_build = Mock()
 
         slave.connect_to_master(self._FAKE_MASTER_URL)
         slave.setup_build(build_id=123, project_type_params={'type': 'Fake'}, build_executor_start_index=0)
@@ -163,10 +165,10 @@ class TestClusterSlave(BaseUnitTestCase):
         # Start the first thread that does build teardown. This thread will block on teardown_build().
         first_thread = SafeThread(target=slave._do_build_teardown_and_reset)
         first_thread.start()
-        # Call build teardown() again and it should raise an exception.
-        with self.assertRaises(BuildTeardownError):
-            slave._do_build_teardown_and_reset()
+        # Call build teardown() again and it should not run teardown again
+        slave._do_build_teardown_and_reset()
 
+        project_type_mock.teardown_build.assert_called_once_with(timeout=None)
         # Cleanup: Unblock the first thread and let it finish. We use the unhandled exception handler just in case any
         # exceptions occurred on the thread (so that they'd be passed back to the main thread and fail the test).
         teardown_event.set()
