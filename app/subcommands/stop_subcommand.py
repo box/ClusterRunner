@@ -1,7 +1,8 @@
 import os
-import psutil
 import signal
 import time
+
+import psutil
 
 from app.subcommands.subcommand import Subcommand
 from app.util import log
@@ -69,7 +70,7 @@ class StopSubcommand(Subcommand):
         # doesn't, perform a SIGKILL.
         # @TODO: use util.timeout functionality once it gets merged
         procs_to_kill = proc.children(recursive=True) + [proc]
-        self.kill_running_procs(procs_to_kill, signal.SIGTERM)
+        self._terminate_running_procs(procs_to_kill)
         sigterm_start = time.time()
 
         while (time.time()-sigterm_start) <= self.SIGTERM_SIGKILL_GRACE_PERIOD_SEC:
@@ -78,22 +79,17 @@ class StopSubcommand(Subcommand):
             time.sleep(0.1)
 
         if any([proc_to_kill.is_running() for proc_to_kill in procs_to_kill]):
-            self.kill_running_procs(procs_to_kill, signal.SIGKILL)
+            self._kill_running_procs(procs_to_kill)
             return
         else:
             self._logger.info("Killed all running clusterrunner processes with SIGTERM")
 
-    def kill_running_procs(self, procs_to_kill, sig):
-        """
-        :type procs_to_kill: list[psutil.Process]
-        :type sig: int
-        """
-        known_signal_to_str = {
-            signal.SIGTERM: 'SIGTERM',
-            signal.SIGKILL: 'SIGKILL'
-        }
-        running_procs = [proc for proc in procs_to_kill if proc.is_running()]
-        for proc in running_procs:
-            self._logger.info("Sending {0} to PID {1}".format(
-                known_signal_to_str.get(sig, "signal " + str(sig)), proc.pid))
-            os.kill(proc.pid, sig)
+    def _terminate_running_procs(self, procs_to_termintate):
+        for proc in [p for p in procs_to_termintate if p.is_running()]:
+            self._logger.info("Sending SIGTERM to PID {}", proc.pid)
+            os.kill(proc.pid, signal.SIGTERM)
+
+    def _kill_running_procs(self, procs_to_kill):
+        for proc in [p for p in procs_to_kill if p.is_running()]:
+            self._logger.info("Sending SIGKILL to PID {}", proc.pid)
+            os.kill(proc.pid, signal.SIGKILL)
