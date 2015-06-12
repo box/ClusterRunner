@@ -47,8 +47,28 @@ class TestDirectory(BaseUnitTestCase):
         ),
     )
     def test_timing_file_path(self, project_directory, fake_job_name, expected_timing_file_path):
-
         directory_env = Directory(project_directory)
         actual_timing_file_path = directory_env.timing_file_path(fake_job_name)
 
         self.assertEqual(actual_timing_file_path, expected_timing_file_path)
+
+    @genty_dataset(
+        (True, False),
+        (False, True),
+    )
+    def test_fetch_project_raises_runtime_error_only_if_project_dir_does_not_exist(
+            self, expect_dir_exists,
+            expect_runtime_error,
+    ):
+        # Arrange
+        directory_env = Directory(join(os.getcwd(), 'my_project'))
+        mock_os_path_isdir = self.patch('os.path.isdir')
+        mock_os_path_isdir.return_value = expect_dir_exists
+        self.patch('app.project_type.directory.node')
+
+        # Act & Assert
+        if expect_runtime_error:
+            with self.assertRaises(RuntimeError):
+                directory_env._fetch_project()
+        else:
+            directory_env._fetch_project()
