@@ -143,7 +143,7 @@ class BuildRequestHandler(object):
         """
         :type build_id: int
         :type job_config: JobConfig
-        :param project_type: the docker, directory, or git repo project_type that this build is running in
+        :param project_type: the directory, or git repo project_type that this build is running in
         :type project_type: project_type.project_type.ProjectType
         :rtype: list[Subjob]
         """
@@ -173,14 +173,14 @@ class BuildRequestHandler(object):
         If not, use the default AtomGrouper (groups each atom into its own subjob).
 
         :param atoms: all of the atoms to be run this time
-        :type atoms: list[str]
+        :type atoms: list[app.master.atom.Atom]
         :param max_executors: the maximum number of executors for this build
         :type max_executors: int
         :param timing_file_path: path to where the timing data file would be stored (if it exists) for this job
         :type timing_file_path: str
         :type project_directory: str
         :return: the grouped atoms (in the form of list of lists of strings)
-        :rtype: list[list[str]]
+        :rtype: list[list[app.master.atom.Atom]]
         """
         atom_time_map = None
 

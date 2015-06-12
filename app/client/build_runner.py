@@ -129,7 +129,6 @@ class BuildRunner(object):
 
             if build_data['status'] == BuildStatus.ERROR:
                 message = 'Build aborted due to error: {}'.format(build_data.get('error_message'))
-                self._logger.error(message)
                 raise _BuildRunnerError(message)
 
             if build_data['status'] == BuildStatus.BUILDING:

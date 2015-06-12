@@ -201,7 +201,13 @@ class DeploySubcommand(Subcommand):
         network = Network()
 
         def all_slaves_registered():
-            return len(self._registered_slave_hostnames(slave_api_url, network)) == len(slaves_to_validate)
+            registered_slave_uids = set(
+                [Network.get_host_id(x) for x in self._registered_slave_hostnames(slave_api_url, network)]
+            )
+            slaves_to_validate_uids = set(
+                [Network.get_host_id(x) for x in slaves_to_validate]
+            )
+            return registered_slave_uids == slaves_to_validate_uids
 
         if not wait_for(
                 boolean_predicate=all_slaves_registered,
@@ -261,21 +267,17 @@ class DeploySubcommand(Subcommand):
         :return: list of slave hostnames that haven't registered with the master service yet
         :rtype: list[str]
         """
-        registered_rsa_keys = []
+        registered_host_ids = [Network.get_host_id(slave) for slave in registered_slaves]
 
-        for registered_slave in registered_slaves:
-            registered_rsa_keys.append(Network.rsa_key(registered_slave))
+        slaves_to_validate_host_id_pairs = {
+            Network.get_host_id(slave): slave
+            for slave in slaves_to_validate
+        }
 
-        slaves_to_validate_rsa_key_host_pairs = {}
-
-        for slave_to_validate in slaves_to_validate:
-            slaves_to_validate_rsa_key_host_pairs[Network.rsa_key(slave_to_validate)] = slave_to_validate
-
-        non_registered_slave_hosts = []
-
-        for rsa_key in slaves_to_validate_rsa_key_host_pairs:
-            if rsa_key not in registered_rsa_keys:
-                non_registered_slave_hosts.append(slaves_to_validate_rsa_key_host_pairs[rsa_key])
+        non_registered_slave_hosts = [
+            slaves_to_validate_host_id_pairs[host_id] for host_id in slaves_to_validate_host_id_pairs
+            if host_id not in registered_host_ids
+        ]
 
         return non_registered_slave_hosts
 

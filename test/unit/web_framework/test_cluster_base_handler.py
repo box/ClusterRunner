@@ -4,7 +4,7 @@ from unittest.mock import ANY, call, MagicMock
 
 from app.util.conf.configuration import Configuration
 from app.web_framework.cluster_application import ClusterApplication
-from app.web_framework.cluster_base_handler import ClusterBaseHandler
+from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -24,7 +24,7 @@ class TestClusterBaseHandler(BaseUnitTestCase):
         if request_origin:
             mock_request.headers['Origin'] = request_origin
 
-        handler = ClusterBaseHandler(mock_application, mock_request)
+        handler = ClusterBaseAPIHandler(mock_application, mock_request)
         handler.set_header = MagicMock()
         handler.set_default_headers()
 
@@ -41,7 +41,7 @@ class TestClusterBaseHandler(BaseUnitTestCase):
         Configuration['cors_allowed_origins_regex'] = cors_conf_value
         mock_request.headers['Origin'] = request_origin
 
-        handler = ClusterBaseHandler(mock_application, mock_request)
+        handler = ClusterBaseAPIHandler(mock_application, mock_request)
         handler.set_header = MagicMock()
         handler.set_default_headers()
 

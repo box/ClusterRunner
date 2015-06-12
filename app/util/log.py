@@ -59,7 +59,7 @@ def get_logger(logger_name=None):
     :return: The logger instance
     :rtype: logbook.Logger
     """
-    name_without_package = logger_name.rsplit('.', 1)[-1]  # e.g., converts "project_type.docker" to "docker"
+    name_without_package = logger_name.rsplit('.', 1)[-1]  # e.g., converts "project_type.git" to "git"
     return Logger(name_without_package)
 
 

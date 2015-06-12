@@ -3,6 +3,7 @@ import functools
 from os.path import dirname, join, realpath
 import requests
 from subprocess import DEVNULL, Popen
+import sys
 import tempfile
 
 from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAPIClient
@@ -96,6 +97,7 @@ class FunctionalTestCluster(object):
         self._master_eventlog_name = tempfile.NamedTemporaryFile(delete=False).name
         master_hostname = 'localhost'
         master_cmd = [
+            sys.executable,
             self._app_executable,
             'master',
             '--port', str(self._MASTER_PORT),
@@ -150,6 +152,7 @@ class FunctionalTestCluster(object):
             self._slave_eventlog_names.append(slave_eventlog)
 
             slave_cmd = [
+                sys.executable,
                 self._app_executable,
                 'slave',
                 '--port', str(slave_port),

@@ -1,167 +1,181 @@
-import psutil
+from io import StringIO
+import os
+from os.path import join
 import signal
-from unittest.mock import mock_open, Mock
+from unittest.mock import call, mock_open, Mock
 
-from app.subcommands.stop_subcommand import StopSubcommand
+import psutil
+
+from app.subcommands.stop_subcommand import Configuration, StopSubcommand
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
-NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL = 4
 
 class TestStopSubcommand(BaseUnitTestCase):
 
-
     def setUp(self):
         super().setUp()
-        self.patch('os.remove')
-        self.os_kill_patch = self.patch('os.kill')
-        self.patch('time.sleep')
-        self.os_path_exists_patch = self.patch('os.path.exists')
-        self.psutil_pid_exists_patch = self.patch('psutil.pid_exists')
+        self._mock_os_path_exists = self.patch('os.path.exists')
+        self._mock_os_kill = self.patch('os.kill')
+        self._mock_psutil_pid_exists = self.patch('psutil.pid_exists')
+        self._mock_psutil_process = self.patch('psutil.Process')
 
-    def _mock_open(self, read_data):
-        open_mock = mock_open(read_data=read_data)
-        self.patch('app.subcommands.stop_subcommand.open', new=open_mock, create=True)
+        self._fake_slave_pid_file_sys_path = join(os.getcwd(), 'slave_pid_file')
+        self._fake_master_pid_file_sys_path = join(os.getcwd(), 'master_pid_file')
+        Configuration['slave_pid_file'] = self._fake_slave_pid_file_sys_path
+        Configuration['master_pid_file'] = self._fake_master_pid_file_sys_path
 
-    def test_stop_subcommand_doesnt_kill_pid_if_pid_file_doesnt_exist(self):
-        self.os_path_exists_patch.return_value = False
+        self._fake_slave_pid = 1111
+        self._fake_master_pid = 2222
+        self._mock_open = mock_open()
+        self._mock_open.side_effect = [
+            StringIO(str(self._fake_slave_pid)),     # pretend to be fhe slave pid file object
+            StringIO(str(self._fake_master_pid)),    # pretend to be the master pid file object
+        ]
 
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
+        self.patch('app.subcommands.stop_subcommand.open', new=self._mock_open, create=True)
+        self._mock_os_remove = self.patch('os.remove')
 
-        self.assertFalse(self.os_kill_patch.called)
+        self._stop_subcommand = StopSubcommand()
 
-    def test_stop_subcommand_doesnt_kill_pid_if_pid_file_exists_but_pid_doesnt_exist(self):
-        self.os_path_exists_patch.return_value = True
-        self.psutil_pid_exists_patch.side_effect = [False]
-        self._mock_open(read_data='9999')
+        # setup the return value of time.time() and SIGTERM grace period so the test won't actually sleep
+        self._stop_subcommand.SIGTERM_SIGKILL_GRACE_PERIOD_SEC = -1
+        mock_time = self.patch('time.time')
+        mock_time.return_value = 0
 
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
+    def test_stop_subcommand_does_not_kill_if_pid_file_does_not_exist(self):
+        # Arrange
+        self._mock_os_path_exists.return_value = False
 
-        self.assertFalse(self.os_kill_patch.called)
+        # Act
+        self._stop_subcommand.run(None)
+
+        # Assert
+        self.assertFalse(self._mock_os_kill.called)
+        self.assertEqual(
+            [
+                call(self._fake_slave_pid_file_sys_path),
+                call(self._fake_master_pid_file_sys_path),
+            ],
+            self._mock_os_path_exists.call_args_list,
+        )
+
+    def test_stop_subcommand_does_not_kill_pid_if_pid_does_not_exist(self):
+        # Arrange
+        self._mock_os_path_exists.return_value = True
+        self._mock_psutil_pid_exists.return_value = False
+
+        # Act
+        self._stop_subcommand.run(None)
+
+        # Assert
+        self.assertFalse(self._mock_os_kill.called)
+        self.assertEqual(
+            [
+                call(self._fake_slave_pid_file_sys_path),
+                call(self._fake_master_pid_file_sys_path),
+            ],
+            self._mock_os_remove.call_args_list,
+        )
 
     def test_stop_subcommand_doesnt_kill_pid_if_pid_file_and_pid_exist_but_command_isnt_whitelisted(self):
-        self.os_path_exists_patch.return_value = True
-        self.psutil_pid_exists_patch.side_effect = [True]
-        self._mock_open(read_data='9999')
-        mock_psutil_process = self.patch('psutil.Process').return_value
-        mock_psutil_process.cmdline.return_value = ['python', './SOME_OTHER_main.py', 'other_master']
+        # Arrange
+        self._mock_os_path_exists.return_value = True
+        self._mock_psutil_pid_exists.return_value = True
+        master_process = Mock(psutil.Process)
+        master_process.cmdline.return_value = ['python', './foo.py']
+        slave_process = Mock(psutil.Process)
+        slave_process.cmdline.return_value = ['python', './bar.py']
+        self._mock_psutil_process.side_effect = [
+            slave_process,
+            master_process,
+        ]
 
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
+        # Act
+        self._stop_subcommand.run(None)
 
-        self.assertFalse(self.os_kill_patch.called)
+        # Assert
+        self.assertFalse(self._mock_os_kill.called)
 
-    def setup_environment_for_os_kill(self, main_proc_pid):
-        self.os_path_exists_patch.return_value = True
-        self._mock_open(read_data=str(main_proc_pid))
-        self.psutil_pid_exists_patch.side_effect = [True, False, False]
-        self.mock_time_so_while_loop_ran_once()
+    def _create_mock_process(self, pid, child_processes=None, cmdline=None):
+        proc = Mock(psutil.Process)
+        proc.pid = pid
+        proc.is_running.return_value = True
+        if cmdline:
+            proc.cmdline.return_value = cmdline
+        proc.children.return_value = child_processes if child_processes else []
+        return proc
 
-    def mock_time_so_while_loop_ran_once(self):
-        mock_time = self.patch('app.subcommands.stop_subcommand.time')
-        start_time = 0
-        mock_time.time.side_effect = [
-            start_time,
-            start_time + StopSubcommand.SIGTERM_SIGKILL_GRACE_PERIOD_SEC - 1,
-            start_time + StopSubcommand.SIGTERM_SIGKILL_GRACE_PERIOD_SEC + 1]
+    def _setup_processes_to_be_killed(self):
+        self._mock_os_path_exists.return_value = True
+        self._mock_psutil_pid_exists.return_value = True
 
-    def setup_main_and_child_proc(self, main_proc_pid, main_is_running_threshold, child_pid,
-                                  child_is_running_threshold):
-        self.patch('psutil.Process').return_value = self.create_process_mock(
-            pid=main_proc_pid,
-            is_running_threshold=main_is_running_threshold,
-            cmdline=['python', './main.py', 'master'],
-            children=[
-                self.create_process_mock(pid=child_pid, is_running_threshold=child_is_running_threshold)
-            ]
+        master_process = self._create_mock_process(
+            self._fake_master_pid,
+            cmdline=['python', 'main.py', 'master'],
         )
 
-    def create_process_mock(self, pid, is_running_threshold=None, cmdline=None, children=None):
-        m = Mock(spec_set=psutil.Process)
-        m.pid = pid
-        is_running_threshold = is_running_threshold if is_running_threshold else 0
-        m.is_running.side_effect = [True] * is_running_threshold + [False] * 10000
-        if cmdline:
-            m.cmdline.return_value = cmdline
+        slave_child_process = self._create_mock_process(3333)
+        slave_process = self._create_mock_process(
+            self._fake_slave_pid,
+            child_processes=[slave_child_process],
+            cmdline=['python', 'main.py', 'slave'],
+        )
 
-        m.children.return_value = children if children else []
-        return m
+        self._mock_psutil_process.side_effect = [
+            slave_process,
+            master_process,
+        ]
+
+
+        return master_process, slave_process, slave_child_process
 
     def test_stop_subcommand_kills_pid_with_sigterm_if_pid_file_and_pid_exist_and_command_is_whitelisted(self):
-        main_proc_pid = 9999
-        threshold = NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL - 1
-        child_pid = main_proc_pid + 1
+        # Arrange
+        master_process, slave_process, slave_child_process = self._setup_processes_to_be_killed()
 
-        self.setup_environment_for_os_kill(main_proc_pid)
-        self.setup_main_and_child_proc(main_proc_pid, threshold, child_pid, threshold)
+        def terminate_processes_successfully(pid, _):
+            if pid == self._fake_master_pid:
+                master_process.is_running.return_value = False
+            elif pid == self._fake_slave_pid:
+                slave_process.is_running.return_value = False
+            else:
+                slave_child_process.is_running.return_value = False
+        self._mock_os_kill.side_effect = terminate_processes_successfully
 
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
+        # Act
+        self._stop_subcommand.run(None)
 
-        self.os_kill_patch.assert_called_with(main_proc_pid, signal.SIGTERM)
-        self.assertEquals(2, self.os_kill_patch.call_count)
-
-    def test_stop_subcommand_kills_main_proc_with_sigkill_if_still_running_after_sigterm(self):
-        main_proc_pid = 9999
-        child_proc_pid = main_proc_pid + 1
-        main_threshold = NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL
-        child_threshold = NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL - 1
-
-        self.setup_environment_for_os_kill(main_proc_pid)
-        self.setup_main_and_child_proc(main_proc_pid,main_threshold, child_proc_pid, child_threshold)
-
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
-
-        self.os_kill_patch.assert_called_with(main_proc_pid, signal.SIGKILL)
-        self.assertEquals(3, self.os_kill_patch.call_count)
-
-    def test_stop_subcommand_kills_child_proc_with_sigkill_if_still_running_after_sigterm(self):
-        main_proc_pid = 9999
-        main_threshold = NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL - 1
-        child_threshold = NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL
-        child_pid = main_proc_pid + 1
-
-        self.setup_environment_for_os_kill(main_proc_pid)
-        self.setup_main_and_child_proc(main_proc_pid, main_threshold, child_pid, child_threshold)
-
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
-
-        self.os_kill_patch.assert_called_with(child_pid, signal.SIGKILL)
-        self.assertEquals(3, self.os_kill_patch.call_count)
-
-    def test_stop_subcommand_kills_proc_with_sigterm(self):
-        main_proc_pid = 9999
-
-        self.setup_environment_for_os_kill(main_proc_pid)
-        self.patch('psutil.Process').return_value = self.create_process_mock(
-            pid=main_proc_pid,
-            is_running_threshold=NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL - 1,
-            cmdline=['python', './main.py', 'master'],
-            children=[]
+        # Assert
+        self.assertEqual(
+            [
+                call(slave_child_process.pid, signal.SIGTERM),
+                call(slave_process.pid, signal.SIGTERM),
+                call(master_process.pid, signal.SIGTERM),
+            ],
+            self._mock_os_kill.call_args_list,
         )
 
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
+    def test_stop_subcommand_kills_proc_with_sigkill_if_still_running_after_sigterm(self):
+        # Arrange
+        master_process, slave_process, slave_child_process = self._setup_processes_to_be_killed()
 
-        self.os_kill_patch.assert_called_with(main_proc_pid, signal.SIGTERM)
-        self.assertEquals(1, self.os_kill_patch.call_count)
+        def terminate_only_master_process_successfully(pid, _):
+            if pid == self._fake_master_pid:
+                master_process.is_running.return_value = False
 
-    def test_stop_subcommand_kills_proc_with_sigkill(self):
-        main_proc_pid = 9999
+        self._mock_os_kill.side_effect = terminate_only_master_process_successfully
 
-        self.setup_environment_for_os_kill(main_proc_pid)
-        self.patch('psutil.Process').return_value = self.create_process_mock(
-            pid=main_proc_pid,
-            is_running_threshold=NUM_OF_IS_RUNNING_CHECKS_TILL_SIGKILL,
-            cmdline=['python', './main.py', 'master'],
-            children=[]
+        # Act
+        self._stop_subcommand.run(None)
+
+        # Assert
+        self.assertEqual(
+            [
+                call(slave_child_process.pid, signal.SIGTERM),
+                call(slave_process.pid, signal.SIGTERM),
+                call(slave_child_process.pid, signal.SIGKILL),
+                call(slave_process.pid, signal.SIGKILL),
+                call(master_process.pid, signal.SIGTERM),
+            ],
+            self._mock_os_kill.call_args_list,
         )
-
-        stop_subcommand = StopSubcommand()
-        stop_subcommand._kill_pid_in_file_if_exists('/tmp/pid_file_path.pid')
-
-        self.os_kill_patch.assert_called_with(main_proc_pid, signal.SIGKILL)
-        self.assertEquals(2, self.os_kill_patch.call_count)

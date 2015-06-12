@@ -1,3 +1,5 @@
+import socket
+
 from app.deployment.remote_service import RemoteService
 
 
@@ -20,6 +22,8 @@ class RemoteSlaveService(RemoteService):
         :param num_executors: the number of concurrent executors that will run in this slave service
         :type num_executors: int
         """
+        if master_host == 'localhost':
+            master_host = socket.gethostname()
         slave_args = '--master-url {}:{}'.format(master_host, str(master_port))
         slave_args += ' --port {}'.format(str(slave_port))
         slave_args += ' --num-executors {}'.format(str(num_executors))

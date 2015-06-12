@@ -30,15 +30,13 @@ class Directory(ProjectType):
         :type remote_files: dict[str, str] | None
         """
         super().__init__(config, job_name, remote_files)
-        project_directory = project_directory
         self._logger = get_logger(__name__)
         self.project_directory = os.path.abspath(project_directory)
         self._logger.debug('Project directory is {}'.format(project_directory))
 
     def _fetch_project(self):
-        check_command = 'test -d "{}"'.format(self.project_directory)
-        output, exit_code = self.execute_command_in_project(check_command, cwd='/')
-        if exit_code != 0:
+        dir_exists = os.path.isdir(self.project_directory)
+        if not dir_exists:
             raise RuntimeError('Could not find the directory "{}" on {}. Directory build mode is not supported on '
                                'clusters with remote slaves.'.format(self.project_directory, node()))
 
@@ -52,12 +50,24 @@ class Directory(ProjectType):
 
     def timing_file_path(self, job_name):
         """
+        Construct the sys path of the directory where the timing file should reside based on the project_directory.
+        project_directory is the sys path of the project which contains the clusterrunner.yaml file.
+
+        e.g.:
+        Configuration['timings_directory'] = '/var/timings_directory'
+        project_directory = '/Users/me/project'
+
+        The final timing file sys path should be:
+        '/var/timings_directory/Users/me/project'
+
         :type job_name: str
         :return: the absolute path to where the timing file for job_name SHOULD be. This method does not guarantee
             that the timing file exists.
         :rtype: string
         """
-        timings_subdirectory = os.path.splitdrive(self.project_directory)[1][1:]  # cut off mount point and leading '/'
+        # cut off mount point and leading separator (e.g. '/' on POSIX or '\\' on Windows)
+        # e.g. '/var/bar' would become 'var/bar' on POSIX and 'c:\\temp\\foo' would become 'temp\\foo'
+        timings_subdirectory = os.path.splitdrive(self.project_directory)[1][len(os.sep):]
         return os.path.join(
             Configuration['timings_directory'],
             timings_subdirectory,

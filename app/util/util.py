@@ -1,11 +1,9 @@
 from app.project_type.directory import Directory
-from app.project_type.docker import Docker
 from app.project_type.git import Git
 
 
 _subclasses_by_name = {
     'directory': Directory,
-    'docker': Docker,
     'git': Git,
 }
 
@@ -28,7 +26,7 @@ def get_project_type_subclass(project_type_name):
 
     Note: This function cannot be placed in project_type.py because it would cause circular imports.
 
-    :param project_type_name: The name of a subclass of ProjectType (e.g., 'docker' or 'git')
+    :param project_type_name: The name of a subclass of ProjectType (e.g., 'directory' or 'git')
     :type project_type_name: str
     :return: The ProjectType subclass corresponding to the specified type name, or None if no matching name found
     :rtype: type|None

@@ -10,9 +10,13 @@ from app.util.network import ENCODED_BODY
 
 
 class ClusterBaseHandler(tornado.web.RequestHandler):
+    """
+    ClusterBaseHandler is the base handler for all request handlers of ClusterRunner services.
+    """
 
-    SUCCESS_STATUS = 'SUCCESS'
-    FAILURE_STATUS = 'FAILURE'
+    def __init__(self, *args, **kwargs):
+        self._logger = log.get_logger(__name__)
+        super().__init__(*args, **kwargs)
 
     _exception_status_codes = {
         ItemNotReadyError: http.client.ACCEPTED,
@@ -21,9 +25,28 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         ItemNotFoundError: http.client.NOT_FOUND,
     }
 
-    def __init__(self, *args, **kwargs):
-        self._logger = log.get_logger(__name__)
-        super().__init__(*args, **kwargs)
+    def _handle_request_exception(self, ex):
+        """
+        This is the "catch-all" exception handler that Tornado uses to map some exception types to appropriate HTTP
+        status codes. The default status code is 500 (generic server error).
+
+        :param ex: The exception that was caught
+        :type ex: Exception
+        """
+        # _handle_request_exception() is called in the exception handler, so we can still use logger.exception.
+        self._logger.exception('Exception occurred during request to {}.', self.request.uri)
+        status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
+        self.set_status(status_code)
+        self.finish()
+
+
+class ClusterBaseAPIHandler(ClusterBaseHandler):
+    """
+    ClusterBaseAPIHandler is the base handler for all API endpoints that are supposed to return json responses.
+    """
+
+    SUCCESS_STATUS = 'SUCCESS'
+    FAILURE_STATUS = 'FAILURE'
 
     def initialize(self, route_node=None):
         """
@@ -31,6 +54,16 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         :type route_node: RouteNode
         """
         self._route_node = route_node
+
+    def _handle_request_exception(self, ex):
+        """
+        Ensure exceptions are caught and a JSON response is always returned to the client.
+
+        :param ex: The exception that was caught
+        :type ex: Exception
+        """
+        self.write({'error': str(ex)})
+        super()._handle_request_exception(ex)
 
     def prepare(self):
         """
@@ -78,24 +111,6 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         if self._route_node is None:
             raise RuntimeError('This handler ({}) is not associated with a RouteNode'.format(type(self).__name__))
         return {child.label: child.route_template() for child in self._route_node.children}
-
-    def _handle_request_exception(self, ex):
-        """
-        This is the "catch-all" exception handler that Tornado uses to ensure exceptions are caught and a JSON response
-        is always returned to the client. (Tornado's default is an HTML response.) This also contains logic to map some
-        exception types to appropriate HTTP status codes. The default status code is 500 (generic server error).
-
-        :param ex: The exception that was caught
-        :type ex: Exception
-        """
-        # _handle_request_exception() is called in the exception handler, so we can still use logger.exception.
-        self._logger.exception('Exception occurred during request to {}.', self.request.uri)
-        status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
-        response = {'error': str(ex)}
-
-        self.set_status(status_code)
-        self.write(response)
-        self.finish()
 
     def set_default_headers(self):
         self.set_header('Content-Type', 'application/json')

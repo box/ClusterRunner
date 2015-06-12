@@ -201,29 +201,27 @@ class TestMain(BaseUnitTestCase):
     def test_start_app_force_kill_countdown_sends_self_sigkill_after_delay(self):
         # Since the countdown logic executes asynchronously on a separate thread, we replace os.kill() with this
         # callback to both capture the os.kill() args and set an event to signal us that async execution finished.
-        def fake_os_kill(*args):
-            nonlocal os_kill_args, os_kill_called_event
-            os_kill_args = args
-            os_kill_called_event.set()
+        def fake_os_exit(*args):
+            nonlocal os_exit_args, os_exit_called_event
+            os_exit_args = args
+            os_exit_called_event.set()
 
         mock_os = self.patch('main.os')
         mock_time = self.patch('main.time')
         self.start_force_kill_countdown_patcher.stop()  # unpatch this method so we can test it
         pid_of_self = 12345
         sleep_duration = 15
-        os_kill_args = None
-        os_kill_called_event = Event()
+        os_exit_args = None
+        os_exit_called_event = Event()
         mock_os.getpid.return_value = pid_of_self
-        mock_os.kill.side_effect = fake_os_kill
+        mock_os._exit.side_effect = fake_os_exit
 
         main._start_app_force_kill_countdown(seconds=sleep_duration)
 
         # Wait for the async thread to finish executing.
-        self.assertTrue(os_kill_called_event.wait(timeout=5), 'os.kill() should be called within a few seconds.')
-
+        self.assertTrue(os_exit_called_event.wait(timeout=5), 'os._exit should be called within a few seconds.')
         mock_time.sleep.assert_called_once_with(sleep_duration)
-        self.assertEqual(os_kill_args, (pid_of_self, signal.SIGKILL),
-                         'The force kill countdown should send SIGKILL to self after a delay.')
+        self.assertEqual(os_exit_args, (1,), 'The force kill countdown should exit the process with exit status 1.')
 
     def mock_cwd(self, current_dir=None):
         mock_os = self.patch('app.subcommands.build_subcommand.os')

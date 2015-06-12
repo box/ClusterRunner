@@ -15,8 +15,12 @@ buildOptions = {
     'copy_dependent_files': True,
     'create_shared_zip': True,
     'include_in_shared_zip': True,
-    'include_files': [('conf/default_clusterrunner.conf', 'conf/default_clusterrunner.conf')],
-    'optimize': 2,
+    'include_files': [
+        ('bin/git_askpass.sh', 'bin/git_askpass.sh'),
+        ('bin/git_ssh.sh', 'bin/git_ssh.sh'),
+        ('conf/default_clusterrunner.conf', 'conf/default_clusterrunner.conf'),
+    ],
+    'optimize': 1,  # This should not be set to 2 because that removes docstrings needed for command line help.
 }
 
 base = 'Console'

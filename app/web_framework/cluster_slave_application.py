@@ -3,7 +3,7 @@ from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
 from app.util.safe_thread import SafeThread
 from app.web_framework.cluster_application import ClusterApplication
-from app.web_framework.cluster_base_handler import ClusterBaseHandler
+from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler
 from app.web_framework.route_node import RouteNode
 
 
@@ -42,7 +42,7 @@ class ClusterSlaveApplication(ClusterApplication):
         super().__init__(handlers)
 
 
-class _ClusterSlaveBaseHandler(ClusterBaseHandler):
+class _ClusterSlaveBaseAPIHandler(ClusterBaseAPIHandler):
     def initialize(self, route_node=None, cluster_slave=None):
         """
         :type route_node: RouteNode | None
@@ -52,11 +52,11 @@ class _ClusterSlaveBaseHandler(ClusterBaseHandler):
         super().initialize(route_node)
 
 
-class _RootHandler(_ClusterSlaveBaseHandler):
+class _RootHandler(_ClusterSlaveBaseAPIHandler):
     pass
 
 
-class _APIVersionOneHandler(_ClusterSlaveBaseHandler):
+class _APIVersionOneHandler(_ClusterSlaveBaseAPIHandler):
     def get(self):
         response = {
             'slave': self._cluster_slave.api_representation(),
@@ -64,7 +64,7 @@ class _APIVersionOneHandler(_ClusterSlaveBaseHandler):
         self.write(response)
 
 
-class _VersionHandler(_ClusterSlaveBaseHandler):
+class _VersionHandler(_ClusterSlaveBaseAPIHandler):
     def get(self):
         response = {
             'version': Configuration['version'],
@@ -72,15 +72,15 @@ class _VersionHandler(_ClusterSlaveBaseHandler):
         self.write(response)
 
 
-class _BuildsHandler(_ClusterSlaveBaseHandler):
+class _BuildsHandler(_ClusterSlaveBaseAPIHandler):
     pass
 
 
-class _BuildHandler(_ClusterSlaveBaseHandler):
+class _BuildHandler(_ClusterSlaveBaseAPIHandler):
     pass
 
 
-class _BuildSetupHandler(_ClusterSlaveBaseHandler):
+class _BuildSetupHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
     def post(self, build_id):
         project_type_params = self.decoded_body.get('project_type_params')
@@ -89,17 +89,17 @@ class _BuildSetupHandler(_ClusterSlaveBaseHandler):
         self._write_status()
 
 
-class _TeardownHandler(_ClusterSlaveBaseHandler):
+class _TeardownHandler(_ClusterSlaveBaseAPIHandler):
     def post(self, build_id):
         self._cluster_slave.teardown_build(int(build_id))
         self._write_status()
 
 
-class _SubjobsHandler(_ClusterSlaveBaseHandler):
+class _SubjobsHandler(_ClusterSlaveBaseAPIHandler):
     pass
 
 
-class _SubjobHandler(_ClusterSlaveBaseHandler):
+class _SubjobHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
     def post(self, build_id, subjob_id):
         subjob_artifact_dir = self.decoded_body.get('subjob_artifact_dir')
@@ -117,7 +117,7 @@ class _SubjobHandler(_ClusterSlaveBaseHandler):
         self.write(response)
 
 
-class _ExecutorsHandler(_ClusterSlaveBaseHandler):
+class _ExecutorsHandler(_ClusterSlaveBaseAPIHandler):
     def get(self):
         response = {
             'executors': [executor.api_representation() for executor in self._cluster_slave.executors_by_id.values()]
@@ -125,7 +125,7 @@ class _ExecutorsHandler(_ClusterSlaveBaseHandler):
         self.write(response)
 
 
-class _ExecutorHandler(_ClusterSlaveBaseHandler):
+class _ExecutorHandler(_ClusterSlaveBaseAPIHandler):
     def get(self, executor_id):
         executor = self._cluster_slave.executors_by_id[int(executor_id)]
         response = {
@@ -134,7 +134,7 @@ class _ExecutorHandler(_ClusterSlaveBaseHandler):
         self.write(response)
 
 
-class _EventlogHandler(_ClusterSlaveBaseHandler):
+class _EventlogHandler(_ClusterSlaveBaseAPIHandler):
     def get(self):
         # all arguments are optional, so default to None
         since_timestamp = self.get_query_argument('since_timestamp', None)
@@ -144,7 +144,7 @@ class _EventlogHandler(_ClusterSlaveBaseHandler):
         })
 
 
-class _KillHandler(_ClusterSlaveBaseHandler):
+class _KillHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
     def post(self):
         self._write_status()

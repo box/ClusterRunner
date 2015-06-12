@@ -31,6 +31,10 @@ class ProjectType(object):
         self._logger = log.get_logger(__name__)
         self._kill_event = Event()
 
+    @property
+    def job_name(self):
+        return self._job_name
+
     def slave_param_overrides(self):
         """
         Produce a set of values to override original project type params for use on a slave machine. Override in
@@ -83,11 +87,11 @@ class ProjectType(object):
     def _fetch_project(self):
         raise NotImplementedError
 
-    def _execute_and_raise_on_failure(self, command, message, cwd=None):
+    def _execute_and_raise_on_failure(self, command, message, cwd=None, env_vars=None):
         """
         :rtype: string
         """
-        output, exit_code = self.execute_command_in_project(command, cwd=cwd)
+        output, exit_code = self.execute_command_in_project(command, cwd=cwd, extra_environment_vars=env_vars)
         # If the command was intentionally killed, do not raise an error
         if exit_code != 0 and not self._kill_event.is_set():
             raise RuntimeError('{} Command: "{}"\nOutput: "{}"'.format(message, command, output))
@@ -108,7 +112,6 @@ class ProjectType(object):
         """
         self.run_job_config_teardown(timeout=timeout)
         self._logger.info('ProjectType teardown complete.')
-        # TODO: run _teardown_executors for each executor if this is a Docker project_type, like _setup_executors above
 
     def run_job_config_setup(self):
         """
@@ -220,13 +223,17 @@ class ProjectType(object):
             # We've been signaled to terminate subprocesses, so terminate them. But we still collect stdout and stderr.
             # We must kill the entire process group since shell=True launches 'sh -c "cmd"' and just killing the pid
             # will kill only "sh" and not its child processes.
-            # Note: We may lose buffered output from the subprocess that hasn't been flushed before termination. If we
-            # want to prevent output buffering we should refactor this method to use pexpect.
+            # Note: We may lose buffered output from the subprocess that hasn't been flushed before termination.
             self._logger.warning('Terminating PID: {}, Command: "{}"', pipe.pid, command)
             try:
                 # todo: os.killpg sends a SIGTERM to all processes in the process group. If the immediate child process
                 # ("sh") dies but its child processes do not, we will leave them running orphaned.
-                os.killpg(pipe.pid, signal.SIGTERM)
+                try:
+                    os.killpg(pipe.pid, signal.SIGTERM)
+                except AttributeError:
+                    self._logger.warning('os.killpg is not available. This is expected if ClusterRunner is running'
+                                         'on Windows. Using os.kill instead.')
+                    os.kill(pipe.pid, signal.SIGTERM)
             except (PermissionError, ProcessLookupError) as ex:  # os.killpg will raise if process has already ended
                 self._logger.warning('Attempted to kill process group (pgid: {}) but raised {}: "{}".',
                                      pipe.pid, type(ex).__name__, ex)
