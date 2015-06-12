@@ -258,7 +258,7 @@ class _EventlogHandler(_ClusterMasterBaseAPIHandler):
         })
 
 
-class _SlaveShutdownHandler(_ClusterMasterBaseHandler):
+class _SlaveShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self, slave_id):
         slaves_to_shutdown = [int(slave_id)]
@@ -266,7 +266,7 @@ class _SlaveShutdownHandler(_ClusterMasterBaseHandler):
         self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)
 
 
-class _SlavesShutdownHandler(_ClusterMasterBaseHandler):
+class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self):
         shutdown_all = self.decoded_body.get('shutdown_all')
