@@ -14,6 +14,3 @@ PyYAML==3.11
 requests==2.3.0
 termcolor==1.1.0
 tornado==3.2.2
-
-# Use a version of pexpect that has fixed an issue with using pexpect from a subprocess.
-git+https://github.com/pexpect/pexpect.git@ae950f0b759f5ecb5237c7366e866225373afebc

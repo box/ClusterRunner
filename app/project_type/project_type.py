@@ -87,11 +87,11 @@ class ProjectType(object):
     def _fetch_project(self):
         raise NotImplementedError
 
-    def _execute_and_raise_on_failure(self, command, message, cwd=None):
+    def _execute_and_raise_on_failure(self, command, message, cwd=None, env_vars=None):
         """
         :rtype: string
         """
-        output, exit_code = self.execute_command_in_project(command, cwd=cwd)
+        output, exit_code = self.execute_command_in_project(command, cwd=cwd, extra_environment_vars=env_vars)
         # If the command was intentionally killed, do not raise an error
         if exit_code != 0 and not self._kill_event.is_set():
             raise RuntimeError('{} Command: "{}"\nOutput: "{}"'.format(message, command, output))
@@ -223,8 +223,7 @@ class ProjectType(object):
             # We've been signaled to terminate subprocesses, so terminate them. But we still collect stdout and stderr.
             # We must kill the entire process group since shell=True launches 'sh -c "cmd"' and just killing the pid
             # will kill only "sh" and not its child processes.
-            # Note: We may lose buffered output from the subprocess that hasn't been flushed before termination. If we
-            # want to prevent output buffering we should refactor this method to use pexpect.
+            # Note: We may lose buffered output from the subprocess that hasn't been flushed before termination.
             self._logger.warning('Terminating PID: {}, Command: "{}"', pipe.pid, command)
             try:
                 # todo: os.killpg sends a SIGTERM to all processes in the process group. If the immediate child process

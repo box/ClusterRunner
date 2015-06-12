@@ -1,17 +1,10 @@
-from multiprocessing import Manager, Pool  # pylint: disable=no-name-in-module
 import os
-import pexpect
-import psutil
-import queue
 import shutil
-import signal
-from time import sleep
 from urllib.parse import urlparse
 
 from app.project_type.project_type import ProjectType
 from app.util import fs, log
 from app.util.conf.configuration import Configuration
-from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 class Git(ProjectType):
@@ -90,8 +83,8 @@ class Git(ProjectType):
         self._hash = hash
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
-        self._git_remote_command_executor = _GitRemoteCommandExecutor()
         self._local_ref = None
+        self._logger = log.get_logger(__name__)
 
         # We explicitly set the repo directory to 700 so we don't inadvertently expose the repo to access by other users
         fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
@@ -102,7 +95,6 @@ class Git(ProjectType):
         # This is done in order to switch between the master's and the slave's copies of the repo while not
         # having to do something hacky in order to user the master's generated atoms on the slaves.
         actual_project_directory = os.path.join(self._repo_directory, project_directory)
-
         try:
             os.unlink(build_project_directory)
         except FileNotFoundError:
@@ -144,45 +136,78 @@ class Git(ProjectType):
                 fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
 
         # Clone the repo if it doesn't exist
-        _, git_exit_code = self.execute_command_in_project('git rev-parse', cwd=self._repo_directory)
-        repo_exists = git_exit_code == 0
-        if not repo_exists:  # This is not a git repo yet, we have to clone the project.
-            clone_command = 'git clone {} {}'. format(self._url, self._repo_directory)
-            self._git_remote_command_executor.execute(clone_command)
+        try:
+            self._execute_git_command_in_repo_and_raise_on_failure('rev-parse')  # rev-parse succeeds if repo exists
+        except RuntimeError:
+            self._logger.notice('No valid repo in "{}". Cloning fresh from "{}".', self._repo_directory, self._url)
+            self._execute_git_command_in_repo_and_raise_on_failure(
+                git_command='clone {} {}'. format(self._url, self._repo_directory),
+                error_msg='Could not clone repo.'
+            )
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
         # is equal to self._branch, otherwise the git fetch will exit with a non-zero exit code.
-        fetch_command = 'git fetch --update-head-ok {} {}'.format(self._remote, self._branch)
-        self._git_remote_command_executor.execute(fetch_command, cwd=self._repo_directory)
+        self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='fetch --update-head-ok {} {}'.format(self._remote, self._branch),
+            error_msg='Could not fetch specified branch "{}" from remote "{}".'.format(self._branch, self._remote)
+        )
 
         # Validate and convert the user-specified hash/refspec to a full git hash
-        self._hash = self._execute_in_repo_and_raise_on_failure(
-            'git rev-parse {}'.format(self._hash),
-            'Could not rev-parse "{}" to a commit hash.'.format(self._hash)
+        self._hash = self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='rev-parse {}'.format(self._hash),
+            error_msg='Could not rev-parse "{}" to a commit hash.'.format(self._hash)
         ).strip()
 
         # Save this hash as a local ref. Named local refs are necessary for slaves to fetch correctly from the master.
         # The local ref will be passed on to slaves instead of the user-specified branch.
         self._local_ref = 'refs/clusterrunner/' + self._hash
-        update_ref_command = 'git update-ref {} {}'.format(self._local_ref, self._hash)
-        self._execute_in_repo_and_raise_on_failure(update_ref_command, 'Could not update local ref.')
+        self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='update-ref {} {}'.format(self._local_ref, self._hash),
+            error_msg='Could not update local ref.'
+        )
 
-        # The '--' option acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
-        reset_command = 'git reset --hard {} --'.format(self._hash)
-        self._execute_in_repo_and_raise_on_failure(reset_command, 'Could not reset Git repo.')
+        # The '--' argument acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
+        self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='reset --hard {} --'.format(self._hash),
+            error_msg='Could not reset Git repo.'
+        )
 
-        self._execute_in_repo_and_raise_on_failure('git clean -dfx', 'Could not clean Git repo.')
+        self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='clean -dfx',
+            error_msg='Could not clean Git repo.'
+        )
 
-    def _execute_in_repo_and_raise_on_failure(self, command, message):
+    def _execute_git_command_in_repo_and_raise_on_failure(self, git_command, error_msg='Error executing git command.'):
         """
+        Execute the given git command. If it exits with a failing exit code then raise an exception.
+
+        We also set some environment variables (e.g., GIT_SSH, GIT_ASKPASS) that should prevent git from trying to
+        display an interactive prompt.
+
+        :param git_command: The git command to execute, e.g., "fetch origin"
+        :type git_command: string
+        :param error_msg: The human readable error message to log if the command fails
+        :type error_msg: string
+        :return: The output of the process (stdout and stderr)
         :rtype: string
         """
-        return self._execute_and_raise_on_failure(command, message, self._repo_directory)
+        # The option that prevents ssh from displaying interactive prompts is "BatchMode=yes".
+        strict_host_key_setting = 'yes' if Configuration['git_strict_host_key_checking'] else 'no'
+        git_ssh_args = '-o BatchMode=yes -o StrictHostKeyChecking={}'.format(strict_host_key_setting)
+
+        env_vars = {
+            'GIT_ASKPASS': Configuration['git_askpass_exe'],
+            'GIT_SSH': Configuration['git_ssh_exe'],
+            'GIT_SSH_ARGS': git_ssh_args,  # GIT_SSH_ARGS is not used by git; it is used by our git_ssh.sh wrapper.
+        }
+        command = 'git ' + git_command
+        return self._execute_and_raise_on_failure(command, error_msg, cwd=self._repo_directory, env_vars=env_vars)
 
     def execute_command_in_project(self, *args, **kwargs):
         """
         Execute a command inside the repo. See superclass for parameter documentation.
 
+        :return: A 2-tuple of: (the process output/error, the process exit code)
         :rtype: (string, int)
         """
         # There is a scenario where self.project_directory doesn't exist yet (when a certain repo has never been
@@ -203,175 +228,3 @@ class Git(ProjectType):
 
     def project_id(self):
         return self._repo_directory
-
-
-class _GitRemoteCommandExecutor(object):
-    """
-    This class is responsible for executing git commands that contact the repo's remote. We use the pexpect library here
-    since git commands may prompt for user input and we want to intercept those prompts.
-
-    We've moved the pexpect logic into a Python subprocess (using the multiprocessing library). This is to work around
-    a shortcoming of pexpect where it will begin to raise exceptions once the Python process holds more than 1024 open
-    files (which includes tcp connections, and those scale with the number of slaves connected to the master). Once]
-    pexpect fixes this issue, we can move this logic back into the main process.
-    The pexpect issue is tracked here: https://github.com/pexpect/pexpect/issues/47
-    """
-    def __init__(self):
-        self._logger = log.get_logger(__name__)
-
-    def execute(self, command, cwd=None, timeout=10, num_tries=3):
-        """
-        Start the _execute_git_remote_command() method in a subprocess.
-        :type command: str
-        :type cwd: str | None
-        :param timeout: the number of seconds to wait for expected prompts before assuming there will be no prompt
-        :type timeout: int
-        :param num_tries: the number of times to attempt to run this command in case of a BrokenPipeError exception
-        :type num_tries: int
-        """
-        for i in range(0, num_tries):
-            try:
-                # We use a multiprocessing.Pool here (instead of a Process) since the Pool can propagate any exceptions
-                # that occur in the subprocess back to the main process.
-                with Manager() as manager, Pool(processes=1) as pool:  # pylint: disable=not-callable
-                    # A queue is used to transfer log messages back to the main process instead of trying to log them
-                    # from the subprocess. This avoids issues around both processes potentially writing logs at the
-                    # same time and clobbering each other's log messages.
-                    log_msg_queue = manager.Queue()
-                    async_result = pool.apply_async(self._execute_git_remote_command_subprocess,
-                                                    args=(command, cwd, timeout, log_msg_queue))
-
-                    # While the subprocess is executing, watch for any logs it puts into the queue and log them
-                    # immediately.
-                    while not async_result.ready() or not log_msg_queue.empty():
-                        try:
-                            log_level, unformatted_msg, format_args = log_msg_queue.get(timeout=0.5)
-                            self._logger.log(log_level, unformatted_msg, *format_args)
-                        except queue.Empty:
-                            pass
-
-                    # If any exception occurred in the subprocess, a call to async_result.get() will re-raise that
-                    # exception.
-                    async_result.get()
-                    break
-            except BrokenPipeError as broken_pipe_error:
-                # Not on the last try
-                if num_tries-1 > i:
-                    self._logger.exception('BrokenPipeError trying to execute command {}', command)
-                    sleep(0.5)
-                else:
-                    raise broken_pipe_error
-
-    def _execute_git_remote_command_subprocess(self, command, cwd, timeout, log_msg_queue):
-        """
-        :type command: str
-        :type cwd: str|None
-        :type timeout: int
-        :type log_msg_queue: multiprocessing.queues.Queue
-
-        This is the entry point for the subprocess that executes git remote commands using pexpect. Args and kwargs are
-        passed directly through to self._execute_git_remote_command().
-        """
-        try:
-            # Reset signal handlers -- unhandled exceptions will be handled by the main process when the subprocess dies.
-            UnhandledExceptionHandler.reset_signal_handlers()
-            log_msg_queue.put(('INFO', 'Closing unneeded network connections...', ()))
-            self._close_unneeded_network_connections()
-            log_msg_queue.put(('INFO', 'Closed network connections, executing git remote command...', ()))
-            self._execute_git_remote_command(command, cwd, timeout, log_msg_queue)
-        except Exception as exception:
-            log_msg_queue.put(('ERROR', 'Exception in _execute_git_remote_command_subprocess {}', (exception,)))
-            raise exception
-
-    def _close_unneeded_network_connections(self):
-        """
-        This is called after forking a subprocess to reduce the number of open file descriptors of the child process.
-        Since a forked child process inherits file descriptors from the parent, the child ends up with a bunch of
-        unneeded fds. Doing this allows pexpect to use a low file descriptor number (since it raises an exception if
-        using a file descriptor number greater than 1024.)
-        """
-        process = psutil.Process(os.getpid())
-        fds_to_close = [connection.fd for connection in process.connections()]
-        for fd_to_close in fds_to_close:
-            try:
-                os.close(fd_to_close)
-            except OSError:
-                pass
-
-    def _execute_git_remote_command(self, command, cwd, timeout, log_msg_queue):
-        """
-        Execute git-related commands. This functionality is sequestered into its own method because an automated
-        system such as ClusterRunner must deal with user-targeted prompts (such that ask for a username/password)
-        deliberately and explicitly. This method will raise a RuntimeError in case of a prompt.
-
-        :type command: str
-        :type cwd: str|None
-        :type timeout: int
-        :type log_msg_queue: multiprocessing.queues.Queue
-        """
-        # todo: Reenable the functionality around listening for a kill_event to abort execution of this method. This
-        # todo: has been temporarily disabled due to complexity around doing this between multiple processes.
-        credentials_prompt_patterns = [
-            r'^User.*:',
-            r'^Pass.*:',
-            r'(^|\n)\S+@\S+\'s password:',  # example prompt: "jharrington@jharrington.local's password: "
-        ]
-        ssh_host_check_patterns = [
-            'Are you sure you want to continue connecting',
-        ]
-        patterns_to_expect = credentials_prompt_patterns + ssh_host_check_patterns
-        do_strict_host_key_checking = Configuration['git_strict_host_key_checking']
-
-        # Because it is possible to receive multiple prompts in any git remote operation, we have to call pexpect
-        # multiple times. For example, the first prompt might be a known_hosts ssh check prompt, and the second
-        # prompt can be a username/password authentication prompt. Without this loop, ClusterRunner may indefinitely
-        # hang in such a scenario.
-        child = pexpect.spawn(command, cwd=cwd)
-        while True:
-            try:
-                prompt_index = child.expect(patterns_to_expect, timeout=timeout)
-                matched_pattern = patterns_to_expect[prompt_index]
-
-                if matched_pattern in credentials_prompt_patterns:
-                    child.kill(signal.SIGKILL)
-                    raise RuntimeError('Failed to retrieve from git remote due to a user/password prompt. '
-                                       'Command: {}'.format(command))
-
-                elif matched_pattern in ssh_host_check_patterns:
-                    if do_strict_host_key_checking:
-                        child.kill(signal.SIGKILL)
-                        raise RuntimeError('Failed to retrieve from git remote due to failed known_hosts check. '
-                                           'Command: {}'.format(command))
-
-                    # Automatically add hosts that aren't in the known_hosts file to the known_hosts file.
-                    child.sendline('yes')
-                    log_msg_queue.put(
-                        ('INFO', 'Automatically added a host to known_hosts in command: {}', (command,)))
-
-            except pexpect.EOF:
-                break
-            except pexpect.TIMEOUT:
-                log_msg_queue.put(
-                    ('INFO', 'Command [{}] had no expected prompts after {} seconds.', (command, timeout)))
-                break
-
-        # Dump out the output stream from pexpect just in case there was an unexpected prompt that wasn't caught.
-        log_msg_queue.put(
-            ('DEBUG', 'Output from command [{}] after {} seconds: {}', (command, timeout, child.before)))
-
-        # Now we assume we are past any prompts and wait for the command to end.  We need to keep checking
-        # if the kill event has been set in case the build is canceled during setup.
-        finished = None
-        while finished is None:  # and not self._kill_event.is_set()  # todo: kill_event temporarily disabled
-            try:
-                finished = child.expect(pexpect.EOF, timeout=1)
-            except pexpect.TIMEOUT:
-                continue
-
-        # This call is necessary for the child.exitstatus to be set properly. Otherwise, it can be set to None.
-        child.close()
-
-        # Raise an error on non-zero exit code (unless the command was intentionally killed).
-        if child.exitstatus != 0:  # and not self._kill_event.is_set():  # todo: kill_event temporarily disabled
-            raise RuntimeError('Git command failed. Child exit status: {}. Command: {}\nOutput: {}'.format(
-                child.exitstatus, command, child.before.decode('utf-8', errors='replace')))

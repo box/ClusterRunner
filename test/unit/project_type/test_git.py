@@ -1,14 +1,16 @@
 from subprocess import Popen
-from unittest.mock import ANY, Mock, MagicMock
+from unittest.mock import ANY, call, MagicMock, Mock
 
-import pexpect
+from genty import genty, genty_dataset
 import re
 
-from app.project_type.git import Git, _GitRemoteCommandExecutor
+from app.project_type.git import Git
 from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
+from test.framework.comparators import AnyStringMatching
 
 
+@genty
 class TestGit(BaseUnitTestCase):
 
     def setUp(self):
@@ -16,9 +18,11 @@ class TestGit(BaseUnitTestCase):
         self.patch('app.project_type.git.fs.create_dir')
         self.patch('os.unlink')
         self.patch('os.symlink')
-        self.mock_pexpect_child = self.patch('pexpect.spawn').return_value
-        self.mock_pexpect_child.before = 'None'
-        self.mock_pexpect_child.exitstatus = 0
+
+        self.os_path_exists_mock = self.patch('app.project_type.git.os.path.exists')
+        self.os_path_exists_mock.return_value = False
+        self.os_path_isfile_mock = self.patch('app.project_type.git.os.path.isfile')
+        self.os_path_isfile_mock.return_value = False
 
     def test_timing_file_path_happy_path(self):
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
@@ -30,8 +34,7 @@ class TestGit(BaseUnitTestCase):
         )
 
     def test_execute_command_in_project_specifies_cwd_if_exists(self):
-        os_path_exists_patch = self.patch('os.path.exists')
-        os_path_exists_patch.return_value = True
+        self.os_path_exists_mock.return_value = True
         project_type_popen_patch = self._patch_popen()
 
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
@@ -47,8 +50,6 @@ class TestGit(BaseUnitTestCase):
         )
 
     def test_execute_command_in_project_type_specifies_cwd_if_doesnt_exist(self):
-        os_path_exists_patch = self.patch('os.path.exists')
-        os_path_exists_patch.return_value = False
         project_type_popen_patch = self._patch_popen()
 
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
@@ -62,48 +63,6 @@ class TestGit(BaseUnitTestCase):
             stderr=ANY,
             start_new_session=ANY,
         )
-
-    def test_execute_git_remote_command_auto_adds_known_host_if_prompted(self):
-        expected_host_check_index = 3
-        expected_eof_index = 0
-        self.mock_pexpect_child.expect.side_effect = [
-            expected_host_check_index,  # first expect to match the host check prompt
-            pexpect.TIMEOUT(None),  # then expect no more prompts occur during the timeout
-            expected_eof_index,  # finally expect that the process finishes normally
-        ]
-        Configuration['git_strict_host_key_checking'] = False
-        git_executor = _GitRemoteCommandExecutor()
-
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
-
-        self.mock_pexpect_child.sendline.assert_called_with("yes")
-
-    def test_execute_git_remote_command_doesnt_auto_add_known_host_if_no_prompt(self):
-        expected_eof_index = 0
-        self.mock_pexpect_child.expect.side_effect = [
-            pexpect.TIMEOUT(None),  # first expect no prompts occur during the timeout
-            expected_eof_index,  # finally expect that the process finishes normally
-        ]
-        Configuration['git_strict_host_key_checking'] = False
-        git_executor = _GitRemoteCommandExecutor()
-
-        git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
-
-        self.assertEquals(self.mock_pexpect_child.sendline.call_count, 0)
-
-    def test_execute_git_remote_command_raises_exception_if_strict_host_checking_and_prompted(self):
-        def expect_side_effect(patterns, *args, **kwargs):
-            for idx, pattern in enumerate(patterns):
-                if 'Are you sure you want to continue connecting' in pattern:
-                    return idx
-            raise pexpect.EOF(None)
-
-        self.mock_pexpect_child.expect.side_effect = expect_side_effect
-        Configuration['git_strict_host_key_checking'] = True
-        git_executor = _GitRemoteCommandExecutor()
-
-        with self.assertRaisesRegex(RuntimeError, 'failed known_hosts check'):
-            git_executor._execute_git_remote_command('some_command', cwd=None, timeout=0, log_msg_queue=MagicMock())
 
     def test_get_full_repo_directory(self):
         Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
@@ -138,9 +97,8 @@ class TestGit(BaseUnitTestCase):
         self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
 
     def test_fetch_project_when_existing_repo_is_shallow_deletes_repo(self):
-        self.patch('app.project_type.git.os.path.exists').return_value = True
-        self.patch('app.project_type.git.os.path.isfile').return_value = True
-        self.patch('app.project_type.git._GitRemoteCommandExecutor')
+        self.os_path_isfile_mock.return_value = True
+        self.os_path_exists_mock.return_value = True
         mock_fs = self.patch('app.project_type.git.fs')
         mock_rmtree = self.patch('shutil.rmtree')
 
@@ -157,42 +115,53 @@ class TestGit(BaseUnitTestCase):
         mock_rmtree.assert_called_once_with('fake/repo_path')
         mock_fs.create_dir.assert_called_once_with('fake/repo_path', Git.DIRECTORY_PERMISSIONS)
 
-    def test_password_prompt_is_covered_by_pexpect_regexes(self):
-        git_executor = _GitRemoteCommandExecutor()
-        matched_prompt = False
+    @genty_dataset(
+        failed_rev_parse=(1, True),
+        successful_rev_parse=(0, False),
+    )
+    def test_repo_is_cloned_if_and_only_if_rev_parse_fails(self, rev_parse_return_code, expect_git_clone_call):
+        mock_popen = self._patch_popen({
+            'git rev-parse$': _FakePopenResult(return_code=rev_parse_return_code)
+        })
+        Configuration['repo_directory'] = '/repo-directory'
 
-        def expect_side_effect(patterns, *args, **kwargs):
-            nonlocal matched_prompt
-            if isinstance(patterns, list):
-                for pattern in patterns:
-                    if re.match(pattern, "Password:"):
-                        matched_prompt = True
-                raise pexpect.EOF(Mock())
-            else:
-                return 0  # pexpect returns 0 on a successful match
+        git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
+        git.fetch_project()
 
-        self.mock_pexpect_child.expect.side_effect = expect_side_effect
+        git_clone_call = call(AnyStringMatching('git clone'), start_new_session=ANY,
+                              stdout=ANY, stderr=ANY, cwd=ANY, shell=ANY)
+        if expect_git_clone_call:
+            self.assertIn(git_clone_call, mock_popen.call_args_list, 'If "git rev-parse" returns a failing exit code, '
+                                                                     '"git clone" should be called.')
+        else:
+            self.assertNotIn(git_clone_call, mock_popen.call_args_list, 'If "git rev-parse" returns a successful exit '
+                                                                        'code, "git clone" should not be called.')
 
-        git_executor._execute_git_remote_command('fake command', cwd=None, timeout=0, log_msg_queue=MagicMock())
+    @genty_dataset(
+        strict_host_checking_is_on=(True,),
+        strict_host_checking_is_off=(False,),
+    )
+    def test_execute_git_command_auto_sets_strict_host_option_correctly(self, strict_host_check_setting):
+        Configuration['git_strict_host_key_checking'] = strict_host_check_setting
+        popen_mock = self._patch_popen()
 
-        self.assertTrue(matched_prompt, "The password prompt was not matched by pexpect")
+        git = Git(url='http://some-user-url.com/repo-path/repo-name')
+        git._execute_git_command_in_repo_and_raise_on_failure('fakecmd')
 
-    def test_execute_raises_broken_pipe_error_on_last_try(self):
-        git_executor = _GitRemoteCommandExecutor()
-        self.patch('app.project_type.git.sleep')
-        self.patch('app.project_type.git.Manager').side_effect = \
-            [BrokenPipeError(''), BrokenPipeError(''), BrokenPipeError('')]
+        if strict_host_check_setting:
+            expected_ssh_arg = '-o StrictHostKeyChecking=yes'
+        else:
+            expected_ssh_arg = '-o StrictHostKeyChecking=no'
 
-        with self.assertRaises(BrokenPipeError):
-            git_executor.execute('fake command', cwd=None, timeout=0, num_tries=3)
+        expected_call = call(AnyStringMatching(expected_ssh_arg),
+                             start_new_session=ANY, stdout=ANY, stderr=ANY, cwd=ANY, shell=ANY)
+        self.assertIn(expected_call, popen_mock.call_args_list, 'Executed git command should include the correct '
+                                                                'option for StrictHostKeyChecking.')
 
     def test_slave_param_overrides_returns_expected(self):
         self._patch_popen({
             'git rev-parse FETCH_HEAD': _FakePopenResult(stdout='deadbee123\n')
         })
-        self.patch('app.project_type.git.os.path.exists').return_value = False
-        self.patch('app.project_type.git.os.path.isfile').return_value = False
-        self.patch('app.project_type.git._GitRemoteCommandExecutor')
         Configuration['repo_directory'] = '/repo-directory'
 
         git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
