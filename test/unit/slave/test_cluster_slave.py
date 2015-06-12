@@ -112,38 +112,53 @@ class TestClusterSlave(BaseUnitTestCase):
         slave = self._create_cluster_slave()
         expected_results_api_url = 'http://{}/v1/build/123/subjob/321/result'.format(self._FAKE_MASTER_URL)
         expected_idle_api_url = 'http://{}/v1/slave/1'.format(self._FAKE_MASTER_URL)
-        subjob_done_event, teardown_done_event = self._mock_network_post_and_put(expected_results_api_url,
+        subjob_done_event, teardown_done_event, setup_done_event = self._mock_network_post_and_put(expected_results_api_url,
                                                                                  expected_idle_api_url)
         slave.connect_to_master(self._FAKE_MASTER_URL)
+
         slave.setup_build(build_id=123, project_type_params={'type': 'Fake'}, build_executor_start_index=0)
+        self.assertTrue(setup_done_event.wait(timeout=5), 'Setup code under test should put to expected idle '
+                                                          'url very quickly.')
+
         slave.start_working_on_subjob(build_id=123, subjob_id=321,
                                       subjob_artifact_dir='', atomic_commands=[])
         # The timeout for this wait() is arbitrary, but it should be generous so the test isn't flaky on slow machines.
         self.assertTrue(subjob_done_event.wait(timeout=5), 'Subjob execution code under test should post to expected '
                                                            'results url very quickly.')
+
         slave.teardown_build(123)
-        self.assertTrue(teardown_done_event.wait(timeout=5), 'Teardown code under test should post to expected idle '
+        self.assertTrue(teardown_done_event.wait(timeout=5), 'Teardown code under test should put to expected idle '
                                                              'url very quickly.')
         self.trigger_graceful_app_shutdown()  # Triggering shutdown should not raise an exception.
 
     def _mock_network_post_and_put(self, expected_results_api_url, expected_idle_api_url):
         # Since subjob execution and teardown is async, we use Events to tell our test when each thread has completed.
         subjob_done_event = Event()
+        setup_done_event = Event()
         teardown_done_event = Event()
 
-        def fake_network_post_and_put(url, *args, **kwargs):
-            if url == expected_results_api_url:
-                subjob_done_event.set()  # Consider subjob finished once code posts to results url.
-            elif url == expected_idle_api_url:
-                teardown_done_event.set()
+        def _get_success_mock_response():
             mock_response = MagicMock(spec=requests.models.Response, create=True)
             mock_response.status_code = http.client.OK
             return mock_response
 
-        self.mock_network.post = fake_network_post_and_put
-        self.mock_network.put = fake_network_post_and_put
-        self.mock_network.put_with_digest = fake_network_post_and_put
-        return subjob_done_event, teardown_done_event
+        def fake_network_post(url, *args, **kwargs):
+            if url == expected_results_api_url:
+                subjob_done_event.set()  # Consider subjob finished once code posts to results url.
+            return _get_success_mock_response()
+
+        def fake_network_put(url, request_params, **kwargs):
+            if url == expected_idle_api_url:
+                if request_params['slave']['state'] == SlaveState.SETUP_COMPLETED:
+                    setup_done_event.set()
+                elif request_params['slave']['state'] == SlaveState.IDLE:
+                    teardown_done_event.set()
+            return _get_success_mock_response()
+
+        self.mock_network.post = fake_network_post
+        self.mock_network.put = fake_network_put
+        self.mock_network.put_with_digest = fake_network_put
+        return subjob_done_event, teardown_done_event, setup_done_event
 
     def test_executing_build_teardown_multiple_times_will_raise_exception(self):
         self.mock_network.post().status_code = http.client.OK
