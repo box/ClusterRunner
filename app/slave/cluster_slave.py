@@ -173,7 +173,8 @@ class ClusterSlave(object):
         for executor in self.executors_by_id.values():
             executor.kill()
 
-        if not self._build_teardown_coin.spend() or not self._project_type:  # Order matters! Spend the coin first.
+        # Order matters! Spend the coin if it has been initialized.
+        if not self._build_teardown_coin or not self._build_teardown_coin.spend() or not self._project_type:
             return  # There is no build to tear down or teardown is already in progress.
 
         self._logger.info('Executing teardown for build {}.', self._current_build_id)
