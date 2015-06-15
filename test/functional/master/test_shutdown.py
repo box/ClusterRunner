@@ -19,6 +19,8 @@ class TestShutdown(BaseFunctionalTestCase):
         self.assertEqual(0, len(living_slaves))
         self.assertEqual(2, len(dead_slaves))
 
+        self.cluster.block_until_n_slaves_dead(2, 10)
+
     def test_shutdown_one_slave_should_leave_one_slave_alive(self):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
@@ -32,6 +34,8 @@ class TestShutdown(BaseFunctionalTestCase):
 
         self.assertEqual(1, len(living_slaves))
         self.assertEqual(1, len(dead_slaves))
+
+        self.cluster.block_until_n_slaves_dead(1, 10)
 
     def test_shutdown_all_slaves_while_build_is_running_should_finish_build_then_kill_slaves(self):
         master = self.cluster.start_master()

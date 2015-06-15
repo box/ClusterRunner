@@ -273,6 +273,18 @@ class FunctionalTestCluster(object):
         services = [service for service in services if service is not None]  # remove `None` values from list
         return services
 
+    def block_until_n_slaves_dead(self, num_slaves, timeout):
+
+        def are_n_slaves_dead(n):
+            dead_slaves = [slave for slave in self.slaves if not slave.is_alive()]
+            return len(dead_slaves) == n
+
+        def are_slaves_dead():
+            are_n_slaves_dead(num_slaves)
+
+        slaves_died_within_timeout = poll.wait_for(are_slaves_dead, timeout_seconds=timeout)
+        return slaves_died_within_timeout
+
 
 class ClusterService(object):
     """
@@ -309,6 +321,9 @@ class ClusterService(object):
     @property
     def url(self):
         return 'http://{}:{}'.format(self.host, self.port)
+
+    def is_alive(self):
+        return self.process.poll() is None
 
 
 class TestClusterTimeoutError(Exception):
