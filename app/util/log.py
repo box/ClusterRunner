@@ -15,7 +15,7 @@ from app.util.conf.configuration import Configuration
 # This custom format string takes care of setting field widths to make logs more aligned and readable.
 _LOG_FORMAT_STRING = (
     '[{record.time!s:.23}] '             # 23 chars of date and time (omits last 3 digits of microseconds)
-    '{record.process:6} '
+    '{record.process} '                  # pid of process
     '{record.level_name:7} '             # log level - min field width = 7
     '{record.thread_name:15.15} '        # thread name - min and max field width = 15
     '{record.channel:15.15} '            # module name - min and max field width = 15
