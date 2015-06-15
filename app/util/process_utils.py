@@ -1,3 +1,4 @@
+from contextlib import suppress
 from subprocess import TimeoutExpired
 
 
@@ -14,7 +15,8 @@ def kill_gracefully(process, timeout=2):
     :rtype: (int, str, str)
     """
     try:
-        process.terminate()
+        with suppress(ProcessLookupError):
+            process.terminate()
         stdout, stderr = process.communicate(timeout=timeout)
     except TimeoutExpired:
         process.kill()
