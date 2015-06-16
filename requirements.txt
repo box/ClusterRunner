@@ -7,9 +7,11 @@ cx_Freeze==4.3.3
 genty==1.1.0
 Logbook==0.7.0
 nose==1.3.4
+nosexcover==1.0.10
 pep8==1.5.7
 psutil==2.1.2
 pylint==1.4.2
+python-coveralls==2.5.0
 PyYAML==3.11
 requests==2.3.0
 termcolor==1.1.0
