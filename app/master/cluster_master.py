@@ -105,22 +105,50 @@ class ClusterMaster(object):
 
         raise ItemNotFoundError('Requested slave ({}) does not exist.'.format(slave_id))
 
-    def connect_new_slave(self, slave_url, num_executors):
+    def connect_slave(self, slave_url, num_executors):
         """
-        Add a new slave to this master.
+        Connect a slave to this master.
+
+        If this slave has already been registered with the master and isn't working on a build, make sure that slave
+        is marked as alive and ready to accept builds.
 
         :type slave_url: str
         :type num_executors: int
-        :return: The slave id of the new slave
-        :rtype: int
+        :return: The response with the slave id of the slave.
+        :rtype: dict[str, str]
         """
-        slave = Slave(slave_url, num_executors)
-        self._all_slaves_by_url[slave_url] = slave
-        self._slave_allocator.add_idle_slave(slave)
+        if slave_url in self._all_slaves_by_url:
+            self._logger.warning('Slave on {} requested to connect to master, even though already connected', slave_url)
+            slave = self._all_slaves_by_url.get(slave_url)
+            slave.set_is_alive(True)
 
-        self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
-                          slave_url, num_executors, slave.id)
-        return {'slave_id': str(slave.id)}
+            # If the slave has made a request to reconnect to the master, it's safe to say that whatever
+            # subjob/build that slave was working on at the time is no longer running. In order to prevent
+            # that build from hanging indefinitely (as the slave will never respond to the master with the
+            # subjob results for that build) we must cancel the build.
+            if slave.current_build_id is not None:
+                self._logger.warning('Newly reconnected slave {} was working on build {}, cancelling build.',
+                                     slave_url, slave.current_build_id)
+                try:
+                    build = self.get_build(slave.current_build_id)
+                    build.cancel()
+                except ItemNotFoundError:
+                    pass
+
+            slave.current_build_id = None
+            # It's a safe operation to try to add the same slave to the slave allocator multiple
+            # times, as the underlying implementation is an OrderedSetQueue, which doesn't allow
+            # multiple entries.
+            self._slave_allocator.add_idle_slave(slave)
+            slave_id = slave.id
+        else:
+            slave = Slave(slave_url, num_executors)
+            self._all_slaves_by_url[slave_url] = slave
+            self._slave_allocator.add_idle_slave(slave)
+            self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
+                              slave_url, num_executors, slave.id)
+            slave_id = slave.id
+        return {'slave_id': str(slave_id)}
 
     def handle_slave_state_update(self, slave, new_slave_state):
         """
