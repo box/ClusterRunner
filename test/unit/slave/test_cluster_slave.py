@@ -1,10 +1,12 @@
 import builtins
-from genty import genty, genty_dataset
 import http.client
+from threading import Event
+from unittest import skip
+from unittest.mock import ANY, call, MagicMock, Mock, mock_open, patch
+
+from genty import genty, genty_dataset
 import requests
 import requests.models
-from threading import Event
-from unittest.mock import ANY, call, MagicMock, Mock, mock_open, patch
 
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import ClusterSlave, SlaveState
@@ -162,6 +164,7 @@ class TestClusterSlave(BaseUnitTestCase):
         self.mock_network.put_with_digest = fake_network_put
         return subjob_done_event, teardown_done_event, setup_done_event
 
+    @skip('Flaky - see issue # 178')
     def test_executing_build_teardown_multiple_times_will_not_raise_exception(self):
         self.mock_network.post().status_code = http.client.OK
         slave = self._create_cluster_slave()
