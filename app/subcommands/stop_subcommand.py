@@ -1,5 +1,4 @@
 import os
-import signal
 import time
 
 import psutil
@@ -86,10 +85,10 @@ class StopSubcommand(Subcommand):
 
     def _terminate_running_procs(self, procs_to_termintate):
         for proc in [p for p in procs_to_termintate if p.is_running()]:
-            self._logger.info("Sending SIGTERM to PID {}", proc.pid)
-            os.kill(proc.pid, signal.SIGTERM)
+            self._logger.info("Terminating process with PID {}", proc.pid)
+            proc.terminate()
 
     def _kill_running_procs(self, procs_to_kill):
         for proc in [p for p in procs_to_kill if p.is_running()]:
-            self._logger.info("Sending SIGKILL to PID {}", proc.pid)
-            os.kill(proc.pid, signal.SIGKILL)
+            self._logger.info("Killing process with PID {}", proc.pid)
+            proc.kill()
