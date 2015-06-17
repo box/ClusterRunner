@@ -19,34 +19,59 @@ class Git(ProjectType):
     DIRECTORY_PERMISSIONS = 0o700
 
     @staticmethod
-    def get_full_repo_directory(url):
+    def _generate_path_from_repo_url(base_sys_path, url):
         """
-        Generates a directory to house the repo based on the origin url
-        :return: A path to clone the git repo in
+        Generate a sys path based on the base_sys_path and the git repo url. It also removes some invalid
+        characters from the final generated sys path.
+
+        e.g. _generate_path_from_repo_url('/tmp', 'ssh://source_control.cr.com:1234/master-repo') returns
+        /tmp/source_control.cr.com1234/masterrepo
+
+        :param base_sys_path: The base sys path of the generated sys path
+        :type base_sys_path: str
+        :param url: The remote 'origin' url of the git repo
+        :type url: str
+
+        :return: Sys path of combining the base_sys_path and generated sys path from url
         :rtype: str
         """
         url_components = urlparse(url)
         url_full_path_parts = url_components.path.split('/')
         repo_name = url_full_path_parts[-1].split('.')[0]
         url_folder_path_parts = url_full_path_parts[:-1]
-        repo_directory = os.path.join(Configuration['repo_directory'], url_components.netloc, *url_folder_path_parts)
-        return fs.remove_invalid_path_characters(os.path.join(repo_directory, repo_name))
+        repo_directory = os.path.join(
+            base_sys_path,
+            url_components.netloc.replace(':', ''),  # remove colons from netloc (e.g. turn example:8000 to example8000)
+            *url_folder_path_parts
+        )
+        # remove '-'s as PHP Intl extension doesn't appear to work if the repo is in a directory with a dash in the path
+        return os.path.join(repo_directory, repo_name).replace('-', '')
+
+    @staticmethod
+    def get_full_repo_directory(url):
+        """
+        Generates a sys path to house the repo based on the origin url
+        :param url: The remote 'origin' url of the git repo
+        :type url: str
+
+        :return: A path to clone the git repo in
+        :rtype: str
+        """
+
+        return Git._generate_path_from_repo_url(Configuration['repo_directory'], url)
 
     @staticmethod
     def get_timing_file_directory(url):
         """
-        Generates the path to store timing results in
+        Generates a sys path to store timing results in
         :param url: The remote 'origin' url for the git repo
+        :type url: str
+
         :return: A path for storing timing files
         :rtype: str
         """
-        url_components = urlparse(url)
-        timings_directory = os.path.join(
-            Configuration['timings_directory'],
-            url_components.netloc,
-            url_components.path.strip('/')
-        )
-        return fs.remove_invalid_path_characters(timings_directory)
+
+        return Git._generate_path_from_repo_url(Configuration['timings_directory'], url)
 
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
