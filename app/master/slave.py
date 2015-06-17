@@ -70,8 +70,9 @@ class Slave(object):
             'project_type_params': slave_project_type_params,
             'build_executor_start_index': build.num_executors_allocated,
         }
-        self._network.post_with_digest(setup_url, post_data, Secret.get())
+
         self.current_build_id = build.build_id()
+        self._network.post_with_digest(setup_url, post_data, Secret.get())
 
     def teardown(self):
         """

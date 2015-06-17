@@ -65,6 +65,23 @@ class TestSlave(BaseUnitTestCase):
             Secret.get()
         )
 
+    def test_build_id_is_set_on_master_before_telling_slave_to_setup(self):
+        # This test enforces an ordering that avoids a race where the slave finishes setup and posts back before the
+        # master has actually set the slave's current_build_id.
+        slave = self._create_slave()
+        mock_build = Mock()
+
+        def assert_slave_build_id_is_already_set(*args, **kwargs):
+            self.assertEqual(slave.current_build_id, mock_build.build_id(),
+                             'slave.current_build_id should be set before the master tells the slave to do setup.')
+
+        slave._network.post_with_digest = Mock(side_effect=assert_slave_build_id_is_already_set)
+        slave.setup(mock_build)
+
+        self.assertEqual(slave._network.post_with_digest.call_count, 1,
+                         'The behavior that this test is checking depends on slave setup being triggered via '
+                         'slave._network.post_with_digest().')
+
     def test_is_alive_returns_cached_value_if_use_cache_is_true(self):
         slave = self._create_slave()
         slave._is_alive = False
