@@ -15,4 +15,5 @@ script:
   - make $TARGETS
 
 after_success:
+  - pip install python-coveralls==2.5.0  # Do not put in requirements.txt; it will not install on Windows.
   - coveralls
