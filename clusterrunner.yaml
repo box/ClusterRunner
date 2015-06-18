@@ -3,4 +3,3 @@ Unit:
         - nosetests --with-xunit --xunit-file $ARTIFACT_DIR/result.xml $TESTPATH
     atomizers:
         - TESTPATH: find "test/unit" -name "test_*.py"
-
