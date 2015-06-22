@@ -1,3 +1,5 @@
+import os
+
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.functional.job_configs import BASIC_JOB
 
@@ -9,7 +11,7 @@ class TestMasterEndpoints(BaseFunctionalTestCase):
 
         build_resp = master.post_new_build({
             'type': 'directory',
-            'config': BASIC_JOB.config,
+            'config': BASIC_JOB.config[os.name],
             'project_directory': '/tmp',
             })
         build_id = build_resp['build_id']
