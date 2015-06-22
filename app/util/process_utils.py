@@ -1,4 +1,6 @@
 from contextlib import suppress
+import os
+import subprocess
 from subprocess import TimeoutExpired
 
 
@@ -23,3 +25,26 @@ def kill_gracefully(process, timeout=2):
         stdout, stderr = process.communicate()
 
     return process.returncode, stdout, stderr
+
+
+def Popen_with_delayed_expansion(cmd, *args, **kwargs):
+    """
+    A thin wrapper around subprocess.Popen which ensures that all environment variables in the cmd are expanded at
+    execution time. By default, Windows CMD *disables* delayed expansion which means it will expand the command first
+    before execution. E.g. run 'set FOO=1 && echo %FOO%' won't actually echo 1 because %FOO% gets expanded before the
+    execution.
+
+    :param cmd: The command to execute
+    :type cmd: str | iterable
+
+    :return: Popen object, just like the Popen object returned by subprocess.Popen
+    :rtype: :class:`Popen`
+    """
+    if os.name == 'nt':
+        cmd_with_deplayed_expansion = ['cmd', '/V', '/C']
+        if isinstance(cmd, str):
+            cmd_with_deplayed_expansion.append(cmd)
+        else:
+            cmd_with_deplayed_expansion.extend(cmd)
+        cmd = cmd_with_deplayed_expansion
+    return subprocess.Popen(cmd, *args, **kwargs)
