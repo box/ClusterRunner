@@ -19,7 +19,7 @@ class Subjob(object):
         :type subjob_id: int
         :param project_type:
         :type project_type: ProjectType
-        :param job_config: the job's configuration from cluster_runner.yaml
+        :param job_config: the job's configuration from clusterrunner.yaml
         :type job_config: JobConfig
         :param atoms: the atom project_type strings
         :type atoms: list[app.master.atom.Atom]

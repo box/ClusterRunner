@@ -17,7 +17,7 @@ class ProjectType(object):
 
     def __init__(self, config=None, job_name=None, remote_files=None):
         """
-        :param config: A yaml string representing a cluster_runner.yaml file
+        :param config: A yaml string representing a clusterrunner.yaml file
         :type config: str | None
         :type job_name: str | None
         :param remote_files: key-value pairs of where the key is the output_file and the value is the url
@@ -55,9 +55,9 @@ class ProjectType(object):
 
     def _get_config_contents(self):
         """
-        Default method for retriving the contents of cluster_runner.yaml.  Override this in project types using a
+        Default method for retriving the contents of clusterrunner.yaml.  Override this in project types using a
         different method
-        :return: The contents of cluster_runner.yaml
+        :return: The contents of clusterrunner.yaml
         :rtype: str
         """
         if self._config is not None:

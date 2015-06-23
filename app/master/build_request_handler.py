@@ -133,7 +133,7 @@ class BuildRequestHandler(object):
         job_config = project_type.job_config()
 
         if job_config is None:
-            build.mark_failed('Build failed while trying to parse cluster_runner.yaml.')
+            build.mark_failed('Build failed while trying to parse clusterrunner.yaml.')
             return
 
         subjobs = self._compute_subjobs_for_build(build_id, job_config, project_type)

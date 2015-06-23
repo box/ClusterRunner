@@ -20,9 +20,9 @@ class Directory(ProjectType):
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
 
-        :param project_directory: path to the directory that contains the project and cluster_runner.yaml
+        :param project_directory: path to the directory that contains the project and clusterrunner.yaml
         :type project_directory: string
-        :param config: a yaml string to be used in place of a cluster_runner.yaml
+        :param config: a yaml string to be used in place of a clusterrunner.yaml
         :type config: string|None
         :param job_name: a list of job names we intend to run
         :type job_name: list [str] | None

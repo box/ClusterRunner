@@ -61,7 +61,7 @@ class Git(ProjectType):
         :type url: str
         :param build_project_directory: the symlinked directory of where PROJECT_DIR should end up being set to
         :type build_project_directory: str
-        :param project_directory: path within the repo that contains cluster_runner.yaml
+        :param project_directory: path within the repo that contains clusterrunner.yaml
         :type project_directory: str
         :param remote: The git remote name to fetch from
         :type remote: str
