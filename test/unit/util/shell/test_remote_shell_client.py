@@ -9,7 +9,7 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestRemoteShellClient(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
-        self.mock_Popen = self.patch('app.util.shell.remote_shell_client.Popen')
+        self.mock_Popen = self.patch('app.util.shell.remote_shell_client.Popen_with_delayed_expansion')
 
     @genty_dataset(
         normal_response=(False, Response(raw_output=b'\ncat', raw_error=b'\ndog', returncode=0)),

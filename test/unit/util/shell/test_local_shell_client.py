@@ -16,7 +16,7 @@ class TestLocalShellClient(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.mock_shutil = self.patch('app.util.shell.local_shell_client.shutil')
-        self.mock_Popen = self.patch('app.util.shell.local_shell_client.Popen')
+        self.mock_Popen = self.patch('app.util.shell.local_shell_client.Popen_with_delayed_expansion')
 
     @genty_dataset(
         empty_response=(True, EmptyResponse()),

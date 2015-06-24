@@ -3,7 +3,7 @@ import inspect
 import os
 import re
 import signal
-from subprocess import Popen, TimeoutExpired
+from subprocess import TimeoutExpired
 from tempfile import TemporaryFile
 from threading import Event
 import time
@@ -11,6 +11,7 @@ import time
 from app.master.cluster_runner_config import ClusterRunnerConfig
 from app.util import log
 from app.util.conf.configuration import Configuration
+from app.util.process_utils import Popen_with_delayed_expansion
 
 
 class ProjectType(object):
@@ -191,7 +192,7 @@ class ProjectType(object):
         # Redirect output to files instead of using pipes to avoid: https://github.com/box/ClusterRunner/issues/57
         stdout_file = TemporaryFile()
         stderr_file = TemporaryFile()
-        pipe = Popen(
+        pipe = Popen_with_delayed_expansion(
             command,
             shell=True,
             stdout=stdout_file,

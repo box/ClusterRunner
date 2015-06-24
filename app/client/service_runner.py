@@ -1,10 +1,11 @@
 import requests
-from subprocess import Popen, DEVNULL
+from subprocess import DEVNULL
 import time
 
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
 from app.util.network import Network
+from app.util.process_utils import Popen_with_delayed_expansion
 from app.util.url_builder import UrlBuilder
 from app.util import poll
 
@@ -98,7 +99,7 @@ class ServiceRunner(object):
         """
         if service_url is not None and self.is_up(service_url):
             return
-        Popen(cmd, stdout=DEVNULL, shell=True)
+        Popen_with_delayed_expansion(cmd, stdout=DEVNULL, shell=True)
         if service_url is not None and not self.is_up(service_url, timeout=10):
             raise ServiceRunError("Failed to run service on {}.".format(service_url))
 

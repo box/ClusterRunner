@@ -8,7 +8,7 @@ class TestServiceRunner(BaseUnitTestCase):
 
     def setUp(self):
         super().setUp()
-        self.mock_Popen = self.patch('app.client.service_runner.Popen')
+        self.mock_Popen = self.patch('app.client.service_runner.Popen_with_delayed_expansion')
         self.mock_Network = self.patch('app.client.service_runner.Network')
         self.mock_time = self.patch('app.client.service_runner.time')
 
