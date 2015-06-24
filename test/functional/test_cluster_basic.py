@@ -1,6 +1,8 @@
-from genty import genty, genty_dataset
+import os
 import tempfile
 from unittest import skip
+
+from genty import genty, genty_dataset
 
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.framework.functional.fs_item import Directory, File
@@ -22,7 +24,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
         project_dir = tempfile.TemporaryDirectory()
         build_resp = master.post_new_build({
             'type': 'directory',
-            'config': test_job_config.config,
+            'config': test_job_config.config[os.name],
             'project_directory': project_dir.name,
         })
         build_id = build_resp['build_id']

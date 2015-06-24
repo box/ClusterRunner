@@ -23,8 +23,8 @@ class FunctionalTestJobConfig(object):
 
 # This is a very basic job where each atom just creates a simple text file.
 BASIC_JOB = FunctionalTestJobConfig(
-    config="""
-
+    config={
+        'posix': """
 BasicJob:
     commands:
         - echo $TOKEN > $ARTIFACT_DIR/result.txt
@@ -32,6 +32,14 @@ BasicJob:
         - TOKEN: seq 0 4 | xargs -I {} echo "This is atom {}"
 
 """,
+        'nt': """
+BasicJob:
+    commands:
+        - echo !TOKEN!> !ARTIFACT_DIR!\\result.txt
+    atomizers:
+        - TOKEN: FOR /l %n in (0,1,4) DO @echo This is atom %n
+""",
+    },
     expected_to_fail=False,
     expected_num_subjobs=5,
     expected_num_atoms=5,
@@ -48,8 +56,8 @@ BasicJob:
 
 # This is a very basic job, but one of the atoms will fail with non-zero exit code.
 BASIC_FAILING_JOB = FunctionalTestJobConfig(
-    config="""
-
+    config={
+        'posix': """
 BasicFailingJob:
     commands:
         - if [ "$TOKEN" = "This is atom 3" ]; then exit 1; fi
@@ -58,6 +66,14 @@ BasicFailingJob:
         - TOKEN: seq 0 4 | xargs -I {} echo "This is atom {}"
 
 """,
+        'nt': """
+BasicFailingJob:
+    commands:
+        - IF "!TOKEN!" == "This is atom 3" (EXIT 1) ELSE (echo !TOKEN!> !ARTIFACT_DIR!\\result.txt)
+    atomizers:
+        - TOKEN: FOR /l %n in (0,1,4) DO @echo This is atom %n
+""",
+    },
     expected_to_fail=True,
     expected_num_subjobs=5,
     expected_num_atoms=5,
@@ -76,7 +92,8 @@ BasicFailingJob:
 # This is a more complex job. Each step (setup_build, commands, teardown_build) depends on the previous steps. This
 # config also includes short sleeps to help tease out race conditions around setup and teardown timing.
 JOB_WITH_SETUP_AND_TEARDOWN = FunctionalTestJobConfig(
-    config="""
+    config={
+        'posix': """
 
 JobWithSetupAndTeardown:
     setup_build:
@@ -101,6 +118,9 @@ JobWithSetupAndTeardown:
         - echo "teardown." | tee -a $ALL_SUBJOB_FILES
 
 """,
+        'nt': """
+""",
+    },
     expected_to_fail=False,
     expected_num_subjobs=3,
     expected_num_atoms=3,
