@@ -8,6 +8,7 @@ from unittest import TestCase
 from app.util import log
 from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
+from app.util.process_utils import is_windows
 from app.util.secret import Secret
 from test.framework.functional.fs_item import Directory
 from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
@@ -71,9 +72,20 @@ class BaseFunctionalTestCase(TestCase):
 
         # Kill processes and make sure all processes exited with 0 exit code
         services = self.cluster.kill()
-        for service in services:
-            self.assertEqual(service.return_code, 0, 'Service running on url: {} should exit with code 0, but exited '
-                                                     'with code {}.'.format(service.url, service.return_code))
+
+        # only check the exit code if not on Windows as Popen.terminate kills the process on Windows and the exit
+        # code is not zero.
+        # TODO: remove the is_windows() check after we can handle exit on Windows gracefully.
+        if is_windows():
+            for service in services:
+                self.assertEqual(
+                    service.return_code,
+                    0,
+                    'Service running on url: {} should exit with code 0, but exited with code {}.'.format(
+                        service.url,
+                        service.return_code,
+                    ),
+                )
         # Remove the temp dir. This will delete the log files, so should be run after cluster shuts down.
         self.test_app_base_dir.cleanup()
 
