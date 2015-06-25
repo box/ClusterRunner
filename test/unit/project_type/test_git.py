@@ -186,7 +186,7 @@ class TestGit(BaseUnitTestCase):
         """
         command_to_result_map = command_to_result_map or {}
         self.patch('app.project_type.project_type.TemporaryFile', new=lambda: Mock())
-        project_type_popen_patch = self.patch('app.project_type.project_type.Popen')
+        project_type_popen_patch = self.patch('app.project_type.project_type.Popen_with_delayed_expansion')
 
         def fake_popen_constructor(command, stdout, stderr, *args, **kwargs):
             fake_result = _FakePopenResult()  # default value

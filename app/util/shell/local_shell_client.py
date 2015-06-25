@@ -1,7 +1,8 @@
 import shutil
-from subprocess import Popen, PIPE, DEVNULL
+from subprocess import PIPE, DEVNULL
 
 from app.util.log import get_logger
+from app.util.process_utils import Popen_with_delayed_expansion
 from app.util.shell.shell_client import ShellClient, Response, EmptyResponse
 
 
@@ -18,7 +19,7 @@ class LocalShellClient(ShellClient):
         """
         # todo investigate why this assignment is required for launching async operations using Popen
         self._logger.debug('popen async [{}:{}]: {}'.format(self.user, self.host, command))
-        proc = Popen(command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        Popen_with_delayed_expansion(command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
         return EmptyResponse()
 
     def _exec_command_on_client_blocking(self, command):
@@ -28,7 +29,7 @@ class LocalShellClient(ShellClient):
         :return:
         :rtype: Response
         """
-        proc = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen_with_delayed_expansion(command, shell=True, stdout=PIPE, stderr=PIPE)
         self._logger.debug('popen blocking [{}:{}]: {}'.format(self.user, self.host, command))
         output, error = proc.communicate()
         return Response(raw_output=output, raw_error=error, returncode=proc.returncode)

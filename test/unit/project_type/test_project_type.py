@@ -14,7 +14,7 @@ class TestProjectType(BaseUnitTestCase):
 
     def setUp(self):
         super().setUp()
-        self.mock_popen = self.patch('app.project_type.project_type.Popen').return_value
+        self.mock_popen = self.patch('app.project_type.project_type.Popen_with_delayed_expansion').return_value
         try:
             self.mock_kill = self.patch('os.killpg')
         except AttributeError:

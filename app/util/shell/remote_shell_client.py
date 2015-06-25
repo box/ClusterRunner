@@ -1,6 +1,7 @@
-from subprocess import Popen, PIPE, DEVNULL
+from subprocess import PIPE, DEVNULL
 
 from app.util.log import get_logger
+from app.util.process_utils import Popen_with_delayed_expansion
 from app.util.shell.shell_client import ShellClient, Response, EmptyResponse
 
 
@@ -16,7 +17,7 @@ class RemoteShellClient(ShellClient):
         """
         escaped_command = self._escaped_ssh_command(command)
         self._logger.debug('SSH popen async [{}:{}]: {}'.format(self.user, self.host, escaped_command))
-        proc = Popen(escaped_command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        Popen_with_delayed_expansion(escaped_command, shell=True, stdout=DEVNULL, stderr=DEVNULL)
         return EmptyResponse()
 
     def _exec_command_on_client_blocking(self, command):
@@ -26,7 +27,7 @@ class RemoteShellClient(ShellClient):
         """
         escaped_command = self._escaped_ssh_command(command)
         self._logger.debug('SSH popen blocking [{}:{}]: {}'.format(self.user, self.host, escaped_command))
-        proc = Popen(escaped_command, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen_with_delayed_expansion(escaped_command, shell=True, stdout=PIPE, stderr=PIPE)
         output, error = proc.communicate()
         return Response(raw_output=output, raw_error=error, returncode=proc.returncode)
 
@@ -39,7 +40,7 @@ class RemoteShellClient(ShellClient):
         # Avoid any ssh known_hosts prompts.
         command = 'scp -o StrictHostKeyChecking=no {} {}:{}'.format(source, self._host_string(), destination)
         self._logger.debug('SCP popen blocking [{}:{}]: {}'.format(self.user, self.host, command))
-        proc = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+        proc = Popen_with_delayed_expansion(command, shell=True, stdout=PIPE, stderr=PIPE)
         output, error = proc.communicate()
         return Response(raw_output=output, raw_error=error, returncode=proc.returncode)
 
