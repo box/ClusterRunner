@@ -27,6 +27,14 @@ def kill_gracefully(process, timeout=2):
     return process.returncode, stdout, stderr
 
 
+def _is_windows():
+    """
+    :return: Whether ClusterRunner is running on Windows or not>
+    :rtype: bool
+    """
+    return os.name == 'nt'
+
+
 def Popen_with_delayed_expansion(cmd, *args, **kwargs):
     """
     A thin wrapper around subprocess.Popen which ensures that all environment variables in the cmd are expanded at
@@ -40,7 +48,7 @@ def Popen_with_delayed_expansion(cmd, *args, **kwargs):
     :return: Popen object, just like the Popen object returned by subprocess.Popen
     :rtype: :class:`Popen`
     """
-    if os.name == 'nt':
+    if _is_windows():
         cmd_with_deplayed_expansion = ['cmd', '/V', '/C']
         if isinstance(cmd, str):
             cmd_with_deplayed_expansion.append(cmd)
@@ -48,3 +56,21 @@ def Popen_with_delayed_expansion(cmd, *args, **kwargs):
             cmd_with_deplayed_expansion.extend(cmd)
         cmd = cmd_with_deplayed_expansion
     return subprocess.Popen(cmd, *args, **kwargs)
+
+
+def get_environment_variable_setter_command(name, value):
+    """
+    Construct a platform specific command for setting an environment variable. Right now each command constructed
+    is designed to be chained with other commands.
+
+    :param name: The name of the environment variable
+    :type name: str
+    :param value: The value of the environment variable
+    :type value: str
+    :return: Platform specific command for setting the environment variable
+    :rtype: str
+    """
+    if _is_windows():
+        return 'set {}={}&&'.format(name, value)
+    else:
+        return 'export {}="{}";'.format(name, value)

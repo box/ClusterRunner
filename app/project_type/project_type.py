@@ -11,7 +11,7 @@ import time
 from app.master.cluster_runner_config import ClusterRunnerConfig
 from app.util import log
 from app.util.conf.configuration import Configuration
-from app.util.process_utils import Popen_with_delayed_expansion
+from app.util.process_utils import Popen_with_delayed_expansion, get_environment_variable_setter_command
 
 
 class ProjectType(object):
@@ -312,7 +312,7 @@ class ProjectType(object):
         environment_vars = self._get_environment_vars()
         environment_vars.update(extra_environment_vars or {})
 
-        commands = ['export {}="{}";'.format(key, value) for key, value in environment_vars.items()]
+        commands = [get_environment_variable_setter_command(key, value) for key, value in environment_vars.items()]
         return ' '.join(commands)
 
     def kill_subprocesses(self):

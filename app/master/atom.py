@@ -1,3 +1,5 @@
+from app.util.process_utils import get_environment_variable_setter_command
+
 
 class Atom(object):
     def __init__(self, env_var_name, atom_value, expected_time=None, actual_time=None):
@@ -13,4 +15,4 @@ class Atom(object):
         self.actual_time = actual_time
 
         # Convert atomizer command output into environment variable export commands.
-        self.command_string = 'export {}="{}";'.format(self._env_var_name, self._atom_value)
+        self.command_string = get_environment_variable_setter_command(self._env_var_name, self._atom_value)
