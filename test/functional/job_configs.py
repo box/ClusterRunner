@@ -94,7 +94,6 @@ BasicFailingJob:
 JOB_WITH_SETUP_AND_TEARDOWN = FunctionalTestJobConfig(
     config={
         'posix': """
-
 JobWithSetupAndTeardown:
     setup_build:
         - echo "Doing build setup."
@@ -119,6 +118,29 @@ JobWithSetupAndTeardown:
 
 """,
         'nt': """
+        # sleep 1 is replaced by ping 127.0.0.1 -n 1 to generate a small amount of delay.
+        # I didn't use 'timeout /t 1' since it would fail with "ERROR: Input redirection is not supported,
+        # exiting the process immediately."
+JobWithSetupAndTeardown:
+    setup_build:
+        - echo Doing build setup.
+        - ping 127.0.0.1 -n 1
+        - echo setup.> !PROJECT_DIR!\\build_setup.txt
+
+    commands:
+        - echo Doing subjob !SUBJOB_NUMBER!.
+        - ping 127.0.0.1 -n 1
+        - set MY_SUBJOB_FILE=!PROJECT_DIR!\\subjob_file_!SUBJOB_NUMBER!.txt
+        - COPY build_setup.txt !MY_SUBJOB_FILE!
+        - echo subjob !SUBJOB_NUMBER!.>> !MY_SUBJOB_FILE!
+
+    atomizers:
+        - SUBJOB_NUMBER: FOR /l %n in (1,1,3) DO @echo %n
+
+    teardown_build:
+        - echo Doing build teardown.
+        - ping 127.0.0.1 -n 1
+        - FOR /l %n in (1,1,3) DO @echo teardown.>> !PROJECT_DIR!\\subjob_file_%n.txt
 """,
     },
     expected_to_fail=False,
