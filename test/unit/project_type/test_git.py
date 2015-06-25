@@ -1,4 +1,5 @@
 from subprocess import Popen
+from unittest import skipIf
 from unittest.mock import ANY, call, MagicMock, Mock
 
 from genty import genty, genty_dataset
@@ -6,6 +7,7 @@ import re
 
 from app.project_type.git import Git
 from app.util.conf.configuration import Configuration
+from app.util.process_utils import is_windows
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from test.framework.comparators import AnyStringMatching
 
@@ -158,11 +160,13 @@ class TestGit(BaseUnitTestCase):
         self.assertIn(expected_call, popen_mock.call_args_list, 'Executed git command should include the correct '
                                                                 'option for StrictHostKeyChecking.')
 
+    @skipIf(is_windows(), 'Skipping test for cloning repo from master on Windows')
     def test_slave_param_overrides_returns_expected(self):
+        Configuration['get_project_from_master'] = True
+        Configuration['repo_directory'] = '/repo-directory'
         self._patch_popen({
             'git rev-parse FETCH_HEAD': _FakePopenResult(stdout='deadbee123\n')
         })
-        Configuration['repo_directory'] = '/repo-directory'
 
         git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
         git.fetch_project()
@@ -174,6 +178,21 @@ class TestGit(BaseUnitTestCase):
         }
         self.assertEqual(expected_overrides, actual_overrides, 'Slave param overrides from Git object should match'
                                                                'expected.')
+
+    def test_slave_param_overrides_when_get_project_from_master_is_disabled(self):
+        Configuration['get_project_from_master'] = False
+
+        git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
+        actual_overrides = git.slave_param_overrides()
+
+        self.assertFalse(
+            'url' in actual_overrides,
+            '"url" should not be in the params to override when "get_project_from_master" is False',
+        )
+        self.assertFalse(
+            'branch' in actual_overrides,
+            '"branch" should not be in the params to override when "get_project_from_master" is False',
+        )
 
     def _patch_popen(self, command_to_result_map=None):
         """
