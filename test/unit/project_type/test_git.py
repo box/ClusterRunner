@@ -1,3 +1,4 @@
+from os.path import join, expanduser
 from subprocess import Popen
 from unittest.mock import ANY, call, MagicMock, Mock
 
@@ -26,12 +27,18 @@ class TestGit(BaseUnitTestCase):
 
     def test_timing_file_path_happy_path(self):
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
-        timing_file = git_env.timing_file_path('QUnit')
-        self.assertEquals(
-            Configuration['base_directory'] +
-            '/timings/master/scm.dev.box.net/box/www/current/QUnit.timing.json',
-            timing_file
+        actual_timing_file_sys_path = git_env.timing_file_path('QUnit')
+        expected_timing_file_sys_path = join(
+            Configuration['base_directory'],
+            'timings',
+            'master',
+            'scm.dev.box.net',
+            'box',
+            'www',
+            'current',
+            'QUnit.timing.json',
         )
+        self.assertEquals(expected_timing_file_sys_path, actual_timing_file_sys_path)
 
     def test_execute_command_in_project_specifies_cwd_if_exists(self):
         self.os_path_exists_mock.return_value = True
@@ -65,36 +72,61 @@ class TestGit(BaseUnitTestCase):
         )
 
     def test_get_full_repo_directory(self):
-        Configuration['repo_directory'] = '/home/cr_user/.clusterrunner/repos/master'
+        Configuration['repo_directory'] = join(expanduser('~'), '.clusterrunner', 'repos')
         url = 'http://scm.example.com/path/to/project'
 
-        repo_path = Git.get_full_repo_directory(url)
+        actual_repo_sys_path = Git.get_full_repo_directory(url)
 
-        self.assertEqual(repo_path, '/home/cr_user/.clusterrunner/repos/master/scm.example.com/path/to/project')
+        expected_repo_sys_path = join(
+            Configuration['repo_directory'],
+            'scm.example.com',
+            'path',
+            'to',
+            'project',
+        )
+        self.assertEqual(expected_repo_sys_path, actual_repo_sys_path)
 
     def test_get_timing_file_directory(self):
-        Configuration['timings_directory'] = '/home/cr_user/.clusterrunner/timing'
+        Configuration['timings_directory'] = join(expanduser('~'), '.clusterrunner', 'timing')
         url = 'http://scm.example.com/path/to/project'
 
-        timings_path = Git.get_timing_file_directory(url)
+        actual_timings_sys_path = Git.get_timing_file_directory(url)
 
-        self.assertEqual(timings_path, '/home/cr_user/.clusterrunner/timing/scm.example.com/path/to/project')
+        expected_timings_sys_path = join(
+            Configuration['timings_directory'],
+            'scm.example.com',
+            'path',
+            'to',
+            'project',
+        )
+
+        self.assertEqual(expected_timings_sys_path, actual_timings_sys_path)
 
     def test_get_repo_directory_removes_colon_from_directory_if_exists(self):
-        Configuration['repo_directory'] = '/tmp/repos'
+        Configuration['repo_directory'] = join(expanduser('~'), 'tmp', 'repos')
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
 
-        repo_directory = git.get_full_repo_directory('ssh://source_control.cr.com:1234/master')
+        actual_repo_directory = git.get_full_repo_directory('ssh://source_control.cr.com:1234/master')
+        expected_repo_directory = join(
+            Configuration['repo_directory'],
+            'source_control.cr.com1234',
+            'master'
+        )
 
-        self.assertEqual(repo_directory, '/tmp/repos/source_control.cr.com1234/master')
+        self.assertEqual(expected_repo_directory, actual_repo_directory)
 
     def test_get_timing_file_directory_removes_colon_from_directory_if_exists(self):
-        Configuration['timings_directory'] = '/tmp/timings'
+        Configuration['timings_directory'] = join(expanduser('~'), 'tmp', 'timings')
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
 
-        repo_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/master')
+        actual_timing_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/master')
+        expected_timing_directory = join(
+            Configuration['timings_directory'],
+            'source_control.cr.com1234',
+            'master',
+        )
 
-        self.assertEqual(repo_directory, '/tmp/timings/source_control.cr.com1234/master')
+        self.assertEqual(expected_timing_directory, actual_timing_directory)
 
     def test_fetch_project_when_existing_repo_is_shallow_deletes_repo(self):
         self.os_path_isfile_mock.return_value = True
