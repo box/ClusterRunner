@@ -67,7 +67,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertIsNotNone(master.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
                              'Registered slave does not have the expected url.')
 
-    def test_connect_slave_with_existing_dead_slave_marks_it_as_alive(self):
+    def test_connect_slave_with_existing_dead_slave_creates_new_alive_instance(self):
         master = ClusterMaster()
         master.connect_slave('existing-slave.turtles.gov', 10)
         existing_slave = master.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
@@ -75,29 +75,25 @@ class TestClusterMaster(BaseUnitTestCase):
         existing_slave_id = existing_slave.id
 
         connect_response = master.connect_slave('existing-slave.turtles.gov', 10)
+        new_slave = master._all_slaves_by_url.get('existing-slave.turtles.gov')
 
-        self.assertEqual(str(existing_slave_id), connect_response['slave_id'],
-                         'The re-connected slave should not have generated a new slave id.')
-        self.assertTrue(existing_slave.is_alive(use_cached=True),
-                        'The re-connected slave should have been marked as alive once reconnected.')
+        self.assertNotEqual(str(existing_slave_id), connect_response['slave_id'],
+                            'The re-connected slave should have generated a new slave id.')
+        self.assertTrue(new_slave.is_alive(use_cached=True),
+                        'The new slave should have been marked as alive once instantiated.')
         self.assertEquals(2, self.mock_slave_allocator.add_idle_slave.call_count,
-                        'Expected slave to be added to the idle slaves list.')
+                          'Expected slave to be added to the idle slaves list.')
 
-    def test_connect_slave_with_existing_slave_running_build_gets_added_to_idle_slaves_list_and_cancels_build(self):
+    def test_connect_slave_with_existing_slave_running_build_cancels_build(self):
         master = ClusterMaster()
         master.connect_slave('running-slave.turtles.gov', 10)
         build_mock = MagicMock(spec_set=Build)
         master._all_builds_by_id[1] = build_mock
         existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
         existing_slave.current_build_id = 1
-        existing_slave_id = existing_slave.id
 
-        connect_response = master.connect_slave('running-slave.turtles.gov', 10)
+        master.connect_slave('running-slave.turtles.gov', 10)
 
-        self.assertEqual(str(existing_slave_id), connect_response['slave_id'],
-                         'The re-connected slave should not have generated a new slave id.')
-        self.assertEqual(2, self.mock_slave_allocator.add_idle_slave.call_count,
-                         'Expected slave to be added to the idle slaves list.')
         self.assertTrue(build_mock.cancel.called, 'The build was not cancelled.')
 
     def test_update_build_with_valid_params_succeeds(self):
