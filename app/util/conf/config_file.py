@@ -3,6 +3,7 @@ import os
 import stat
 
 from app.util import fs
+from app.util.process_utils import is_windows
 
 
 class ConfigFile(object):
@@ -21,7 +22,7 @@ class ConfigFile(object):
         if not os.path.isfile(self._filename):
             raise FileNotFoundError('Conf file {} does not exist'.format(self._filename))
         file_mode = stat.S_IMODE(os.stat(self._filename).st_mode)
-        if file_mode != self.CONFIG_FILE_MODE:
+        if is_windows() or file_mode != self.CONFIG_FILE_MODE:
             raise PermissionError('The conf file {} has incorrect permissions, '
                                   'should be 0600 for security reasons'.format(self._filename))
         config_parsed = ConfigObj(self._filename)

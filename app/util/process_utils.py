@@ -27,7 +27,7 @@ def kill_gracefully(process, timeout=2):
     return process.returncode, stdout, stderr
 
 
-def _is_windows():
+def is_windows():
     """
     :return: Whether ClusterRunner is running on Windows or not>
     :rtype: bool
@@ -48,7 +48,7 @@ def Popen_with_delayed_expansion(cmd, *args, **kwargs):
     :return: Popen object, just like the Popen object returned by subprocess.Popen
     :rtype: :class:`Popen`
     """
-    if _is_windows():
+    if is_windows():
         cmd_with_deplayed_expansion = ['cmd', '/V', '/C']
         if isinstance(cmd, str):
             cmd_with_deplayed_expansion.append(cmd)
@@ -70,7 +70,7 @@ def get_environment_variable_setter_command(name, value):
     :return: Platform specific command for setting the environment variable
     :rtype: str
     """
-    if _is_windows():
+    if is_windows():
         return 'set {}={}&&'.format(name, value)
     else:
         return 'export {}="{}";'.format(name, value)
