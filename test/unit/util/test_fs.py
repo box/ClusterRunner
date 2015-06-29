@@ -5,7 +5,7 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestFs(BaseUnitTestCase):
 
     def test_async_delete_calls_correct_commands(self):
-        popen_mock = self.patch('subprocess.Popen')
+        popen_mock = self.patch('app.util.fs.Popen_with_delayed_expansion')
         move_mock = self.patch('shutil.move')
         self.patch('os.path.isdir').return_value = True
         mkdtemp_mock = self.patch('tempfile.mkdtemp')
