@@ -21,6 +21,7 @@ def async_delete(path):
     """
     new_temp_path = tempfile.mkdtemp(prefix='async_delete_directory')
     shutil.move(path, new_temp_path)
+    # TODO: make the following command cross-platform.
     Popen_with_delayed_expansion(['rm', '-rf', new_temp_path])
 
 
