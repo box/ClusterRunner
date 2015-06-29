@@ -8,7 +8,7 @@ import re
 
 from app.project_type.git import Git
 from app.util.conf.configuration import Configuration
-from app.util.process_utils import is_windows
+from app.util.process_utils import is_windows, get_environment_variable_setter_command
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from test.framework.comparators import AnyStringMatching
 
@@ -46,12 +46,15 @@ class TestGit(BaseUnitTestCase):
         self.os_path_exists_mock.return_value = True
         project_type_popen_patch = self._patch_popen()
 
+        fake_project_directory = 'proj_dir'
+        fake_command = 'some_command'
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
-        git_env.project_directory = 'proj_dir'
-        git_env.execute_command_in_project('some_command')
+        git_env.project_directory = fake_project_directory
+        git_env.execute_command_in_project(fake_command)
+        env_setter = get_environment_variable_setter_command('PROJECT_DIR', fake_project_directory)
         project_type_popen_patch.assert_called_once_with(
-            'export PROJECT_DIR="proj_dir"; some_command',
-            cwd='proj_dir',
+            '{} {}'.format(env_setter, fake_command),
+            cwd=fake_project_directory,
             shell=ANY,
             stdout=ANY,
             stderr=ANY,
@@ -61,11 +64,14 @@ class TestGit(BaseUnitTestCase):
     def test_execute_command_in_project_type_specifies_cwd_if_doesnt_exist(self):
         project_type_popen_patch = self._patch_popen()
 
+        fake_project_directory = 'proj_dir'
+        fake_command = 'some_command'
         git_env = Git("ssh://scm.dev.box.net/box/www/current", 'origin', 'refs/changes/78/151978/27')
-        git_env.project_directory = 'proj_dir'
-        git_env.execute_command_in_project('some_command')
+        git_env.project_directory = fake_project_directory
+        git_env.execute_command_in_project(fake_command)
+        env_setter = get_environment_variable_setter_command('PROJECT_DIR', fake_project_directory)
         project_type_popen_patch.assert_called_once_with(
-            'export PROJECT_DIR="proj_dir"; some_command',
+            '{} {}'.format(env_setter, fake_command),
             cwd=None,
             shell=ANY,
             stdout=ANY,
