@@ -87,6 +87,11 @@ class BaseConfigLoader(object):
         conf.set('git_askpass_exe', join(bin_dir, 'git_askpass.sh'))
         conf.set('git_ssh_exe', join(bin_dir, 'git_ssh.sh'))
 
+        # How slaves get the project
+        # Slaves would get the project from master if set to True. Otherwise it would just get the project in
+        # the same way how the master gets the project.
+        conf.set('get_project_from_master', True)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory
@@ -131,6 +136,7 @@ class BaseConfigLoader(object):
             'eventlog_filename',
             'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
+            'get_project_from_master',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):
