@@ -46,8 +46,8 @@ class TestClusterBasic(BaseFunctionalTestCase):
         self.assert_directory_contents_match_expected(
             dir_path=project_dir.name, expected_dir_contents=test_job_config.expected_project_dir_contents)
 
-    # todo: Skipping for now since this fails on Travis-CI due to the slave being unable to ssh into the master.
-    @skip
+    # TODO: unskip the test when we've changed the default value of `get_project_from_master` to False
+    @skip('Skipping for now since this fails on Travis due to the slave being unable to ssh into the master.')
     def test_git_type_demo_project_config(self):
         master = self.cluster.start_master()
         self.cluster.start_slave(num_executors_per_slave=10)
