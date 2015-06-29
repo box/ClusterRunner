@@ -76,7 +76,7 @@ class BaseFunctionalTestCase(TestCase):
         # only check the exit code if not on Windows as Popen.terminate kills the process on Windows and the exit
         # code is not zero.
         # TODO: remove the is_windows() check after we can handle exit on Windows gracefully.
-        if is_windows():
+        if not is_windows():
             for service in services:
                 self.assertEqual(
                     service.return_code,
