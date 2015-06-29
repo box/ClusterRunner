@@ -102,12 +102,13 @@ class BuildRequestHandler(object):
             try:
                 self._prepare_build(build)
                 if not build.has_error:
-                    analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(),
+                    analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=True,
                                            log_msg='Build {build_id} successfully prepared and waiting for slaves.')
                     self._builds_waiting_for_slaves.put(build)
             except Exception as ex:  # pylint: disable=broad-except
                 build.mark_failed(str(ex))
                 self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
+                analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=False)
 
     def _prepare_build(self, build):
         """
