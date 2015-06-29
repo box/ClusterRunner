@@ -102,12 +102,12 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
         complete_valid_config=(_COMPLETE_VALID_CONFIG, {
             'name': 'Best Job Ever',
             'max_executors': 21,
-            'setup_build': 'echo "This is setup! Woo!" && sleep 1 ',
-            'command': 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/my_hard_work.txt ',
+            'setup_build': 'echo "This is setup! Woo!" && sleep 1',
+            'command': 'echo "Now I\'m doing $THE_THING!" && echo "Semicolons are fun." > /tmp/my_hard_work.txt',
             'atomizer': [{'THE_THING': 'printf \'something with a number %d\\n\' {1..50}'}],
         }),
         valid_config_with_empty_command=(_VALID_CONFIG_WITH_EMPTY_COMMANDS, {
-            'command': 'echo "first" && echo "last" ',
+            'command': 'echo "first" && echo "last"',
             'atomizer': [{'ENV_VAR': 'echo "atom"'}],
         }),
     )
@@ -168,4 +168,4 @@ class TestClusterRunnerConfig(BaseUnitTestCase):
         config = ClusterRunnerConfig(self._BACKGROUND_TASK_CONFIG)
         job_config = config.get_job_config()
         self.assertEqual(job_config.setup_build,
-                         'echo "in the background" & echo "in the foreground"  && echo "another thing" ')
+                         'echo "in the background" & echo "in the foreground"  && echo "another thing"')
