@@ -148,7 +148,7 @@ class ClusterRunnerConfig(object):
 
     def _shell_command_list_to_single_command(self, commands):
         """
-        Combines a list of commands into a single bash string
+        Combines a list of commands into a single command string
         :param commands: a list of commands, optionally ending with semicolons
         :type commands: list[str|None]
         :return: returns the concatenated shell command on success, or None if there was an error
@@ -174,7 +174,7 @@ class ClusterRunnerConfig(object):
         joined_commands = ''.join(sanitized_commands).strip()
 
         if joined_commands.endswith('&&'):
-            joined_commands = joined_commands.rstrip('&')
+            joined_commands = joined_commands.rstrip('&').strip()
 
         return joined_commands
 
