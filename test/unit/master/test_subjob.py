@@ -4,6 +4,7 @@ from app.master.job_config import JobConfig
 
 from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
+from app.util.process_utils import get_environment_variable_setter_command
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -28,8 +29,18 @@ class TestSubjob(BaseUnitTestCase):
             'id': 34,
             'command': job_config_command,
             'atoms': [
-                {'id': 0, 'atom': 'export BREAKFAST="pancakes";', 'expected_time': 23.4, 'actual_time': 56.7},
-                {'id': 1, 'atom': 'export BREAKFAST="cereal";', 'expected_time': 89.0, 'actual_time': 24.6},
+                {
+                    'id': 0,
+                    'atom': get_environment_variable_setter_command('BREAKFAST', 'pancakes'),
+                    'expected_time': 23.4,
+                    'actual_time': 56.7,
+                },
+                {
+                    'id': 1,
+                    'atom': get_environment_variable_setter_command('BREAKFAST', 'cereal'),
+                    'expected_time': 89.0,
+                    'actual_time': 24.6,
+                },
             ]
         }
         self.assertEqual(actual_api_repr, expected_api_repr, 'Actual api representation should match expected.')
