@@ -2,8 +2,9 @@ from queue import Queue
 from os.path import abspath, join
 import sys
 from threading import Event
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, mock_open
 
+from app.master.atom import Atom
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_request import BuildRequest
@@ -152,6 +153,24 @@ class TestBuild(BaseUnitTestCase):
         build._create_build_artifact.assert_called_once_with()
         self.assertTrue(build._subjobs_are_finished)
         self.assertEqual(build._status(), BuildStatus.FINISHED)
+
+    def test_complete_subjob_parses_payload_and_stores_value_in_atom_objects(self):
+        m_open = self.patch('app.master.build.open', new=mock_open(read_data='1'), create=True)
+        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
+        build = Build(BuildRequest({}))
+        build._project_type = self._create_mock_project_type()
+        subjob = self._create_subjobs(count=1, build_id=build.build_id(), atoms=[Atom('FOO', 1)])[0]
+        build.prepare([subjob], self._create_job_config())
+
+        payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
+        build.complete_subjob(subjob.subjob_id(), payload=payload)
+
+        expected_payload_sys_path = join(Configuration['results_directory'], '1', 'artifact_0_0')
+        m_open.assert_called_once_with(
+            join(expected_payload_sys_path, Subjob.EXIT_CODE_FILE),
+            'r',
+        )
+        self.assertEqual(subjob.atoms[0].exit_code, 1)
 
     def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
         Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
@@ -331,9 +350,15 @@ class TestBuild(BaseUnitTestCase):
         with self.assertRaises(BuildProjectError):
             build.generate_project_type()
 
-    def _create_subjobs(self, count=3, build_id=0):
+    def _create_subjobs(self, count=3, build_id=0, atoms=None):
         return [
-            Subjob(build_id=build_id, subjob_id=i, project_type=None, job_config=None, atoms=[])
+            Subjob(
+                build_id=build_id,
+                subjob_id=i,
+                project_type=None,
+                job_config=None,
+                atoms=atoms if atoms else [],
+            )
             for i in range(count)
         ]
 

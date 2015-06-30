@@ -6,6 +6,7 @@ import uuid
 
 from app.master.build_artifact import BuildArtifact
 from app.master.slave import SlaveMarkedForShutdownError
+from app.master.subjob import Subjob
 from app.util import analytics, util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -228,6 +229,22 @@ class Build(object):
             self.mark_failed('Error occurred while completing subjob {}.'.format(subjob_id))
             raise
 
+    def _get_atom_artifact_sys_path(self, subjob, atom_id):
+        return os.path.join(
+            self._build_results_dir(),
+            subjob.get_atom_artifact_name(atom_id),
+        )
+
+    def _parse_payload_for_atom_exit_code(self, subjob_id):
+        subjob = self.subjob(subjob_id)
+        for atom_id in range(len(subjob.atoms)):
+            atom_exit_code_file_sys_path = os.path.join(
+                self._get_atom_artifact_sys_path(subjob, atom_id),
+                Subjob.EXIT_CODE_FILE,
+            )
+            with open(atom_exit_code_file_sys_path, 'r') as atom_exit_code_file:
+                subjob.atoms[atom_id].exit_code = int(atom_exit_code_file.read())
+
     def _handle_subjob_payload(self, subjob_id, payload):
         if not payload:
             self._logger.warning('No payload for subjob {} of build {}.', subjob_id, self._build_id)
@@ -241,6 +258,7 @@ class Build(object):
         try:
             app.util.fs.write_file(payload['body'], result_file_path)
             app.util.fs.extract_tar(result_file_path, delete=True)
+            self._parse_payload_for_atom_exit_code(subjob_id)
         except:
             self._logger.warning('Writing payload for subjob {} of build {} FAILED.', subjob_id, self._build_id)
             raise

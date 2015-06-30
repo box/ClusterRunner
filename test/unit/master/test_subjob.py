@@ -18,8 +18,8 @@ class TestSubjob(BaseUnitTestCase):
             project_type=Mock(spec_set=ProjectType),
             job_config=Mock(spec=JobConfig, command=job_config_command),
             atoms=[
-                Atom('BREAKFAST', 'pancakes', expected_time=23.4, actual_time=56.7),
-                Atom('BREAKFAST', 'cereal', expected_time=89.0, actual_time=24.6),
+                Atom('BREAKFAST', 'pancakes', expected_time=23.4, actual_time=56.7, exit_code=1),
+                Atom('BREAKFAST', 'cereal', expected_time=89.0, actual_time=24.6, exit_code=0),
             ],
         )
 
@@ -34,12 +34,14 @@ class TestSubjob(BaseUnitTestCase):
                     'atom': get_environment_variable_setter_command('BREAKFAST', 'pancakes'),
                     'expected_time': 23.4,
                     'actual_time': 56.7,
+                    'exit_code': 1,
                 },
                 {
                     'id': 1,
                     'atom': get_environment_variable_setter_command('BREAKFAST', 'cereal'),
                     'expected_time': 89.0,
                     'actual_time': 24.6,
+                    'exit_code': 0,
                 },
             ]
         }
