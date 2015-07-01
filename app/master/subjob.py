@@ -43,12 +43,17 @@ class Subjob(object):
             'atoms': self.get_atoms()
         }
 
+    @property
+    def atoms(self):
+        return self._atoms
+
     def get_atoms(self):
         return [{
             'id': idx,
             'atom': atom.command_string,
             'expected_time': atom.expected_time,
             'actual_time': atom.actual_time,
+            'exit_code': atom.exit_code,
         } for idx, atom in enumerate(self._atoms)]
 
     def build_id(self):
@@ -73,6 +78,15 @@ class Subjob(object):
         job_command = self.job_config.command
         return ['{} {}'.format(atom.command_string, job_command) for atom in self._atoms]
 
+    def get_atom_artifact_name(self, atom_id):
+        """
+        Construct atom artifact dir name for `atom_id`. E.g. "artifact_0_0" for atom 0 of subjob 0.
+
+        :param atom_id: The atom id
+        :return: The artifact dir name for `atom_id`
+        """
+        return Subjob.ATOM_DIR_FORMAT.format(self._subjob_id, atom_id)
+
     def _timings_file_path(self, atom_id, result_root=None):
         """
         The path to read/write the subjob's timing data from, relative to a root 'result' directory
@@ -81,9 +95,11 @@ class Subjob(object):
         :param str result_root: root of the result path
         :rtype: str
         """
-        return os.path.join(self.artifact_dir(result_root),
-                            Subjob.ATOM_DIR_FORMAT.format(self._subjob_id, atom_id),
-                            Subjob.TIMING_FILE)
+        return os.path.join(
+            self.artifact_dir(result_root),
+            self.get_atom_artifact_name(atom_id),
+            Subjob.TIMING_FILE,
+        )
 
     def add_timings(self, timings):
         """
