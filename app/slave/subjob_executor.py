@@ -131,13 +131,13 @@ class SubjobExecutor(object):
         :rtype: int
         """
         fs_util.create_dir(atom_artifact_dir)
-
-        start_time = time.time()
-        output, exit_code = self._project_type.execute_command_in_project(atomic_command, atom_environment_vars)
-        elapsed_time = time.time() - start_time
-
-        console_output_path = os.path.join(atom_artifact_dir, Subjob.OUTPUT_FILE)
-        fs_util.write_file(output, console_output_path)
+        # This console_output_file must be opened in 'w+b' mode in order to be interchangeable with the
+        # TemporaryFile instance that gets instantiated in self._project_type.execute_command_in_project.
+        with open(os.path.join(atom_artifact_dir, Subjob.OUTPUT_FILE), mode='w+b') as console_output_file:
+            start_time = time.time()
+            _, exit_code = self._project_type.execute_command_in_project(atomic_command, atom_environment_vars,
+                                                                         output_file=console_output_file)
+            elapsed_time = time.time() - start_time
 
         exit_code_output_path = os.path.join(atom_artifact_dir, Subjob.EXIT_CODE_FILE)
         fs_util.write_file(str(exit_code) + '\n', exit_code_output_path)

@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, mock_open
 
 from app.slave.subjob_executor import SubjobExecutor
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -40,6 +40,7 @@ class TestSubjobExecutor(BaseUnitTestCase):
         executor._project_type.execute_command_in_project = Mock(return_value=(1, 2))
         self.patch('app.slave.subjob_executor.fs_util')
         self.patch('app.slave.subjob_executor.shutil')
+        output_file_mock = self.patch('app.slave.subjob_executor.open', new=mock_open(read_data=''), create=True).return_value
         os = self.patch('app.slave.subjob_executor.os')
         os.path = Mock()
         os.path.join = Mock(return_value='path')
@@ -56,4 +57,5 @@ class TestSubjobExecutor(BaseUnitTestCase):
         executor.execute_subjob(build_id=1, subjob_id=2, subjob_artifact_dir='dir', atomic_commands=atomic_commands,
                                 base_executor_index=6)
 
-        executor._project_type.execute_command_in_project.assert_called_with('command', expected_env_vars)
+        executor._project_type.execute_command_in_project.assert_called_with('command', expected_env_vars,
+                                                                             output_file=output_file_mock)
