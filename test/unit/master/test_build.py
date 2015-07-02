@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, Mock, mock_open
 from app.master.atom import Atom, AtomState
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
+from app.master.build_artifact import BuildArtifact
 from app.master.build_request import BuildRequest
 from app.master.job_config import JobConfig
 from app.master.slave import Slave
@@ -171,7 +172,7 @@ class TestBuild(BaseUnitTestCase):
 
         expected_payload_sys_path = join(Configuration['results_directory'], '1', 'artifact_0_0')
         m_open.assert_called_once_with(
-            join(expected_payload_sys_path, Subjob.EXIT_CODE_FILE),
+            join(expected_payload_sys_path, BuildArtifact.EXIT_CODE_FILE),
             'r',
         )
         self.assertEqual(subjob.atoms[0].exit_code, 1)

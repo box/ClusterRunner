@@ -6,7 +6,6 @@ import uuid
 
 from app.master.build_artifact import BuildArtifact
 from app.master.slave import SlaveMarkedForShutdownError
-from app.master.subjob import Subjob
 from app.util import analytics, util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -229,19 +228,16 @@ class Build(object):
             self.mark_failed('Error occurred while completing subjob {}.'.format(subjob_id))
             raise
 
-    def _get_atom_artifact_sys_path(self, subjob, atom_id):
-        return os.path.join(
-            self._build_results_dir(),
-            subjob.get_atom_artifact_name(atom_id),
-        )
-
     def _parse_payload_for_atom_exit_code(self, subjob_id):
         subjob = self.subjob(subjob_id)
         for atom_id in range(len(subjob.atoms)):
-            atom_exit_code_file_sys_path = os.path.join(
-                self._get_atom_artifact_sys_path(subjob, atom_id),
-                Subjob.EXIT_CODE_FILE,
+            artifact_dir = BuildArtifact.atom_artifact_directory(
+                self.build_id(),
+                subjob.subjob_id(),
+                atom_id,
+                result_root=Configuration['results_directory']
             )
+            atom_exit_code_file_sys_path = os.path.join(artifact_dir, BuildArtifact.EXIT_CODE_FILE)
             with open(atom_exit_code_file_sys_path, 'r') as atom_exit_code_file:
                 subjob.atoms[atom_id].exit_code = int(atom_exit_code_file.read())
 
@@ -251,9 +247,7 @@ class Build(object):
             return
 
         # Assertion: all payloads received from subjobs are uniquely named.
-        result_file_path = os.path.join(
-            self._build_results_dir(),
-            payload['filename'])
+        result_file_path = os.path.join(self._build_results_dir(), payload['filename'])
 
         try:
             app.util.fs.write_file(payload['body'], result_file_path)
@@ -469,10 +463,7 @@ class Build(object):
         self._artifacts_archive_file = app.util.fs.compress_directory(self._build_results_dir(), 'results.tar.gz')
 
     def _build_results_dir(self):
-        return os.path.join(
-            Configuration['results_directory'],
-            str(self.build_id()),
-        )
+        return BuildArtifact.build_artifact_directory(self.build_id(), result_root=Configuration['results_directory'])
 
     def _generate_unique_symlink_path_for_build_repo(self):
         """

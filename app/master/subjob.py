@@ -1,17 +1,12 @@
 import os
 
 from app.master.atom import AtomState
+from app.master.build_artifact import BuildArtifact
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
 
 
 class Subjob(object):
-    ATOM_DIR_FORMAT = "artifact_{}_{}"
-    OUTPUT_FILE = 'clusterrunner_console_output'
-    EXIT_CODE_FILE = 'clusterrunner_exit_code'
-    COMMAND_FILE = 'clusterrunner_command'
-    TIMING_FILE = 'clusterrunner_time'
-
     def __init__(self, build_id, subjob_id, project_type, job_config, atoms):
         """
         :param build_id:
@@ -103,29 +98,6 @@ class Subjob(object):
         job_command = self.job_config.command
         return ['{} {}'.format(atom.command_string, job_command) for atom in self._atoms]
 
-    def get_atom_artifact_name(self, atom_id):
-        """
-        Construct atom artifact dir name for `atom_id`. E.g. "artifact_0_0" for atom 0 of subjob 0.
-
-        :param atom_id: The atom id
-        :return: The artifact dir name for `atom_id`
-        """
-        return Subjob.ATOM_DIR_FORMAT.format(self._subjob_id, atom_id)
-
-    def _timings_file_path(self, atom_id, result_root=None):
-        """
-        The path to read/write the subjob's timing data from, relative to a root 'result' directory
-
-        :param int atom_id: id for the atom
-        :param str result_root: root of the result path
-        :rtype: str
-        """
-        return os.path.join(
-            self.artifact_dir(result_root),
-            self.get_atom_artifact_name(atom_id),
-            Subjob.TIMING_FILE,
-        )
-
     def add_timings(self, timings):
         """
         Add timing data for this subjob's atoms, collected from a slave
@@ -142,9 +114,13 @@ class Subjob(object):
         """
         timings = {}
         for atom_id, atom in enumerate(self._atoms):
-
-            timings_file_path = self._timings_file_path(
-                atom_id, result_root=Configuration['results_directory'])
+            artifact_dir = BuildArtifact.atom_artifact_directory(
+                self.build_id(),
+                self.subjob_id(),
+                atom_id,
+                result_root=Configuration['results_directory']
+            )
+            timings_file_path = os.path.join(artifact_dir, BuildArtifact.TIMING_FILE)
             if os.path.exists(timings_file_path):
                 with open(timings_file_path, 'r') as f:
                     # Strip out the project directory from atom timing data in order to have all
@@ -161,15 +137,3 @@ class Subjob(object):
             self._logger.warning('No timing data for subjob {}.', self._subjob_id)
 
         return timings
-
-    def artifact_dir(self, result_root=None):
-        """
-        Generate the path to where the artifacts for a subjob should be stored on the file system.
-
-        :type result_root: str
-        :rtype: string
-        """
-        return os.path.join(
-            result_root or Configuration['artifact_directory'],
-            str(self._build_id)
-        )
