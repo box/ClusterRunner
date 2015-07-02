@@ -252,7 +252,6 @@ class TestGit(BaseUnitTestCase):
                     fake_result = command_to_result_map[command_regex]
                     break
             stdout.read.return_value = fake_result.stdout.encode()
-            stderr.read.return_value = fake_result.stderr.encode()
             return Mock(spec=Popen, returncode=fake_result.return_code)
 
         project_type_popen_patch.side_effect = fake_popen_constructor

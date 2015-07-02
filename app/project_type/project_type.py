@@ -3,7 +3,7 @@ import inspect
 import os
 import re
 import signal
-from subprocess import TimeoutExpired
+from subprocess import TimeoutExpired, STDOUT
 from tempfile import TemporaryFile
 from threading import Event
 import time
@@ -170,7 +170,8 @@ class ProjectType(object):
         """
         return command
 
-    def execute_command_in_project(self, command, extra_environment_vars=None, timeout=None, **popen_kwargs):
+    def execute_command_in_project(self, command, extra_environment_vars=None, timeout=None, output_file=None,
+                                   **popen_kwargs):
         """
         Execute a command in the context of the project
 
@@ -180,6 +181,9 @@ class ProjectType(object):
         :type extra_environment_vars: dict[str, str]
         :param timeout: A maximum number of seconds before the process is terminated, or None for no timeout
         :type timeout: int | None
+        :param output_file: The file to write console output to (both stdout and stderr). If not specified,
+                            will generate a TemporaryFile. This method will close the file.
+        :type output_file: BufferedRandom | None
         :param popen_kwargs: additional keyword arguments to pass through to subprocess.Popen
         :type popen_kwargs: dict[str, mixed]
         :return: a tuple of (the string output from the command, the exit code of the command)
@@ -190,17 +194,50 @@ class ProjectType(object):
         self._logger.debug('Executing command in project: {}', command)
 
         # Redirect output to files instead of using pipes to avoid: https://github.com/box/ClusterRunner/issues/57
-        stdout_file = TemporaryFile()
-        stderr_file = TemporaryFile()
+        output_file = output_file if output_file is not None else TemporaryFile()
         pipe = Popen_with_delayed_expansion(
             command,
             shell=True,
-            stdout=stdout_file,
-            stderr=stderr_file,
+            stdout=output_file,
+            stderr=STDOUT,  # Redirect stderr to stdout, as we do not care to distinguish the two.
             start_new_session=True,  # Starts a new process group (so we can kill it without killing clusterrunner).
             **popen_kwargs
         )
 
+        clusterrunner_error_msgs = self._wait_for_pipe_to_close(pipe, command, timeout)
+        console_output = self._read_file_contents_and_close(output_file)
+        exit_code = pipe.returncode
+
+        if exit_code != 0:
+            max_log_length = 300
+            logged_console_output = console_output
+            if len(console_output) > max_log_length:
+                logged_console_output = '{}... (total output length: {})'.format(console_output[:max_log_length],
+                                                                                 len(console_output))
+
+            # Note we are intentionally not logging at error or warning level here. Interpreting a non-zero return
+            # code as a failure is context-dependent, so we can't make that determination here.
+            self._logger.notice(
+                'Command exited with non-zero exit code.\nCommand: {}\nExit code: {}\nConsole output: {}\n',
+                command, exit_code, logged_console_output)
+        else:
+            self._logger.debug('Command completed with exit code {}.', exit_code)
+
+        exit_code = exit_code if exit_code is not None else -1  # Make sure we always return an int.
+        combined_command_output = '\n'.join([console_output] + clusterrunner_error_msgs)
+        return combined_command_output, exit_code
+
+    def _wait_for_pipe_to_close(self, pipe, command, timeout):
+        """
+        Wait for the pipe to close (after command completes) or until timeout. If timeout is reached, then
+        kill the pipe as well as any child processes spawned.
+
+        :type pipe: Popen
+        :type command: str
+        :type timeout: int | None
+        :return: the list of error encountered while waiting for the pipe to close.
+        :rtype: list[str]
+        """
         clusterrunner_error_msgs = []
         command_completed = False
         timeout_time = time.time() + (timeout or float('inf'))
@@ -246,28 +283,7 @@ class ProjectType(object):
                 clusterrunner_error_msgs.append(
                     'ClusterRunner: {} ({}: "{}")'.format(error_message, type(ex).__name__, ex))
 
-        stdout, stderr = [self._read_file_contents_and_close(f) for f in [stdout_file, stderr_file]]
-        exit_code = pipe.returncode
-
-        if exit_code != 0:
-            max_log_length = 300
-            logged_stdout, logged_stderr = stdout, stderr
-            if len(stdout) > max_log_length:
-                logged_stdout = '{}... (total stdout length: {})'.format(stdout[:max_log_length], len(stdout))
-            if len(stderr) > max_log_length:
-                logged_stderr = '{}... (total stderr length: {})'.format(stderr[:max_log_length], len(stderr))
-
-            # Note we are intentionally not logging at error or warning level here. Interpreting a non-zero return code
-            # as a failure is context-dependent, so we can't make that determination here.
-            self._logger.notice(
-                'Command exited with non-zero exit code.\nCommand: {}\nExit code: {}\nStdout: {}\nStderr: {}\n',
-                command, exit_code, logged_stdout, logged_stderr)
-        else:
-            self._logger.debug('Command completed with exit code {}.', exit_code)
-
-        exit_code = exit_code if exit_code is not None else -1  # Make sure we always return an int.
-        combined_command_output = '\n'.join([stdout, stderr] + clusterrunner_error_msgs)
-        return combined_command_output, exit_code
+        return clusterrunner_error_msgs
 
     def _read_file_contents_and_close(self, file):
         """
