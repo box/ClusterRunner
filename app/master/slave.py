@@ -95,6 +95,7 @@ class Slave(object):
             raise SlaveMarkedForShutdownError('Tried to start a subjob on a slave in shutdown mode. ({}, id: {})'
                                               .format(self.url, self.id))
 
+        subjob.mark_in_progress()
         SafeThread(target=self._async_start_subjob, args=(subjob,)).start()
 
     def _async_start_subjob(self, subjob):

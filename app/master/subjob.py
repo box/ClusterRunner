@@ -1,5 +1,6 @@
 import os
 
+from app.master.atom import AtomState
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
 
@@ -31,7 +32,30 @@ class Subjob(object):
         self.project_type = project_type
         self.job_config = job_config
         self._atoms = atoms
+        self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
+
+    def _set_atom_state(self, state):
+        """
+        Set the state of all atoms of the subjob.
+
+        :param state: up-to-date state of all atoms of the subjob
+        :type state: `:class:AtomState`
+        """
+        for atom in self._atoms:
+            atom.state = state
+
+    def mark_in_progress(self):
+        """
+        Mark the subjob IN_PROGRESS, which marks the state of all the atoms of the subjob IN_PROGRESS.
+        """
+        self._set_atom_state(AtomState.IN_PROGRESS)
+
+    def mark_completed(self):
+        """
+        Mark the subjob COMPLETED, which marks the state of all the atoms of the subjob COMPLETED.
+        """
+        self._set_atom_state(AtomState.COMPLETED)
 
     def api_representation(self):
         """
@@ -54,6 +78,7 @@ class Subjob(object):
             'expected_time': atom.expected_time,
             'actual_time': atom.actual_time,
             'exit_code': atom.exit_code,
+            'state': atom.state.value,
         } for idx, atom in enumerate(self._atoms)]
 
     def build_id(self):

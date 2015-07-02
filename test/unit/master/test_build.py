@@ -4,7 +4,7 @@ import sys
 from threading import Event
 from unittest.mock import MagicMock, Mock, mock_open
 
-from app.master.atom import Atom
+from app.master.atom import Atom, AtomState
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_request import BuildRequest
@@ -154,13 +154,17 @@ class TestBuild(BaseUnitTestCase):
         self.assertTrue(build._subjobs_are_finished)
         self.assertEqual(build._status(), BuildStatus.FINISHED)
 
-    def test_complete_subjob_parses_payload_and_stores_value_in_atom_objects(self):
+    def _prepare_one_subjob_with_one_atom(self):
         m_open = self.patch('app.master.build.open', new=mock_open(read_data='1'), create=True)
         Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
         build = Build(BuildRequest({}))
         build._project_type = self._create_mock_project_type()
         subjob = self._create_subjobs(count=1, build_id=build.build_id(), atoms=[Atom('FOO', 1)])[0]
         build.prepare([subjob], self._create_job_config())
+        return build, subjob, m_open
+
+    def test_complete_subjob_parses_payload_and_stores_value_in_atom_objects(self):
+        build, subjob, m_open = self._prepare_one_subjob_with_one_atom()
 
         payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
         build.complete_subjob(subjob.subjob_id(), payload=payload)
@@ -172,12 +176,17 @@ class TestBuild(BaseUnitTestCase):
         )
         self.assertEqual(subjob.atoms[0].exit_code, 1)
 
+    def test_complete_subjob_marks_atoms_of_subjob_as_completed(self):
+        build, subjob, _ = self._prepare_one_subjob_with_one_atom()
+
+        payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
+        build.complete_subjob(subjob.subjob_id(), payload=payload)
+
+        for atom in subjob.atoms:
+            self.assertEqual(AtomState.COMPLETED, atom.state)
+
     def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
-        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
-        build = Build(BuildRequest({}))
-        build._project_type = self._create_mock_project_type()
-        subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
-        build.prepare([subjob], self._create_job_config())
+        build, subjob, _ = self._prepare_one_subjob_with_one_atom()
 
         payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
         build.complete_subjob(subjob.subjob_id(), payload=payload)
