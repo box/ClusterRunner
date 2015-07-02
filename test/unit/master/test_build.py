@@ -27,6 +27,7 @@ class TestBuild(BaseUnitTestCase):
         super().setUp()
         mock_util = self.patch('app.master.build.app.util')  # stub out util since these often interact with the fs
         self.mock_fs = mock_util.fs
+        self.patch('app.master.build.BuildArtifact.__new__')  # patch __new__ to mock instances but keep static methods
 
     def test_allocate_slave_calls_slave_setup(self):
         subjobs = self._create_subjobs()
@@ -360,13 +361,130 @@ class TestBuild(BaseUnitTestCase):
         with self.assertRaises(BuildProjectError):
             build.generate_project_type()
 
-    def _create_subjobs(self, count=3, build_id=0, atoms=None):
+    def test_creating_build_sets_queued_timestamp(self):
+        build = self._create_test_build()
+        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.QUEUED),
+                             '"queued" timestamp should be set immediately after build creation.')
+
+    def test_preparing_build_sets_prepared_timestamps(self):
+        job_config = self._create_job_config()
+        subjobs = self._create_subjobs(job_config=job_config)
+        build = self._create_test_build(BuildStatus.QUEUED)
+
+        self.assertIsNone(build.get_state_timestamp(BuildStatus.PREPARED),
+                          '"prepared" timestamp should not be set before build preparation.')
+
+        build.prepare(subjobs=subjobs, job_config=job_config)
+
+        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.PREPARED),
+                             '"prepared" timestamp should not be set before build preparation.')
+
+    def test_allocating_slave_to_build_sets_building_timestamp_only_on_first_slave_allocation(self):
+        mock_slave1 = self._create_mock_slave()
+        mock_slave2 = self._create_mock_slave()
+        build = self._create_test_build(BuildStatus.PREPARED)
+
+        self.assertIsNone(build.get_state_timestamp(BuildStatus.BUILDING),
+                          '"building" timestamp should not be set until slave allocated.')
+
+        build.allocate_slave(slave=mock_slave1)
+        building_timestamp1 = build.get_state_timestamp(BuildStatus.BUILDING)
+        build.allocate_slave(slave=mock_slave2)
+        building_timestamp2 = build.get_state_timestamp(BuildStatus.BUILDING)
+
+        self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first slave allocated.')
+        self.assertEqual(building_timestamp1, building_timestamp2,
+                         '"building" timestamp should not change upon further slave allocation.')
+
+    def test_finishing_build_sets_finished_timestamp(self):
+        build = self._create_test_build(BuildStatus.BUILDING)
+
+        self.assertIsNone(build.get_state_timestamp(BuildStatus.FINISHED),
+                          '"finished" timestamp should not be set until build finishes.')
+
+        self._finish_test_build(build)
+        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.FINISHED),
+                             '"finished" timestamp should be set when build finishes.')
+
+    def test_marking_build_failed_sets_error_timestamp(self):
+        build = self._create_test_build(BuildStatus.BUILDING)
+
+        self.assertIsNone(build.get_state_timestamp(BuildStatus.ERROR),
+                          '"error" timestamp should not be set unless build fails.')
+
+        build.mark_failed('Test build was intentionally marked failed.')
+        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.ERROR),
+                             '"error" timestamp should be set when build fails.')
+
+    def test_canceling_build_sets_canceled_timestamp(self):
+        build = self._create_test_build(BuildStatus.BUILDING)
+
+        self.assertIsNone(build.get_state_timestamp(BuildStatus.CANCELED),
+                          '"canceled" timestamp should not be set unless build is canceled.')
+
+        build.cancel()
+        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.CANCELED),
+                             '"canceled" timestamp should be set when build is canceled.')
+
+    # todo: almost all tests in this file should use this helper.
+    def _create_test_build(self, build_status=None, num_subjobs=1):
+        """
+        Create a Build instance for testing purposes. The instance will be created and brought to the specified
+        state similarly to how it would reach that state in actual app execution. This helps us test Build objects
+        in a more realistic way.
+
+        :type build_status: BuildStatus
+        :rtype: Build
+        """
+        build = Build(BuildRequest(build_parameters={}))
+        if build_status is None:
+            return build
+
+        # QUEUED: Instantiate a mock project_type instance for the build.
+        mock_project_type = self._create_mock_project_type()
+        self.patch('app.master.build.util.create_project_type').return_value = mock_project_type
+        build.generate_project_type()
+        if build_status is BuildStatus.QUEUED:
+            return build
+
+        # PREPARED: Create a fake job config and subjobs and hand them off to the build.
+        job_config = self._create_job_config()
+        subjobs = self._create_subjobs(count=num_subjobs, job_config=job_config)
+        build.prepare(subjobs=subjobs, job_config=job_config)
+        if build_status is BuildStatus.PREPARED:
+            return build
+
+        # BUILDING: Allocate a slave and begin subjob executions on that slave.
+        mock_slave = self._create_mock_slave()
+        build.allocate_slave(slave=mock_slave)
+        build.begin_subjob_executions_on_slave(slave=mock_slave)
+        if build_status is BuildStatus.BUILDING:
+            return build
+
+        # ERROR: Mark the in-progress build as failed.
+        if build_status is BuildStatus.ERROR:
+            build.mark_failed(failure_reason='Test build was intentionally marked failed.')
+            return build
+
+        # CANCELED: Cancel the in-progress build.
+        if build_status is BuildStatus.CANCELED:
+            build.cancel()
+            return build
+
+        # FINISHED: Complete all subjobs and allow all postbuild tasks to execute.
+        self._finish_test_build(build)
+        if build_status is BuildStatus.FINISHED:
+            return build
+
+        raise ValueError('Unsupported value for build_status: "{}".'.format(build_status))
+
+    def _create_subjobs(self, count=3, build_id=0, atoms=None, job_config=None):
         return [
             Subjob(
                 build_id=build_id,
                 subjob_id=i,
                 project_type=None,
-                job_config=None,
+                job_config=job_config,
                 atoms=atoms if atoms else [],
             )
             for i in range(count)
@@ -388,6 +506,24 @@ class TestBuild(BaseUnitTestCase):
         mock.url = self._FAKE_SLAVE_URL
         mock.num_executors = num_executors
         return mock
+
+    def _finish_test_build(self, build):
+        """
+        Complete all the subjobs for a build, triggering the build's postbuild tasks and transitioning it
+        to the "finished" state. Since postbuild tasks are asynchronous, this injects an event so we can
+        detect when the asynchronous method is finished.
+        :type build: Build
+        """
+        # Inject an event into the build's postbuild task so that we can detect when it completes.
+        postbuild_tasks_complete_event = Event()
+        self._on_async_postbuild_tasks_completed(build, postbuild_tasks_complete_event.set)
+
+        # Complete all subjobs for this build.
+        for subjob in build.all_subjobs():
+            build.complete_subjob(subjob.subjob_id())
+
+        # Wait for the async postbuild thread to complete executing postbuild tasks.
+        self.assertTrue(postbuild_tasks_complete_event.wait(timeout=5), 'Postbuild tasks should complete quickly.')
 
     def _on_async_postbuild_tasks_completed(self, build, callback):
         # Patch a build so it executes the specified callback after its PostBuild thread finishes.

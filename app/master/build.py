@@ -1,7 +1,9 @@
+from collections import OrderedDict
 from enum import Enum
 import os
 from queue import Queue, Empty
 from threading import Lock
+import time
 import uuid
 
 from app.master.build_artifact import BuildArtifact
@@ -57,6 +59,10 @@ class Build(object):
         self._postbuild_tasks_are_finished = False
         self._timing_file_path = None
 
+        self._state_timestamps = {status: None
+                                  for status in BuildStatus}   # initialize all timestamps to None
+        self._record_state_timestamp(BuildStatus.QUEUED)
+
     def api_representation(self):
         return {
             'id': self._build_id,
@@ -69,6 +75,11 @@ class Build(object):
             'failed_atoms': self._failed_atoms(),  # todo: print the file contents instead of paths
             'result': self._result(),
             'request_params': self.build_request.build_parameters(),
+            # Convert self._state_timestamps to OrderedDict to make raw API response more readable. Sort the entries
+            # by numerically increasing dict value, with None values sorting highest.
+            'state_timestamps': OrderedDict(sorted(
+                [(state.lower(), timestamp) for state, timestamp in self._state_timestamps.items()],
+                key=lambda item: item[1] or float('inf'))),
         }
 
     def generate_project_type(self):
@@ -98,7 +109,7 @@ class Build(object):
         :type subjobs: list[Subjob]
         :type job_config: JobConfig
         """
-        if self.project_type is None:
+        if self._project_type is None:
             raise RuntimeError('prepare() was called before generate_project_type() on build {}.'
                                .format(self._build_id))
 
@@ -114,8 +125,9 @@ class Build(object):
 
         self._max_executors = job_config.max_executors
         self._max_executors_per_slave = job_config.max_executors_per_slave
-        self._timing_file_path = self.project_type.timing_file_path(job_config.name)
+        self._timing_file_path = self._project_type.timing_file_path(job_config.name)
         self.is_prepared = True
+        self._record_state_timestamp(BuildStatus.PREPARED)
 
     def build_id(self):
         """
@@ -137,6 +149,10 @@ class Build(object):
 
         :type slave: Slave
         """
+        if not self._slaves_allocated:
+            # If this is the first slave to be allocated, timestamp a build start event.
+            self._record_state_timestamp(BuildStatus.BUILDING)
+
         self._slaves_allocated.append(slave)
         slave.setup(self)
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
@@ -292,6 +308,7 @@ class Build(object):
         """
         self._logger.error('Build {} failed: {}', self.build_id(), failure_reason)
         self._error_message = failure_reason
+        self._record_state_timestamp(BuildStatus.ERROR)
 
     def cancel(self):
         """
@@ -302,6 +319,7 @@ class Build(object):
             return
 
         self._is_canceled = True
+        self._record_state_timestamp(BuildStatus.CANCELED)
 
         # Deplete the unstarted subjob queue.
         # TODO: Handle situation where cancel() is called while subjobs are being added to _unstarted_subjobs
@@ -455,6 +473,7 @@ class Build(object):
         self._create_build_artifact()
         self._logger.debug('Postbuild tasks completed for build {}', self.build_id())
         self._postbuild_tasks_are_finished = True
+        self._record_state_timestamp(BuildStatus.FINISHED)
 
     def _create_build_artifact(self):
         self._build_artifact = BuildArtifact(self._build_results_dir())
@@ -472,6 +491,29 @@ class Build(object):
         """
         return os.path.join(Configuration['build_symlink_directory'], str(uuid.uuid4()))
 
+    def get_state_timestamp(self, build_status):
+        """
+        Get the recorded timestamp for a given build status. This may be None if the build has not yet reached
+        the specified state.
+        :param build_status: The build status for which to retrieve the corresponding timestamp
+        :type build_status: BuildStatus
+        :return: The timestamp for the specified status
+        :rtype: float | None
+        """
+        return self._state_timestamps.get(build_status)
+
+    def _record_state_timestamp(self, build_status):
+        """
+        Record a timestamp for a given build status. This is used to record the timing of the various build phases and
+        is exposed via the Build object's API representation.
+        :param build_status: The build status for which to record a timestamp
+        :type build_status: BuildStatus
+        """
+        if self._state_timestamps.get(build_status) is not None:
+            self._logger.warning(
+                'Overwriting timestamp for build {}, status {}'.format(self.build_id(), build_status))
+        self._state_timestamps[build_status] = time.time()
+
 
 class BuildStatus(str, Enum):
     """
@@ -479,6 +521,7 @@ class BuildStatus(str, Enum):
     useful for client code in parsing API responses).
     """
     QUEUED = 'QUEUED'
+    PREPARED = 'PREPARED'
     BUILDING = 'BUILDING'
     FINISHED = 'FINISHED'
     ERROR = 'ERROR'
