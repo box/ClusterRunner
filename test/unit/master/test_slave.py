@@ -1,8 +1,10 @@
 from unittest.mock import Mock, MagicMock
 
+from app.master.atom import Atom, AtomState
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave
+from app.master.subjob import Subjob
 from app.util.secret import Secret
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -142,6 +144,22 @@ class TestSlave(BaseUnitTestCase):
         slave._is_in_shutdown_mode = True
 
         self.assertRaises(SlaveMarkedForShutdownError, slave.start_subjob, Mock())
+
+    def test_start_subjob_marks_all_atoms_in_progress(self):
+        slave = self._create_slave()
+        atoms = [Atom('FOO', 1), Atom('BAR', 2)]
+        subjob = Subjob(
+            build_id=1,
+            subjob_id=1,
+            project_type=None,
+            job_config=None,
+            atoms=atoms,
+        )
+
+        slave.start_subjob(subjob)
+
+        for atom in subjob.atoms:
+            self.assertEqual(AtomState.IN_PROGRESS, atom.state)
 
     def test_set_shutdown_mode_should_set_is_shutdown_and_not_kill_slave_if_slave_has_a_build(self):
         slave = self._create_slave()

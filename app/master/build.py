@@ -278,7 +278,8 @@ class Build(object):
         """
         :type subjob_id: int
         """
-        subjob = self._all_subjobs_by_id[int(subjob_id)]
+        subjob = self.subjob(subjob_id)
+        subjob.mark_completed()
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
             subjobs_are_finished = self._subjobs_are_finished
