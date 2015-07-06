@@ -27,7 +27,13 @@ class ClusterSlaveApplication(ClusterApplication):
                             RouteNode(r'setup', _BuildSetupHandler),
                             RouteNode(r'teardown', _TeardownHandler),
                             RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
-                                RouteNode(r'(\d+)', _SubjobHandler, 'subjob')
+                                RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
+                                    RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
+                                        RouteNode(r'(\d+)', _AtomHandler).add_children([
+                                            RouteNode(r'console', _AtomConsoleHandler)
+                                        ])
+                                    ])
+                                ])
                             ])
                         ])
                     ]),
@@ -113,6 +119,29 @@ class _SubjobHandler(_ClusterSlaveBaseAPIHandler):
         response = {
             'comment': 'not implemented',
         }
+        self.write(response)
+
+
+class _AtomsHandler(_ClusterSlaveBaseAPIHandler):
+    pass
+
+
+class _AtomHandler(_ClusterSlaveBaseAPIHandler):
+    pass
+
+
+class _AtomConsoleHandler(_ClusterSlaveBaseAPIHandler):
+    def get(self, build_id, subjob_id, atom_id):
+        """
+        :type build_id: int
+        :type subjob_id: int
+        :type atom_id: int
+        """
+        max_lines = int(self.get_query_argument('maxLines', 50))
+        offset_line = self.get_query_argument('offsetLine', None)
+        if offset_line is not None:
+            offset_line = int(offset_line)
+        response = self._cluster_slave.get_console_output(build_id, subjob_id, atom_id, max_lines, offset_line)
         self.write(response)
 
 
