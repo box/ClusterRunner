@@ -103,10 +103,7 @@ class Slave(object):
         :type subjob: Subjob
         """
         execution_url = self._slave_api.url('build', subjob.build_id(), 'subjob', subjob.subjob_id())
-        post_data = {
-            'subjob_artifact_dir': subjob.artifact_dir(),
-            'atomic_commands': subjob.atomic_commands(),
-        }
+        post_data = {'atomic_commands': subjob.atomic_commands()}
         response = self._network.post_with_digest(execution_url, post_data, Secret.get(), error_on_failure=True)
 
         subjob_executor_id = response.json().get('executor_id')

@@ -1,6 +1,8 @@
 from unittest.mock import Mock, mock_open
+from os.path import expanduser, join
 
 from app.slave.subjob_executor import SubjobExecutor
+from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -35,6 +37,7 @@ class TestSubjobExecutor(BaseUnitTestCase):
         executor._project_type.run_job_config_setup.assert_called_with()
 
     def test_execute_subjob_passes_correct_build_executor_index_to_execute_command_in_project(self):
+        Configuration['artifact_directory'] = expanduser('~')
         executor = SubjobExecutor(1)
         executor._project_type = Mock()
         executor._project_type.execute_command_in_project = Mock(return_value=(1, 2))
@@ -47,14 +50,14 @@ class TestSubjobExecutor(BaseUnitTestCase):
         atomic_commands = ['command']
         executor.id = 2
         expected_env_vars = {
-            'ARTIFACT_DIR': 'path',
+            'ARTIFACT_DIR': join(expanduser('~'), '1', 'artifact_2_0'),
             'ATOM_ID': 0,
             'EXECUTOR_INDEX': 2,
             'MACHINE_EXECUTOR_INDEX': 2,
             'BUILD_EXECUTOR_INDEX': 8
         }
 
-        executor.execute_subjob(build_id=1, subjob_id=2, subjob_artifact_dir='dir', atomic_commands=atomic_commands,
+        executor.execute_subjob(build_id=1, subjob_id=2, atomic_commands=atomic_commands,
                                 base_executor_index=6)
 
         executor._project_type.execute_command_in_project.assert_called_with('command', expected_env_vars,

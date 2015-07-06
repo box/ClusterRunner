@@ -39,7 +39,7 @@ class TestClusterSlave(BaseUnitTestCase):
         incorrect_build_id = 300
 
         with self.assertRaises(BadRequestError, msg='Start subjob should raise error if incorrect build_id specified.'):
-            slave.start_working_on_subjob(incorrect_build_id, 1, '~/test', ['ls'])
+            slave.start_working_on_subjob(incorrect_build_id, 1, ['ls'])
 
     @genty_dataset(
         current_build_id_not_set=(None,),
@@ -124,8 +124,7 @@ class TestClusterSlave(BaseUnitTestCase):
         self.assertTrue(setup_done_event.wait(timeout=5), 'Setup code under test should put to expected idle '
                                                           'url very quickly.')
 
-        slave.start_working_on_subjob(build_id=123, subjob_id=321,
-                                      subjob_artifact_dir='', atomic_commands=[])
+        slave.start_working_on_subjob(build_id=123, subjob_id=321, atomic_commands=[])
         # The timeout for this wait() is arbitrary, but it should be generous so the test isn't flaky on slow machines.
         self.assertTrue(subjob_done_event.wait(timeout=5), 'Subjob execution code under test should post to expected '
                                                            'results url very quickly.')
@@ -234,10 +233,9 @@ class TestClusterSlave(BaseUnitTestCase):
         slave._idle_executors = Mock()
 
         with patch.object(builtins, 'open', mock_open(read_data='asdf')):
-            slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, subjob_artifact_dir='',
-                                  atomic_commands=[])
+            slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, atomic_commands=[])
 
-        executor.execute_subjob.assert_called_with(1, 2, '', [], 12)
+        executor.execute_subjob.assert_called_with(1, 2, [], 12)
 
     def _create_cluster_slave(self, **kwargs):
         """

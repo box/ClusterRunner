@@ -102,11 +102,10 @@ class _SubjobsHandler(_ClusterSlaveBaseAPIHandler):
 class _SubjobHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
     def post(self, build_id, subjob_id):
-        subjob_artifact_dir = self.decoded_body.get('subjob_artifact_dir')
         atomic_commands = self.decoded_body.get('atomic_commands')
 
         response = self._cluster_slave.start_working_on_subjob(
-            int(build_id), int(subjob_id), subjob_artifact_dir, atomic_commands
+            int(build_id), int(subjob_id), atomic_commands
         )
         self._write_status(response, status_code=201)
 

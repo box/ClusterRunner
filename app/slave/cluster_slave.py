@@ -250,14 +250,13 @@ class ClusterSlave(object):
 
         return is_responsive
 
-    def start_working_on_subjob(self, build_id, subjob_id, subjob_artifact_dir, atomic_commands):
+    def start_working_on_subjob(self, build_id, subjob_id, atomic_commands):
         """
         Begin working on a subjob with the given build id and subjob id. This just starts the subjob execution
         asynchronously on a separate thread.
 
         :type build_id: int
         :type subjob_id: int
-        :type subjob_artifact_dir: str
         :type atomic_commands: list[str]
         :return: The text to return in the API response.
         :rtype: dict[str, int]
@@ -272,7 +271,7 @@ class ClusterSlave(object):
         # Start a thread to execute the job (after waiting for setup to complete)
         SafeThread(
             target=self._execute_subjob,
-            args=(build_id, subjob_id, executor, subjob_artifact_dir, atomic_commands),
+            args=(build_id, subjob_id, executor, atomic_commands),
             name='Bld{}-Sub{}'.format(build_id, subjob_id),
         ).start()
 
@@ -280,7 +279,7 @@ class ClusterSlave(object):
                           subjob_id)
         return {'executor_id': executor.id}
 
-    def _execute_subjob(self, build_id, subjob_id, executor, subjob_artifact_dir, atomic_commands):
+    def _execute_subjob(self, build_id, subjob_id, executor, atomic_commands):
         """
         This is the method for executing a subjob asynchronously. This performs the work required by executing the
         specified command, then does a post back to the master results endpoint to signal that the work is done.
@@ -288,14 +287,12 @@ class ClusterSlave(object):
         :type build_id: int
         :type subjob_id: int
         :type executor: SubjobExecutor
-        :type subjob_artifact_dir: str
         :type atomic_commands: list[str]
         """
         subjob_event_data = {'build_id': build_id, 'subjob_id': subjob_id, 'executor_id': executor.id}
 
         analytics.record_event(analytics.SUBJOB_EXECUTION_START, **subjob_event_data)
-        results_file = executor.execute_subjob(build_id, subjob_id, subjob_artifact_dir, atomic_commands,
-                                               self._base_executor_index)
+        results_file = executor.execute_subjob(build_id, subjob_id, atomic_commands, self._base_executor_index)
         analytics.record_event(analytics.SUBJOB_EXECUTION_FINISH, **subjob_event_data)
 
         results_url = self._master_api.url('build', build_id, 'subjob', subjob_id, 'result')

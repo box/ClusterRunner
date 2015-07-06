@@ -1,13 +1,18 @@
 import json
 import os
 
-from app.master.subjob import Subjob
+from app.util.conf.configuration import Configuration
 import app.util.fs
 from app.util.log import get_logger
 
 
 class BuildArtifact(object):
     ATOM_ARTIFACT_DIR_PREFIX = 'artifact_'
+    ATOM_DIR_FORMAT = ATOM_ARTIFACT_DIR_PREFIX + '{}_{}'
+    COMMAND_FILE = 'clusterrunner_command'
+    EXIT_CODE_FILE = 'clusterrunner_exit_code'
+    OUTPUT_FILE = 'clusterrunner_console_output'
+    TIMING_FILE = 'clusterrunner_time'
 
     def __init__(self, build_artifact_dir):
         """
@@ -66,8 +71,10 @@ class BuildArtifact(object):
             self._failed_commands = {}
             for build_artifact_file_or_subdir in os.listdir(self.build_artifact_dir):
                 if self._is_atom_artifact_dir(build_artifact_file_or_subdir):
-                    exit_file = os.path.join(self.build_artifact_dir, build_artifact_file_or_subdir, Subjob.EXIT_CODE_FILE)
-                    command_file = os.path.join(self.build_artifact_dir, build_artifact_file_or_subdir, Subjob.COMMAND_FILE)
+                    exit_file = os.path.join(self.build_artifact_dir, build_artifact_file_or_subdir,
+                                             BuildArtifact.EXIT_CODE_FILE)
+                    command_file = os.path.join(self.build_artifact_dir, build_artifact_file_or_subdir,
+                                                BuildArtifact.COMMAND_FILE)
                     if os.path.isfile(exit_file) and os.path.isfile(command_file):
                         with open(exit_file, 'r') as exit_stream, open(command_file, 'r') as command_stream:
                             exit_code = exit_stream.readline()
@@ -103,3 +110,55 @@ class BuildArtifact(object):
         :type timing_data: dict[str, float]
         """
         app.util.fs.write_file(json.dumps(timing_data), path)
+
+    @staticmethod
+    def atom_artifact_directory(build_id, subjob_id, atom_id, result_root=None):
+        """
+        Get the sys path to the atom artifact directory.
+
+        :type build_id: int
+        :type subjob_id: int
+        :type atom_id: int
+        :param result_root: The sys path to the result directory that isn't the default artifact directory.
+        :type result_root: str | None
+        :rtype: str
+        """
+        return BuildArtifact._artifact_directory(build_id, subjob_id=subjob_id, atom_id=atom_id,
+                                                 result_root=result_root)
+
+    @staticmethod
+    def build_artifact_directory(build_id, result_root=None):
+        """
+        Get the sys path to the build artifact directory.
+
+        :type build_id: int
+        :param result_root: The sys path to the result directory that isn't the default artifact directory.
+        :type result_root: str | None
+        :rtype: str
+        """
+        return BuildArtifact._artifact_directory(build_id, result_root=result_root)
+
+    @staticmethod
+    def _artifact_directory(build_id, subjob_id=None, atom_id=None, result_root=None):
+        """
+        To get the full path to an atom artifact id, the caller must specify all id's: build_id, subjob_id, atom_id.
+        To get the path to just the build artifact directory, the caller must only specify the build_id.
+
+        If the caller specifies exactly one of the subjob_id or atom_id, it is a fatal error, and this method
+        will raise a ValueError exception.
+
+        :type build_id: int
+        :type subjob_id: int | None
+        :type atom_id: int | None
+        :param result_root: The sys path to the result directory that isn't the default artifact directory.
+        :type result_root: str | None
+        :rtype: str
+        """
+        result_root = result_root if result_root is not None else Configuration['artifact_directory']
+
+        if subjob_id is None and atom_id is None:
+            return os.path.join(result_root, str(build_id))
+        elif subjob_id is not None and atom_id is not None:
+            return os.path.join(result_root, str(build_id), BuildArtifact.ATOM_DIR_FORMAT.format(subjob_id, atom_id))
+        else:
+            raise ValueError('Specified one of either subjob_id or atom_id. Must either specify both or neither.')
