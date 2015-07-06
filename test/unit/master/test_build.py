@@ -1,8 +1,8 @@
-from queue import Queue
 from os.path import abspath, join
 import sys
 from threading import Event
 from unittest.mock import MagicMock, Mock, mock_open, call
+
 from genty import genty, genty_dataset
 
 from app.master.atom import Atom, AtomState
@@ -11,10 +11,11 @@ from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_artifact import BuildArtifact
 from app.master.build_request import BuildRequest
 from app.master.job_config import JobConfig
-from app.master.slave import Slave
+from app.master.slave import Slave, SlaveMarkedForShutdownError
 from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
+from app.util.counter import Counter
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -47,7 +48,7 @@ class TestBuild(BaseUnitTestCase):
         expected_num_executors_used = 12  # We expect the build to use 12 out of 15 available executors.
         job_config = self._create_job_config(max_executors=expected_num_executors_used)
         build = self._create_test_build(BuildStatus.PREPARED, job_config=job_config)
-        build.execute_next_subjob_or_teardown_slave = MagicMock()
+        build.execute_next_subjob_or_teardown_slave = Mock()
 
         for mock_slave in mock_slaves:
             build.allocate_slave(mock_slave)
@@ -192,57 +193,57 @@ class TestBuild(BaseUnitTestCase):
             build.prepare(subjobs=subjobs, job_config=job_config)
 
     def test_teardown_called_on_slave_when_no_subjobs_remain(self):
-        build = Build(BuildRequest({}))
-        slave = Slave('', 1)
-        slave.teardown = MagicMock()
-        slave.free_executor = MagicMock(return_value=0)
-        build._unstarted_subjobs = Queue()
-        build._slaves_allocated = [slave]
+        mock_slave = self._create_mock_slave(num_executors=1)
+        self._create_test_build(BuildStatus.FINISHED, num_subjobs=1, slaves=[mock_slave])
 
-        build.execute_next_subjob_or_teardown_slave(slave)
+        mock_slave.teardown.assert_called_with()
 
-        slave.teardown.assert_called_with()
+    def test_teardown_called_on_all_slaves_when_no_subjobs_remain(self):
+        mock_slaves = [
+            self._create_mock_slave(num_executors=5),
+            self._create_mock_slave(num_executors=4),
+            self._create_mock_slave(num_executors=3),
+        ]
+        self._create_test_build(BuildStatus.FINISHED, num_subjobs=20, slaves=mock_slaves)
+
+        for mock_slave in mock_slaves:
+            mock_slave.teardown.assert_called_with()
 
     def test_teardown_called_on_slave_when_slave_in_shutdown_mode(self):
-        build = Build(BuildRequest({}))
-        slave = Slave('', 1)
-        slave.teardown = MagicMock()
-        slave._is_in_shutdown_mode = True
-        slave.free_executor = MagicMock(return_value=0)
-        build._unstarted_subjobs = Queue()
-        build._unstarted_subjobs.put(Mock(spec=Subjob))
-        build._slaves_allocated = [slave]
+        mock_slave = self._create_mock_slave(num_executors=5)
+        mock_slave.start_subjob.side_effect = SlaveMarkedForShutdownError
 
-        build.execute_next_subjob_or_teardown_slave(slave)
+        self._create_test_build(BuildStatus.BUILDING, num_subjobs=30, slaves=[mock_slave])
 
-        slave.teardown.assert_called_with()
+        mock_slave.teardown.assert_called_with()
 
-    def test_cancel_depletes_queue_and_sets_canceled(self):
-        build = Build(BuildRequest({}))
-        build._unstarted_subjobs = Queue()
-        build._unstarted_subjobs.put(1)
-        slave_mock = Mock()
-        build._slaves_allocated = [slave_mock]
+    def test_cancel_prevents_further_subjob_starts_and_sets_canceled(self):
+        mock_slave = self._create_mock_slave(num_executors=5)
+        build = self._create_test_build(BuildStatus.BUILDING, num_subjobs=30, slaves=[mock_slave])
+
+        self.assertEqual(mock_slave.start_subjob.call_count, 5, 'Slave should only have had as many subjobs started '
+                                                                'as its num_executors.')
+        build.cancel()
+        self._finish_test_build(build, assert_postbuild_tasks_complete=False)
+
+        self.assertEqual(build._status(), BuildStatus.CANCELED, 'Canceled build should have canceled state.')
+        self.assertEqual(mock_slave.start_subjob.call_count, 5, 'A canceled build should not have any more subjobs '
+                                                                'started after it has been canceled.')
+
+    def test_cancel_is_a_noop_if_build_is_already_finished(self):
+        mock_slave = self._create_mock_slave()
+        build = self._create_test_build(BuildStatus.FINISHED, slaves=[mock_slave])
+        num_slave_calls_before_cancel = len(mock_slave.method_calls)
 
         build.cancel()
 
-        self.assertTrue(build._is_canceled, "Build should've been canceled")
-        self.assertTrue(build._unstarted_subjobs.empty(), "Build's unstarted subjobs should've been depleted")
-
-    def test_cancel_exits_early_if_build_not_running(self):
-        build = Build(BuildRequest({}))
-        build._unstarted_subjobs = Queue()
-        slave_mock = Mock()
-        build._slaves_allocated = [slave_mock]
-        build._status = Mock(return_value=BuildStatus.FINISHED)
-
-        build.cancel()
-
-        self.assertFalse(build._is_canceled, "Build should not be canceled")
-        self.assertEqual(slave_mock.teardown.call_count, 0, "Teardown should not have been called")
+        self.assertEqual(build._status(), BuildStatus.FINISHED,
+                         'Canceling a finished build should not change its state.')
+        self.assertEqual(len(mock_slave.method_calls), num_slave_calls_before_cancel,
+                         'Canceling a finished build should not cause any further calls to slave.')
 
     def test_validate_update_params_for_cancelling_build(self):
-        build = Build(BuildRequest({}))
+        build = self._create_test_build()
 
         success, response = build.validate_update_params({'status': 'canceled'})
 
@@ -250,7 +251,7 @@ class TestBuild(BaseUnitTestCase):
         self.assertEqual({}, response, "Error response should be empty")
 
     def test_validate_update_params_rejects_bad_params(self):
-        build = Build(BuildRequest({}))
+        build = self._create_test_build()
 
         success, response = build.validate_update_params({'status': 'foo'})
 
@@ -259,52 +260,51 @@ class TestBuild(BaseUnitTestCase):
                          "Error response not expected")
 
     def test_validate_update_params_rejects_bad_keys(self):
-        build = Build(BuildRequest({}))
+        build = self._create_test_build()
 
-        success, response = build.validate_update_params({'badkey': 'foo'})
+        success, response = build.validate_update_params({'badkey': 'canceled'})
 
         self.assertFalse(success, "Bad status update reported success")
         self.assertEqual({'error': "Key (badkey) is not in list of allowed keys (status)"}, response,
                          "Error response not expected")
 
-    def test_update_state_to_canceled_sets_state_correctly(self):
-        build = Build(BuildRequest({}))
-        build._unstarted_subjobs = Queue()
+    def test_update_state_to_canceled_will_cancel_build(self):
+        build = self._create_test_build(BuildStatus.BUILDING)
+        build.cancel = Mock()
 
         success = build.update_state({'status': 'canceled'})
 
-        self.assertEqual(build._status(), BuildStatus.CANCELED, "Status not set to canceled")
+        build.cancel.assert_called_once_with()
         self.assertTrue(success, "Update did not report success")
 
-    def test_execute_next_subjob_with_empty_queue_cant_teardown_same_slave_twice(self):
-        build = Build(BuildRequest({}))
-        build._unstarted_subjobs = Queue()
-        slave = Mock()
-        slave.free_executor = Mock(return_value=0)
-        build._slaves_allocated.append(slave)
+    def test_execute_next_subjob_with_no_more_subjobs_should_not_teardown_same_slave_twice(self):
+        mock_slave = self._create_mock_slave()
+        build = self._create_test_build(BuildStatus.BUILDING, slaves=[mock_slave])
+        self._finish_test_build(build, assert_postbuild_tasks_complete=False)
 
-        build.execute_next_subjob_or_teardown_slave(slave)
-        build.execute_next_subjob_or_teardown_slave(slave)
+        build.execute_next_subjob_or_teardown_slave(mock_slave)
+        build.execute_next_subjob_or_teardown_slave(mock_slave)
 
-        self.assertEqual(slave.teardown.call_count, 1, "Teardown should only be called once")
+        self.assertEqual(mock_slave.teardown.call_count, 1, "Teardown should only be called once")
 
-    def test_allocate_slave_increments_by_num_executors_when_max_is_inf(self):
-        build = Build(BuildRequest({}))
-        slave = Mock()
-        slave.num_executors = 10
-        build.allocate_slave(slave)
-        self.assertEqual(build._num_executors_allocated, 10, "Should be incremented by num executors")
+    def test_slave_is_fully_allocated_when_max_executors_per_slave_is_not_set(self):
+        mock_slave = self._create_mock_slave(num_executors=10)
+        job_config = self._create_job_config(max_executors_per_slave=float('inf'))
+        self._create_test_build(BuildStatus.BUILDING, job_config=job_config, slaves=[mock_slave])
 
-    def test_allocate_slave_increments_by_per_slave_when_max_not_inf_and_less_than_num(self):
-        build = Build(BuildRequest({}))
-        build._max_executors_per_slave = 5
-        slave = Mock()
-        slave.num_executors = 10
-        build.allocate_slave(slave)
-        self.assertEqual(build._num_executors_allocated, 5, "Should be incremented by num executors")
+        self.assertEqual(mock_slave.claim_executor.call_count, 10, 'Claim executor should be called once for each '
+                                                                   'of the slave executors.')
+
+    def test_slave_is_only_allocated_up_to_max_executors_per_slave_setting(self):
+        mock_slave = self._create_mock_slave(num_executors=10)
+        job_config = self._create_job_config(max_executors_per_slave=5)
+        self._create_test_build(BuildStatus.BUILDING, job_config=job_config, slaves=[mock_slave])
+
+        self.assertEqual(mock_slave.claim_executor.call_count, 5, 'Claim executor should be called '
+                                                                  'max_executors_per_slave times.')
 
     def test_generate_project_type_raises_error_if_failed_to_generate_project(self):
-        build = Build(BuildRequest({}))
+        build = self._create_test_build()
         self.patch('app.master.build.util.create_project_type').return_value = None
 
         with self.assertRaises(BuildProjectError):
@@ -375,7 +375,14 @@ class TestBuild(BaseUnitTestCase):
         self.assertIsNotNone(build.get_state_timestamp(BuildStatus.CANCELED),
                              '"canceled" timestamp should be set when build is canceled.')
 
-    def _create_test_build(self, build_status=None, job_config=None, num_subjobs=3, num_atoms_per_subjob=3):
+    def _create_test_build(
+            self,
+            build_status=None,
+            job_config=None,
+            num_subjobs=3,
+            num_atoms_per_subjob=3,
+            slaves=None,
+    ):
         """
         Create a Build instance for testing purposes. The instance will be created and brought to the specified
         state similarly to how it would reach that state in actual app execution. Build instances have a huge
@@ -405,9 +412,10 @@ class TestBuild(BaseUnitTestCase):
             return build
 
         # BUILDING: Allocate a slave and begin subjob executions on that slave.
-        mock_slave = self._create_mock_slave()
-        build.allocate_slave(slave=mock_slave)
-        build.begin_subjob_executions_on_slave(slave=mock_slave)
+        slaves = slaves or [self._create_mock_slave()]
+        for slave in slaves:
+            build.allocate_slave(slave=slave)
+            build.begin_subjob_executions_on_slave(slave=slave)
         if build_status is BuildStatus.BUILDING:
             return build
 
@@ -452,28 +460,56 @@ class TestBuild(BaseUnitTestCase):
         return MagicMock(spec_set=ProjectType())
 
     def _create_mock_slave(self, num_executors=5):
-        mock = MagicMock(spec_set=Slave(slave_url=self._FAKE_SLAVE_URL, num_executors=num_executors))
-        mock.url = self._FAKE_SLAVE_URL
-        mock.num_executors = num_executors
-        return mock
+        """
+        :type num_executors: int
+        :rtype: Slave | MagicMock
+        """
+        slave_spec = Slave('', 0)  # constructor values don't matter since this is just a spec object
+        mock_slave = MagicMock(spec_set=slave_spec, url=self._FAKE_SLAVE_URL, num_executors=num_executors)
 
-    def _finish_test_build(self, build):
+        counter = Counter()
+        mock_slave.claim_executor.side_effect = counter.increment
+        mock_slave.free_executor.side_effect = counter.decrement
+
+        return mock_slave
+
+    def _finish_test_build(self, build, assert_postbuild_tasks_complete=True):
         """
         Complete all the subjobs for a build, triggering the build's postbuild tasks and transitioning it
         to the "finished" state. Since postbuild tasks are asynchronous, this injects an event so we can
         detect when the asynchronous method is finished.
         :type build: Build
+        :type assert_postbuild_tasks_complete: bool
         """
         # Inject an event into the build's postbuild task so that we can detect when it completes.
         postbuild_tasks_complete_event = Event()
         self._on_async_postbuild_tasks_completed(build, postbuild_tasks_complete_event.set)
 
         # Complete all subjobs for this build.
-        for subjob in build.all_subjobs():
-            build.complete_subjob(subjob.subjob_id())
+        build_has_running_subjobs = True
+        while build_has_running_subjobs:
+            build_has_running_subjobs = False
+
+            for mock_slave in build._slaves_allocated.copy():  # copy since slaves may get deallocated during loop
+                self.assertIsInstance(mock_slave, Mock,
+                                      '_finish_test_build() can only be used on builds with mock slaves.')
+
+                for subjob in self._get_in_progress_subjobs_for_mock_slave(mock_slave):
+                    build_has_running_subjobs = True
+                    build.complete_subjob(subjob.subjob_id())
+                    build.execute_next_subjob_or_teardown_slave(mock_slave)
 
         # Wait for the async postbuild thread to complete executing postbuild tasks.
-        self.assertTrue(postbuild_tasks_complete_event.wait(timeout=5), 'Postbuild tasks should complete quickly.')
+        if assert_postbuild_tasks_complete:
+            self.assertTrue(postbuild_tasks_complete_event.wait(timeout=5),
+                            'Postbuild tasks should be run and complete quickly when build finishes.')
+
+    def _get_in_progress_subjobs_for_mock_slave(self, mock_slave):
+        return [
+            start_subjob_args[0]
+            for start_subjob_args, _ in mock_slave.start_subjob.call_args_list
+            if start_subjob_args[0].atoms[0].state is AtomState.IN_PROGRESS
+        ]
 
     def _on_async_postbuild_tasks_completed(self, build, callback):
         # Patch a build so it executes the specified callback after its PostBuild thread finishes.
