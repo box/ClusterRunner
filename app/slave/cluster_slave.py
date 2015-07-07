@@ -1,16 +1,14 @@
 from enum import Enum
-import os
 from queue import Queue
 import requests
 import sys
 import time
 
-from app.common.console_output import ConsoleOutput
-from app.master.build_artifact import BuildArtifact
+from app.common.cluster_service import ClusterService
 from app.project_type.project_type import SetupFailureError
 from app.slave.subjob_executor import SubjobExecutor
 from app.util import analytics, log, util
-from app.util.exceptions import BadRequestError, ItemNotFoundError
+from app.util.exceptions import BadRequestError
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
@@ -19,7 +17,7 @@ from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from app.util.url_builder import UrlBuilder
 
 
-class ClusterSlave(object):
+class ClusterSlave(ClusterService):
 
     API_VERSION = 'v1'
 
@@ -326,55 +324,6 @@ class ClusterSlave(object):
         Exits without error.
         """
         sys.exit(0)
-
-    def get_console_output(self, build_id, subjob_id, atom_id, max_lines=50, offset_line=None):
-        """
-        Return the console output if it exists, raises an ItemNotFound error if not.
-
-        On success, the response contains keys: offset_line, num_lines, total_num_lines, and content.
-
-        e.g.:
-        {
-            'offset_line': 0,
-            'num_lines': 50,
-            'total_num_lines': 167,
-            'content': 'Lorem ipsum dolor sit amet,\nconsectetur adipiscing elit,\n...',
-        }
-
-        :type build_id: int
-        :type subjob_id: int
-        :type atom_id: int
-        :param max_lines: The maximum total number of lines to return. If this max_lines + offset_line lines do not
-            exist in the output file, just return what there is.
-        :type max_lines: int
-        :param offset_line: The line number (0-indexed) to start reading content for. If none is specified, we will
-            return the console output starting from the end of the file.
-        :type offset_line: int | None
-        """
-        if offset_line is not None and offset_line < 0:
-            raise BadRequestError('\'offset_line\' must be greater than or equal to zero.')
-        if max_lines <= 0:
-            raise BadRequestError('\'max_lines\' must be greater than zero.')
-
-        artifact_dir = BuildArtifact.atom_artifact_directory(build_id, subjob_id, atom_id)
-        output_file = os.path.join(artifact_dir, BuildArtifact.OUTPUT_FILE)
-
-        if not os.path.isfile(output_file):
-            raise ItemNotFoundError('Output file doesn\'t exist for build_id: {} subjob_id: {} atom_id: {}'.format(
-                build_id, subjob_id, atom_id))
-
-        try:
-            console_output = ConsoleOutput(output_file)
-            segment = console_output.segment(max_lines, offset_line)
-        except ValueError as e:
-            raise BadRequestError(e)
-
-        return {
-            'offset_line': segment.offset_line,
-            'num_lines': segment.num_lines,
-            'total_num_lines': segment.total_num_lines,
-            'content': segment.content,
-        }
 
 
 class SlaveState(str, Enum):

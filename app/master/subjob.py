@@ -29,6 +29,7 @@ class Subjob(object):
         self._atoms = atoms
         self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
+        self.slave = None  # The slave that had been assigned this subjob. Is None if not started.
 
     def _set_atom_state(self, state):
         """
@@ -40,11 +41,15 @@ class Subjob(object):
         for atom in self._atoms:
             atom.state = state
 
-    def mark_in_progress(self):
+    def mark_in_progress(self, slave):
         """
         Mark the subjob IN_PROGRESS, which marks the state of all the atoms of the subjob IN_PROGRESS.
+
+        :param slave: the slave node that has been assigned this subjob.
+        :type slave: Slave
         """
         self._set_atom_state(AtomState.IN_PROGRESS)
+        self.slave = slave
 
     def mark_completed(self):
         """

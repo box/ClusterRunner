@@ -8,10 +8,9 @@ from genty import genty, genty_dataset
 import requests
 import requests.models
 
-from app.common.console_output_segment import ConsoleOutputSegment
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import ClusterSlave, SlaveState
-from app.util.exceptions import BadRequestError, ItemNotFoundError
+from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
 from app.util.single_use_coin import SingleUseCoin
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
@@ -237,46 +236,6 @@ class TestClusterSlave(BaseUnitTestCase):
             slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, atomic_commands=[])
 
         executor.execute_subjob.assert_called_with(1, 2, [], 12)
-
-    def test_get_console_output_happy_path_returns_return_values(self):
-        self.os_path_isfile_mock = self.patch('app.slave.cluster_slave.os.path.isfile')
-        self.os_path_isfile_mock.return_value = True
-        console_output_patch = self.patch('app.slave.cluster_slave.ConsoleOutput').return_value
-        console_output_patch.segment.return_value = \
-            ConsoleOutputSegment(offset_line=0, num_lines=1, total_num_lines=2, content='The content\n')
-        slave = self._create_cluster_slave()
-
-        response = slave.get_console_output(1, 2, 3)
-
-        self.assertDictEqual(
-            response,
-            {
-                'offset_line': 0,
-                'num_lines': 1,
-                'total_num_lines': 2,
-                'content': 'The content\n',
-            },
-            'The response dictionary did not contain the expected contents.'
-        )
-
-    @genty_dataset(
-        zero_max_lines=(0, None),
-        negative_max_lines=(-1, None),
-        negative_offset_line=(1, -1),
-    )
-    def test_get_console_output_raises_bad_request_error_with_invalid_arguments(self, max_lines, offset_line):
-        slave = self._create_cluster_slave()
-
-        with self.assertRaises(BadRequestError):
-            slave.get_console_output(1, 2, 3, max_lines=max_lines, offset_line=offset_line)
-
-    def test_get_console_output_raises_item_not_found_error_if_console_output_file_doesnt_exist(self):
-        self.os_path_isfile_mock = self.patch('app.slave.cluster_slave.os.path.isfile')
-        self.os_path_isfile_mock.return_value = False
-        slave = self._create_cluster_slave()
-
-        with self.assertRaises(ItemNotFoundError):
-            slave.get_console_output(1, 2, 3)
 
     def _create_cluster_slave(self, **kwargs):
         """

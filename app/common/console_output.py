@@ -40,7 +40,7 @@ class ConsoleOutput(object):
         output_lines = 0
         console_output = []
 
-        with open(self.path, 'r') as f:
+        with open(self.path, 'r', encoding='utf-8', errors='replace') as f:
             # Iterate up to the index offset_line
             for i in range(0, offset_line):
                 # This is an error, meaning that there aren't even offset_line+1 lines in self.path.
@@ -80,7 +80,7 @@ class ConsoleOutput(object):
         output_lines = 0
         console_output = []
 
-        with open(self.path, 'r') as f:
+        with open(self.path, 'r', encoding='utf-8', errors='replace') as f:
             # Figure out how many lines there are, so that we know which offset line to start appending
             # console output from.
             for line in f:

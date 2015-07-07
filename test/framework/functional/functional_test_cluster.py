@@ -84,8 +84,8 @@ class FunctionalTestCluster(object):
         """
         Start the master process on localhost.
 
-        :return: A ClusterService object which wraps the master service's Popen instance
-        :rtype: ClusterService
+        :return: A ClusterController object which wraps the master service's Popen instance
+        :rtype: ClusterController
         """
         if self.master:
             raise RuntimeError('Master service was already started for this cluster.')
@@ -106,7 +106,7 @@ class FunctionalTestCluster(object):
         ]
 
         # Don't use shell=True in the Popen here; the kill command might only kill "sh -c", not the actual process.
-        self.master = ClusterService(
+        self.master = ClusterController(
             Popen(master_cmd, **popen_kwargs),
             host=master_hostname,
             port=self._MASTER_PORT,
@@ -135,8 +135,8 @@ class FunctionalTestCluster(object):
         :type num_slaves: int
         :param num_executors_per_slave: The number of executors to start each slave with
         :type num_executors_per_slave: int
-        :return: A list of ClusterService objects which wrap the slave services' Popen instances
-        :rtype: list[ClusterService]
+        :return: A list of ClusterController objects which wrap the slave services' Popen instances
+        :rtype: list[ClusterController]
         """
         popen_kwargs = {}
         if not self._verbose:
@@ -163,7 +163,7 @@ class FunctionalTestCluster(object):
             ]
 
             # Don't use shell=True in the Popen here; the kill command may only kill "sh -c", not the actual process.
-            new_slaves.append(ClusterService(
+            new_slaves.append(ClusterController(
                 Popen(slave_cmd, **popen_kwargs),
                 host=slave_hostname,
                 port=slave_port,
@@ -239,7 +239,7 @@ class FunctionalTestCluster(object):
         Kill the master process and return an object wrapping the return code, stdout, and stderr.
 
         :return: The killed master service with return code, stdout, and stderr set.
-        :rtype: ClusterService
+        :rtype: ClusterController
         """
         if self.master:
             self.master.kill()
@@ -252,7 +252,7 @@ class FunctionalTestCluster(object):
         Kill all the slave processes and return objects wrapping the return code, stdout, and stderr of each process.
 
         :return: The killed slave services with return code, stdout, and stderr set.
-        :rtype: list[ClusterService]
+        :rtype: list[ClusterController]
         """
         for service in self.slaves:
             if service:
@@ -266,7 +266,7 @@ class FunctionalTestCluster(object):
         Kill the master and all the slave subprocesses.
 
         :return: The killed master and killed slave services with return code, stdout, and stderr set.
-        :rtype: list[ClusterService]
+        :rtype: list[ClusterController]
         """
         services = [self.kill_master()]
         services.extend(self.kill_slaves())
@@ -286,7 +286,7 @@ class FunctionalTestCluster(object):
         return slaves_died_within_timeout
 
 
-class ClusterService(object):
+class ClusterController(object):
     """
     A data container that wraps a process and holds metadata about that process. This is useful for wrapping up data
     relating to the various services started by the FunctionalTestCluster (master, slaves, etc.).

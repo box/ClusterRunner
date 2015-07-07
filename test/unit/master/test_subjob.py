@@ -69,7 +69,7 @@ class TestSubjob(BaseUnitTestCase):
             self.assertEqual(atom_dict['state'], state_str)
 
     def test_mark_in_progress_marks_all_atoms_in_progress(self):
-        self._subjob.mark_in_progress()
+        self._subjob.mark_in_progress(None)
         actual_api_repr = self._subjob.api_representation()
         self._assert_atoms_are_in_state(actual_api_repr, 'IN_PROGRESS')
 

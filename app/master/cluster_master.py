@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import os
 
+from app.common.cluster_service import ClusterService
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
@@ -13,7 +14,7 @@ from app.util import fs
 from app.util.log import get_logger
 
 
-class ClusterMaster(object):
+class ClusterMaster(ClusterService):
     """
     The ClusterRunner Master service: This is the main application class that the web framework/REST API sits on top of.
     """
@@ -285,7 +286,7 @@ class ClusterMaster(object):
         """
         build = self._all_builds_by_id.get(build_id)
         if build is None:
-            raise ItemNotFoundError('Invalid build id.')
+            raise ItemNotFoundError('Invalid build id: {}.'.format(build_id))
 
         return build
 
