@@ -2,7 +2,8 @@ from queue import Queue
 from os.path import abspath, join
 import sys
 from threading import Event
-from unittest.mock import MagicMock, Mock, mock_open
+from unittest.mock import MagicMock, Mock, mock_open, call
+from genty import genty, genty_dataset
 
 from app.master.atom import Atom, AtomState
 from app.master.atomizer import Atomizer
@@ -17,230 +18,178 @@ from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
+@genty
 class TestBuild(BaseUnitTestCase):
 
     _FAKE_SLAVE_URL = 'my.favorite.slave.com:40001'
     _FAKE_MAX_EXECUTORS = sys.maxsize
     _FAKE_MAX_EXECUTORS_PER_SLAVE = sys.maxsize
+    _FAKE_PAYLOAD = {'filename': 'pizza_order.txt', 'body': 'Four large pepperoni, one small cheese.'}
 
     def setUp(self):
         super().setUp()
-        mock_util = self.patch('app.master.build.app.util')  # stub out util since these often interact with the fs
-        self.mock_fs = mock_util.fs
+        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
+
         self.patch('app.master.build.BuildArtifact.__new__')  # patch __new__ to mock instances but keep static methods
+        self.mock_util = self.patch('app.master.build.app.util')  # stub out util - it often interacts with the fs
+        self.mock_open = self.patch('app.master.build.open', autospec=False, create=True)
 
     def test_allocate_slave_calls_slave_setup(self):
-        subjobs = self._create_subjobs()
-        mock_project_type = self._create_mock_project_type()
         mock_slave = self._create_mock_slave()
-        build = Build(Mock(spec_set=BuildRequest))
-        build._project_type = mock_project_type
+        build = self._create_test_build(BuildStatus.PREPARED)
 
-        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
 
         mock_slave.setup.assert_called_once_with(build)
 
     def test_build_doesnt_use_more_than_max_executors(self):
-        subjobs = self._create_subjobs()
-        mock_project_type = self._create_mock_project_type()
-        fake_setup_command = 'mock command'
-        mock_slaves = [self._create_mock_slave(num_executors=5) for _ in range(3)]
-        expected_num_executors = 12  # We expect the build to use 12 out of 15 available executors.
-
-        build = Build(BuildRequest({'setup': fake_setup_command}))
-        build._project_type = mock_project_type
+        mock_slaves = [self._create_mock_slave(num_executors=5) for _ in range(3)]  # 15 total available executors
+        expected_num_executors_used = 12  # We expect the build to use 12 out of 15 available executors.
+        job_config = self._create_job_config(max_executors=expected_num_executors_used)
+        build = self._create_test_build(BuildStatus.PREPARED, job_config=job_config)
         build.execute_next_subjob_or_teardown_slave = MagicMock()
 
-        build.prepare(subjobs, self._create_job_config(max_executors=expected_num_executors))
-        [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
-        [build.begin_subjob_executions_on_slave(mock_slave) for mock_slave in mock_slaves]
+        for mock_slave in mock_slaves:
+            build.allocate_slave(mock_slave)
+            build.begin_subjob_executions_on_slave(mock_slave)
 
-        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, expected_num_executors,
+        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, expected_num_executors_used,
                          'Build should start executing as many subjobs as its max_executors setting.')
 
     def test_build_doesnt_use_more_than_max_executors_per_slave(self):
-        subjobs = self._create_subjobs()
-        mock_project_type = self._create_mock_project_type()
-        fake_setup_command = 'mock command'
         mock_slaves = [self._create_mock_slave(num_executors=5) for _ in range(3)]
         max_executors_per_slave = 2
-        expected_total_num_executors_used = 6  # We expect the build to use 2 executors on each of the 3 slaves.
+        job_config = self._create_job_config(max_executors_per_slave=max_executors_per_slave)
+        build = self._create_test_build(build_status=BuildStatus.PREPARED, job_config=job_config)
+        build.execute_next_subjob_or_teardown_slave = Mock()
 
-        build = Build(BuildRequest({'setup': fake_setup_command}))
-        build._project_type = mock_project_type
-        build.execute_next_subjob_or_teardown_slave = MagicMock()
+        for mock_slave in mock_slaves:
+            build.allocate_slave(mock_slave)
+            build.begin_subjob_executions_on_slave(mock_slave)
 
-        build.prepare(subjobs, self._create_job_config(max_executors_per_slave=max_executors_per_slave))
-        [build.allocate_slave(mock_slave) for mock_slave in mock_slaves]
-
-        expected_current_num_executors_used = 0
-        for i in range(len(mock_slaves)):
-            build.begin_subjob_executions_on_slave(mock_slaves[i])
-            expected_current_num_executors_used += max_executors_per_slave
-            self.assertEqual(
-                build.execute_next_subjob_or_teardown_slave.call_count, expected_current_num_executors_used,
-                'After allocating {} slaves, build with max_executors_per_slave set to {} should only be using {} '
-                'executors.'.format(i + 1, max_executors_per_slave, expected_current_num_executors_used))
-
+        # Even though each slave has 5 executors, we should only start subjobs on 2 of those executors per slave.
+        expected_subjob_execution_calls = [
+            call(mock_slaves[0]),
+            call(mock_slaves[0]),
+            call(mock_slaves[1]),
+            call(mock_slaves[1]),
+            call(mock_slaves[2]),
+            call(mock_slaves[2]),
+        ]
         self.assertEqual(
-            build.execute_next_subjob_or_teardown_slave.call_count, expected_total_num_executors_used,
+            build.execute_next_subjob_or_teardown_slave.mock_calls,
+            expected_subjob_execution_calls,
             'Build should start executing as many subjobs per slave as its max_executors_per_slave setting.')
 
-    def test_build_status_returns_requested_after_build_creation(self):
-        build = Build(BuildRequest({}))
-        status = build._status()
+    def test_build_status_returns_queued_after_build_creation(self):
+        build = self._create_test_build()
 
-        self.assertEqual(status, BuildStatus.QUEUED,
+        self.assertEqual(build._status(), BuildStatus.QUEUED,
                          'Build status should be QUEUED immediately after build has been created.')
 
     def test_build_status_returns_queued_after_build_preparation(self):
-        subjobs = self._create_subjobs()
-        mock_project_type = self._create_mock_project_type()
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
+        build = self._create_test_build(BuildStatus.PREPARED)
 
-        build.prepare(subjobs, self._create_job_config())
-        status = build._status()
-
-        self.assertEqual(status, BuildStatus.QUEUED,
+        self.assertEqual(build._status(), BuildStatus.QUEUED,
                          'Build status should be QUEUED after build has been prepared.')
 
     def test_build_status_returns_building_after_setup_has_started(self):
-        subjobs = self._create_subjobs()
-        mock_project_type = self._create_mock_project_type()
         mock_slave = self._create_mock_slave()
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
+        build = self._create_test_build(BuildStatus.PREPARED)
 
-        build.prepare(subjobs, self._create_job_config())
         build.allocate_slave(mock_slave)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
                          'Build status should be BUILDING after setup has started on slaves.')
 
     def test_build_status_returns_building_after_setup_is_complete_and_subjobs_are_executing(self):
-        subjobs = self._create_subjobs(count=3)
-        mock_project_type = self._create_mock_project_type()
-        mock_slave = self._create_mock_slave(num_executors=2)
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
-
-        build.prepare(subjobs, self._create_job_config())
-        build.allocate_slave(mock_slave)
-        build.begin_subjob_executions_on_slave(mock_slave)  # two out of three subjobs are now in progress
+        build = self._create_test_build(BuildStatus.BUILDING)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
                          'Build status should be BUILDING after subjobs have started executing on slaves.')
 
     def test_build_status_returns_finished_after_all_subjobs_complete_and_slaves_finished(self):
-        subjobs = self._create_subjobs(count=3)
-        mock_project_type = self._create_mock_project_type()
-        mock_slave = self._create_mock_slave(num_executors=3)
-        postbuild_tasks_complete_event = Event()
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
+        build = self._create_test_build(BuildStatus.BUILDING)
         build._create_build_artifact = MagicMock()
-        self._on_async_postbuild_tasks_completed(build, postbuild_tasks_complete_event.set)
 
-        build.prepare(subjobs, self._create_job_config())
-        build.allocate_slave(mock_slave)  # all three subjobs are now "in progress"
-        for subjob in subjobs:
-            build.complete_subjob(subjob.subjob_id())
+        self._finish_test_build(build)
 
-        # Wait for the async thread to complete executing postbuild tasks.
-        self.assertTrue(postbuild_tasks_complete_event.wait(timeout=2), 'Postbuild tasks should complete within a few'
-                                                                        'seconds.')
         # Verify build artifacts was called after subjobs completed
         build._create_build_artifact.assert_called_once_with()
         self.assertTrue(build._subjobs_are_finished)
         self.assertEqual(build._status(), BuildStatus.FINISHED)
 
-    def _prepare_one_subjob_with_one_atom(self):
-        m_open = self.patch('app.master.build.open', new=mock_open(read_data='1'), create=True)
-        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
-        build = Build(BuildRequest({}))
-        build._project_type = self._create_mock_project_type()
-        subjob = self._create_subjobs(count=1, build_id=build.build_id(), atoms=[Atom('FOO', 1)])[0]
-        build.prepare([subjob], self._create_job_config())
-        return build, subjob, m_open
-
     def test_complete_subjob_parses_payload_and_stores_value_in_atom_objects(self):
-        build, subjob, m_open = self._prepare_one_subjob_with_one_atom()
+        fake_atom_exit_code = 777
+        mock_open(mock=self.mock_open, read_data=str(fake_atom_exit_code))
+        build = self._create_test_build(BuildStatus.BUILDING, num_subjobs=1, num_atoms_per_subjob=1)
+        subjob = build.all_subjobs()[0]
 
-        payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
-        build.complete_subjob(subjob.subjob_id(), payload=payload)
+        build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
         expected_payload_sys_path = join(Configuration['results_directory'], '1', 'artifact_0_0')
-        m_open.assert_called_once_with(
+        self.mock_open.assert_called_once_with(
             join(expected_payload_sys_path, BuildArtifact.EXIT_CODE_FILE),
             'r',
         )
-        self.assertEqual(subjob.atoms[0].exit_code, 1)
+        self.assertEqual(subjob.atoms[0].exit_code, fake_atom_exit_code)
 
     def test_complete_subjob_marks_atoms_of_subjob_as_completed(self):
-        build, subjob, _ = self._prepare_one_subjob_with_one_atom()
+        build = self._create_test_build(BuildStatus.BUILDING)
+        subjob = build.all_subjobs()[0]
 
-        payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
-        build.complete_subjob(subjob.subjob_id(), payload=payload)
+        build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
         for atom in subjob.atoms:
             self.assertEqual(AtomState.COMPLETED, atom.state)
 
     def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
-        build, subjob, _ = self._prepare_one_subjob_with_one_atom()
+        build = self._create_test_build(BuildStatus.BUILDING)
+        subjob = build.all_subjobs()[0]
 
         payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
         build.complete_subjob(subjob.subjob_id(), payload=payload)
 
         expected_payload_sys_path = join(Configuration['results_directory'], '1', 'turtles.txt')
-        self.mock_fs.write_file.assert_called_once_with('Heroes in a half shell.', expected_payload_sys_path)
-        self.mock_fs.extract_tar.assert_called_once_with(expected_payload_sys_path, delete=True)
+        self.mock_util.fs.write_file.assert_called_once_with('Heroes in a half shell.', expected_payload_sys_path)
+        self.mock_util.fs.extract_tar.assert_called_once_with(expected_payload_sys_path, delete=True)
 
     def test_exception_is_raised_if_problem_occurs_writing_subjob(self):
-        Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
-        build = Build(BuildRequest({}))
-        build._project_type = self._create_mock_project_type()
-        subjob = self._create_subjobs(count=1, build_id=build.build_id())[0]
-        build.prepare([subjob], self._create_job_config())
-        self.mock_fs.write_file.side_effect = FileExistsError
+        build = self._create_test_build(BuildStatus.BUILDING)
+        subjob = build.all_subjobs()[0]
+
+        self.mock_util.fs.write_file.side_effect = FileExistsError
 
         with self.assertRaises(Exception):
-            payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
-            build.complete_subjob(subjob.subjob_id(), payload=payload)
+            build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
-    def test_need_more_slaves_returns_false_if_max_processes_is_reached(self):
-        subjobs = self._create_subjobs(count=5)
-        mock_project_type = self._create_mock_project_type()
-        mock_slave = self._create_mock_slave(num_executors=1)
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
+    @genty_dataset(
+        max_executors_reached=(1, False),
+        max_executors_not_reached=(30, True),
+    )
+    def test_need_more_slaves_returns_false_if_and_only_if_max_executors_is_reached(
+            self,
+            max_executors_for_build,
+            build_should_need_more_slaves
+    ):
+        job_config = self._create_job_config(max_executors=max_executors_for_build)
+        build = self._create_test_build(BuildStatus.PREPARED, num_subjobs=100, job_config=job_config)
 
-        build.prepare(subjobs, self._create_job_config(max_executors=1))
-        build.allocate_slave(mock_slave)
-        self.assertFalse(build.needs_more_slaves(), "if max processes is reached, we shouldn't need more slaves")
-
-    def test_need_more_slaves_returns_true_if_max_processes_is_not_reached(self):
-        subjobs = self._create_subjobs(count=8)
-        mock_project_type = self._create_mock_project_type()
         mock_slave = self._create_mock_slave(num_executors=5)
-        build = Build(BuildRequest({}))
-        build._project_type = mock_project_type
+        build.allocate_slave(slave=mock_slave)
 
-        build.prepare(subjobs, self._create_job_config(max_executors=8))
-        build.allocate_slave(mock_slave)
-        self.assertTrue(build.needs_more_slaves(), "if max_processes is not reached, we should need more slaves")
+        self.assertEqual(build.needs_more_slaves(), build_should_need_more_slaves,
+                         'If and only if the maximum number of executors is allocated we should not need more slaves.')
 
     def test_build_cannot_be_prepared_more_than_once(self):
-        build = Build(BuildRequest({}))
-        subjobs = self._create_subjobs(count=3)
-        mock_project_type = self._create_mock_project_type()
-        build._project_type = mock_project_type
+        build = self._create_test_build(BuildStatus.QUEUED)
+        job_config = self._create_job_config()
+        subjobs = self._create_subjobs(count=3, job_config=job_config)
 
-        build.prepare(subjobs, self._create_job_config())
+        build.prepare(subjobs=subjobs, job_config=job_config)
 
-        with self.assertRaises(Exception):
-            build.prepare(subjobs, mock_project_type, self._create_job_config())
+        with self.assertRaisesRegex(RuntimeError, r'prepare\(\) was called more than once'):
+            build.prepare(subjobs=subjobs, job_config=job_config)
 
     def test_teardown_called_on_slave_when_no_subjobs_remain(self):
         build = Build(BuildRequest({}))
@@ -426,12 +375,13 @@ class TestBuild(BaseUnitTestCase):
         self.assertIsNotNone(build.get_state_timestamp(BuildStatus.CANCELED),
                              '"canceled" timestamp should be set when build is canceled.')
 
-    # todo: almost all tests in this file should use this helper.
-    def _create_test_build(self, build_status=None, num_subjobs=1):
+    def _create_test_build(self, build_status=None, job_config=None, num_subjobs=3, num_atoms_per_subjob=3):
         """
         Create a Build instance for testing purposes. The instance will be created and brought to the specified
-        state similarly to how it would reach that state in actual app execution. This helps us test Build objects
-        in a more realistic way.
+        state similarly to how it would reach that state in actual app execution. Build instances have a huge
+        amount of internal state with complicated interactions, so this helper method helps us write tests that
+        are much more consistent and closer to reality. It also helps us avoid modifying a build's private members
+        directly.
 
         :type build_status: BuildStatus
         :rtype: Build
@@ -448,8 +398,8 @@ class TestBuild(BaseUnitTestCase):
             return build
 
         # PREPARED: Create a fake job config and subjobs and hand them off to the build.
-        job_config = self._create_job_config()
-        subjobs = self._create_subjobs(count=num_subjobs, job_config=job_config)
+        job_config = job_config or self._create_job_config()
+        subjobs = self._create_subjobs(count=num_subjobs, num_atoms_each=num_atoms_per_subjob, job_config=job_config)
         build.prepare(subjobs=subjobs, job_config=job_config)
         if build_status is BuildStatus.PREPARED:
             return build
@@ -478,14 +428,14 @@ class TestBuild(BaseUnitTestCase):
 
         raise ValueError('Unsupported value for build_status: "{}".'.format(build_status))
 
-    def _create_subjobs(self, count=3, build_id=0, atoms=None, job_config=None):
+    def _create_subjobs(self, count=3, num_atoms_each=1, build_id=0, job_config=None):
         return [
             Subjob(
                 build_id=build_id,
                 subjob_id=i,
                 project_type=None,
                 job_config=job_config,
-                atoms=atoms if atoms else [],
+                atoms=[Atom('NAME', 'Leonardo') for _ in range(num_atoms_each)],
             )
             for i in range(count)
         ]
