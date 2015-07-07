@@ -3,7 +3,6 @@ import subprocess
 import sys
 
 from app.util import fs
-from app.util import package_version
 
 
 _MAJOR_MINOR_VERSION = '0.5'
@@ -27,6 +26,15 @@ def get_version():
     return _calculate_source_version()  # unfrozen/running from source
 
 
+def _try_rename(src, dst):
+    try:
+        os.rename(src, dst)
+    except FileExistsError:
+        # Skip backing up the original package_version.py if a FileExistsError happened.
+        # This might happen on Windows as NTFS doesn't support writing to a file while the file is opened in python.
+        pass
+
+
 def write_package_version_file(package_version_string):
     """
     Write the specfied version string to package_version.py. This method is intended to be called during the process of
@@ -39,7 +47,7 @@ def write_package_version_file(package_version_string):
     """
     package_version_file_contents = 'version = "{}"  # DO NOT COMMIT\n'.format(package_version_string)
 
-    os.rename(_VERSION_FILE_PATH, _VERSION_FILE_BACKUP_PATH)  # Backup the original file.
+    _try_rename(_VERSION_FILE_PATH, _VERSION_FILE_BACKUP_PATH)  # Backup the original file.
     fs.write_file(package_version_file_contents, _VERSION_FILE_PATH)
 
 
@@ -48,7 +56,7 @@ def restore_original_package_version_file():
     Restore the backed up version of package_version.py. This is just a convenience method to help us remember not to
     commit changes to the package version file.
     """
-    os.rename(_VERSION_FILE_BACKUP_PATH, _VERSION_FILE_PATH)
+    _try_rename(_VERSION_FILE_BACKUP_PATH, _VERSION_FILE_PATH)
 
 
 def _get_frozen_package_version():
@@ -59,6 +67,10 @@ def _get_frozen_package_version():
     :return: The version of the (frozen) application
     :rtype: str
     """
+
+    # only import package_version when needed as on Windows once imported, the actual package_version.py can't be
+    # edited anymore
+    from app.util import package_version
     return package_version.version
 
 
