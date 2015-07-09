@@ -137,11 +137,24 @@ class _AtomConsoleHandler(_ClusterSlaveBaseAPIHandler):
         :type subjob_id: int
         :type atom_id: int
         """
-        max_lines = int(self.get_query_argument('maxLines', 50))
-        offset_line = self.get_query_argument('offsetLine', None)
+        # Because the 'Origin' header in the redirect (from the master) gets set to 'null', the only way
+        # for the client to receive this response is for us to allow any origin to receive this response.
+        self.set_header('Access-Control-Allow-Origin', '*')
+
+        max_lines = int(self.get_query_argument('max_lines', 50))
+        offset_line = self.get_query_argument('offset_line', None)
+
         if offset_line is not None:
             offset_line = int(offset_line)
-        response = self._cluster_slave.get_console_output(build_id, subjob_id, atom_id, max_lines, offset_line)
+
+        response = self._cluster_slave.get_console_output(
+            build_id,
+            subjob_id,
+            atom_id,
+            Configuration['artifact_directory'],
+            max_lines,
+            offset_line
+        )
         self.write(response)
 
 

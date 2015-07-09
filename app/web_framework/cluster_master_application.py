@@ -1,10 +1,13 @@
 import http.client
 import os
 import tornado.web
+import urllib.parse
 
 from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
+from app.util.exceptions import ItemNotFoundError
+from app.util.url_builder import UrlBuilder
 from app.web_framework.cluster_application import ClusterApplication
 from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler, ClusterBaseHandler
 from app.web_framework.route_node import RouteNode
@@ -32,7 +35,9 @@ class ClusterMasterApplication(ClusterApplication):
                             RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
                                 RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                                     RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
-                                        RouteNode(r'(\d+)', _AtomHandler, 'atom')
+                                        RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
+                                            RouteNode(r'console', _AtomConsoleHandler)
+                                        ])
                                     ]),
                                     RouteNode(r'result', _SubjobResultHandler)
                                 ])
@@ -150,6 +155,51 @@ class _AtomHandler(_ClusterMasterBaseAPIHandler):
             'atom': atoms[int(atom_id)],
         }
         self.write(response)
+
+
+class _AtomConsoleHandler(_ClusterMasterBaseAPIHandler):
+    def get(self, build_id, subjob_id, atom_id):
+        """
+        :type build_id: int
+        :type subjob_id: int
+        :type atom_id: int
+        """
+        max_lines = int(self.get_query_argument('max_lines', 50))
+        offset_line = self.get_query_argument('offset_line', None)
+
+        if offset_line is not None:
+            offset_line = int(offset_line)
+
+        try:
+            response = self._cluster_master.get_console_output(
+                build_id,
+                subjob_id,
+                atom_id,
+                Configuration['results_directory'],
+                max_lines,
+                offset_line
+            )
+            self.write(response)
+            return
+        except ItemNotFoundError as e:
+            # If the master doesn't have the atom's console output, it's possible it's currently being worked on,
+            # in which case the slave that is working on it may be able to provide the in-progress console output.
+            build = self._cluster_master.get_build(int(build_id))
+            subjob = build.subjob(int(subjob_id))
+            slave = subjob.slave
+
+            if slave is None:
+                raise e
+
+            api_url_builder = UrlBuilder(slave.url)
+            slave_console_url = api_url_builder.url('build', build_id, 'subjob', subjob_id, 'atom', atom_id, 'console')
+            query = {'max_lines': max_lines}
+
+            if offset_line is not None:
+                query['offset_line'] = offset_line
+
+            query_string = urllib.parse.urlencode(query)
+            self.redirect('{}?{}'.format(slave_console_url, query_string))
 
 
 class _BuildsHandler(_ClusterMasterBaseAPIHandler):
