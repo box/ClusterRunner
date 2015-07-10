@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 from app.util import autoversioning
+from app.util.process_utils import is_windows
 
 
 buildOptions = {
@@ -25,7 +26,7 @@ buildOptions = {
 
 base = 'Console'
 
-executable_name = 'clusterrunner.exe' if os.name == 'nt' else 'clusterrunner'
+executable_name = 'clusterrunner.exe' if is_windows() else 'clusterrunner'
 executables = [
     Executable('main.py', base=base, targetName=executable_name)
 ]
