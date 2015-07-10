@@ -25,7 +25,7 @@ buildOptions = {
 
 base = 'Console'
 
-executable_name = 'clusterrunner'
+executable_name = 'clusterrunner.exe' if os.name == 'nt' else 'clusterrunner'
 executables = [
     Executable('main.py', base=base, targetName=executable_name)
 ]
