@@ -210,8 +210,10 @@ class Build(object):
                                    subjob.subjob_id(), subjob.build_id(), slave.url)
                 try:
                     slave.start_subjob(subjob)
+                    subjob.mark_in_progress(slave)
+
                 except SlaveMarkedForShutdownError:
-                    self._unstarted_subjobs.put(subjob)
+                    self._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
                     # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
                     # Since the slave has been marked for shutdown, we need to free the executor.
                     self._free_slave_executor(slave)
@@ -316,8 +318,11 @@ class Build(object):
         """
         # Early exit if build is not running
         if self._status() in [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED]:
+            self._logger.notice('Ignoring cancel request for build {}. Build is already in state {}.',
+                                self._build_id, self._status())
             return
 
+        self._logger.notice('Canceling build {}.', self._build_id)
         self._is_canceled = True
         self._record_state_timestamp(BuildStatus.CANCELED)
 
