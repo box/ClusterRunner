@@ -43,6 +43,7 @@ class TestSubjob(BaseUnitTestCase):
         expected_api_repr = {
             'id': 34,
             'command': self._job_config_command,
+            'slave': None,
             'atoms': [
                 {
                     'id': 0,

@@ -64,7 +64,8 @@ class Subjob(object):
         return {
             'id': self._subjob_id,
             'command': self.job_config.command,
-            'atoms': self.get_atoms()
+            'atoms': self.get_atoms(),
+            'slave': self.slave.url if self.slave else None,
         }
 
     @property
