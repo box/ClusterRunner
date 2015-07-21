@@ -15,17 +15,19 @@ class TestConsoleOutput(BaseIntegrationTestCase):
             console_output.append('line_' + str(i))
 
         # Completed console output file.
-        _, cls._completed_console_output_file_path = mkstemp()
+        cls._completed_console_output_fd, cls._completed_console_output_file_path = mkstemp()
         with open(cls._completed_console_output_file_path, 'w') as f:
             f.write("\n".join(console_output) + "\n")
 
         # Incomplete console output file (still being written to, as there is no newline at the end).
-        _, cls._incomplete_console_output_file_path = mkstemp()
+        cls._incomplete_console_output_fd, cls._incomplete_console_output_file_path = mkstemp()
         with open(cls._incomplete_console_output_file_path, 'w') as f:
             f.write("\n".join(console_output))
 
     @classmethod
     def tearDownClass(cls):
+        os.close(cls._completed_console_output_fd)
+        os.close(cls._incomplete_console_output_fd)
         os.remove(cls._completed_console_output_file_path)
         os.remove(cls._incomplete_console_output_file_path)
 

@@ -6,8 +6,6 @@ import tempfile
 from unittest import TestCase
 
 from app.util import log
-from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
-from app.util.conf.config_file import ConfigFile
 from app.util.process_utils import is_windows
 from app.util.secret import Secret
 from test.framework.functional.fs_item import Directory
@@ -25,19 +23,8 @@ class BaseFunctionalTestCase(TestCase):
         log.configure_logging('DEBUG')
 
         Secret.set('testsecret')
-        self.test_app_base_dir = tempfile.TemporaryDirectory()
 
-        self.test_conf_file_path = self._create_test_config_file({
-            'secret': Secret.get(),
-            'base_directory': self.test_app_base_dir.name,
-            # Set the max log file size to a low value so that we cause  at least one rollover during the test.
-            'max_log_file_size': 1024 * 5,
-        })
-
-        self.cluster = FunctionalTestCluster(
-            conf_file_path=self.test_conf_file_path,
-            verbose=self._get_test_verbosity(),
-        )
+        self.cluster = FunctionalTestCluster(verbose=self._get_test_verbosity())
 
     def _create_test_config_file(self, conf_values_to_set=None):
         """
@@ -62,10 +49,6 @@ class BaseFunctionalTestCase(TestCase):
         return test_conf_file_path
 
     def tearDown(self):
-        # Clean up files created during this test
-        with suppress(FileNotFoundError):
-            os.remove(self.test_conf_file_path)
-
         # Give the cluster a bit of extra time to finish working (before forcefully killing it and failing the test)
         with suppress(TestClusterTimeoutError):
             self.cluster.block_until_build_queue_empty(timeout=5)
@@ -87,7 +70,8 @@ class BaseFunctionalTestCase(TestCase):
                     ),
                 )
         # Remove the temp dir. This will delete the log files, so should be run after cluster shuts down.
-        self.test_app_base_dir.cleanup()
+        self.cluster.master_app_base_dir.cleanup()
+        [slave_app_base_dir.cleanup() for slave_app_base_dir in self.cluster.slaves_app_base_dirs]
 
     def _get_test_verbosity(self):
         """
@@ -167,7 +151,7 @@ class BaseFunctionalTestCase(TestCase):
         :param expected_build_artifact_contents: A list of FSItems corresponding to the expected artifact dir contents
         :type expected_build_artifact_contents: list[FSItem]
         """
-        build_artifacts_dir_path = os.path.join(self.test_app_base_dir.name, 'results', 'master', str(build_id))
+        build_artifacts_dir_path = os.path.join(self.cluster.master_app_base_dir.name, 'results', 'master', str(build_id))
         self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
 
     def assert_directory_contents_match_expected(self, dir_path, expected_dir_contents):
