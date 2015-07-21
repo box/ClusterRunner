@@ -1,0 +1,11 @@
+install:
+  - "SET PATH=C:\\Python34;C:\\Python34\\Scripts\\;%PATH%"
+  - pip install -r requirements.txt
+
+environment:
+  CR_VERBOSE: 1
+
+build: false  # Not a C# project
+
+test_script:
+  - nosetests -vv test

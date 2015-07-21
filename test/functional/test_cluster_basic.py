@@ -28,8 +28,8 @@ class TestClusterBasic(BaseFunctionalTestCase):
             'project_directory': project_dir.name,
         })
         build_id = build_resp['build_id']
-        master.block_until_build_finished(build_id, timeout=10)
-        slave.block_until_idle(timeout=5)  # ensure slave teardown has finished before making assertions
+        master.block_until_build_finished(build_id, timeout=30)
+        slave.block_until_idle(timeout=20)  # ensure slave teardown has finished before making assertions
 
         if test_job_config.expected_to_fail:
             self.assert_build_has_failure_status(build_id=build_id)
