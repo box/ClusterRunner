@@ -1,13 +1,19 @@
+import requests
+
 from contextlib import suppress
 import functools
+import os
 from os.path import dirname, join, realpath
-import requests
 from subprocess import DEVNULL, Popen
 import sys
+import shutil
 import tempfile
 
 from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAPIClient
 from app.util import log, poll, process_utils
+from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
+from app.util.conf.config_file import ConfigFile
+from app.util.secret import Secret
 
 
 class FunctionalTestCluster(object):
@@ -18,14 +24,11 @@ class FunctionalTestCluster(object):
     _MASTER_PORT = 43000
     _SLAVE_START_PORT = 43001
 
-    def __init__(self, conf_file_path, verbose=False):
+    def __init__(self, verbose=False):
         """
-        :param conf_file_path: The path to the clusterrunner.conf file that this cluster's services should use
-        :type conf_file_path: str
         :param verbose: If true, output from the master and slave processes is allowed to pass through to stdout.
         :type verbose: bool
         """
-        self._conf_file_path = conf_file_path
         self._verbose = verbose
         self._logger = log.get_logger(__name__)
 
@@ -36,8 +39,47 @@ class FunctionalTestCluster(object):
         self._slave_eventlog_names = []
         self._next_slave_port = self._SLAVE_START_PORT
 
-        clusterrunner_repo_dir = dirname(dirname(dirname(dirname(realpath(__file__)))))
-        self._app_executable = join(clusterrunner_repo_dir, 'main.py')
+        self._clusterrunner_repo_dir = dirname(dirname(dirname(dirname(realpath(__file__)))))
+        self._app_executable = join(self._clusterrunner_repo_dir, 'main.py')
+
+        self._master_app_base_dir = None
+        self._slaves_app_base_dirs = []
+
+    @property
+    def master_app_base_dir(self):
+        return self._master_app_base_dir
+
+    @property
+    def slaves_app_base_dirs(self):
+        return self._slaves_app_base_dirs
+
+    def _create_test_config_file(self, base_dir_sys_path):
+        """
+        Create a temporary conf file just for this test.
+
+        :param base_dir_sys_path: Sys path of the base app dir
+        :type base_dir_sys_path: unicode
+
+        :return: The path to the conf file
+        :rtype: str
+        """
+        # Copy default conf file to tmp location
+        self._conf_template_path = join(self._clusterrunner_repo_dir, 'conf', 'default_clusterrunner.conf')
+        test_conf_file_path = tempfile.NamedTemporaryFile().name
+        shutil.copy(self._conf_template_path, test_conf_file_path)
+        os.chmod(test_conf_file_path, ConfigFile.CONFIG_FILE_MODE)
+        conf_file = ConfigFile(test_conf_file_path)
+
+        # Set custom conf file values for this test
+        conf_values_to_set = {
+            'secret': Secret.get(),
+            'base_directory': base_dir_sys_path,
+            'max_log_file_size': 1024 * 5,
+        }
+        for conf_key, conf_value in conf_values_to_set.items():
+            conf_file.write_value(conf_key, conf_value, BASE_CONFIG_FILE_SECTION)
+
+        return test_conf_file_path
 
     def start_master(self):
         """
@@ -95,6 +137,8 @@ class FunctionalTestCluster(object):
             popen_kwargs.update({'stdout': DEVNULL, 'stderr': DEVNULL})  # hide output of master process
 
         self._master_eventlog_name = tempfile.NamedTemporaryFile(delete=False).name
+        self._master_app_base_dir = tempfile.TemporaryDirectory()
+        master_config_file_path = self._create_test_config_file(self._master_app_base_dir.name)
         master_hostname = 'localhost'
         master_cmd = [
             sys.executable,
@@ -102,7 +146,7 @@ class FunctionalTestCluster(object):
             'master',
             '--port', str(self._MASTER_PORT),
             '--eventlog-file', self._master_eventlog_name,
-            '--config-file', self._conf_file_path,
+            '--config-file', master_config_file_path,
         ]
 
         # Don't use shell=True in the Popen here; the kill command might only kill "sh -c", not the actual process.
@@ -150,6 +194,9 @@ class FunctionalTestCluster(object):
 
             slave_eventlog = tempfile.NamedTemporaryFile().name  # each slave writes to its own file to avoid collision
             self._slave_eventlog_names.append(slave_eventlog)
+            slave_base_app_dir = tempfile.TemporaryDirectory()
+            self._slaves_app_base_dirs.append(slave_base_app_dir)
+            slave_config_file_path = self._create_test_config_file(slave_base_app_dir.name)
 
             slave_cmd = [
                 sys.executable,
@@ -159,7 +206,7 @@ class FunctionalTestCluster(object):
                 '--num-executors', str(num_executors_per_slave),
                 '--master-url', '{}:{}'.format(self.master.host, self.master.port),
                 '--eventlog-file', slave_eventlog,
-                '--config-file', self._conf_file_path,
+                '--config-file', slave_config_file_path,
             ]
 
             # Don't use shell=True in the Popen here; the kill command may only kill "sh -c", not the actual process.
