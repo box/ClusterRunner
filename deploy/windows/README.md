@@ -13,6 +13,7 @@ We provide an option to deploy ClusterRunner on Windows via [Ansible](http://doc
 
 Ansible requires Windows machines to meet certain requirements to work. Two things specifically:
 - Install Powershell 4.0 or higher.
+- Install [Microsoft Visual C++ 2010 Redistributable Package (x86)](https://www.microsoft.com/en-us/download/details.aspx?id=5555).
 - Run the [ConfigureRemotingForAnsible.ps1](https://github.com/ansible/ansible/blob/devel/examples/scripts/ConfigureRemotingForAnsible.ps1) on the Windows machines.
 - More details about preparing the Windows machines for Ansible can be found [here](http://docs.ansible.com/ansible/intro_windows.html).
 
