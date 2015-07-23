@@ -1,0 +1,4 @@
+ansible_ssh_user: your_windows_user_name
+ansible_ssh_pass: password_for_the_windows_user
+ansible_ssh_port: 5986
+ansible_connection: winrm
