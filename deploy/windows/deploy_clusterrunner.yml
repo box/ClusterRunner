@@ -1,0 +1,66 @@
+- name: Stop ClusterRunner
+  hosts: clusterrunner_nodes
+  tags:
+    - stop
+
+  tasks:
+    - name: Stop existing clusterrunner service
+      raw: '{{home}}\.clusterrunner\dist\clusterrunner.exe stop'
+      ignore_errors: true
+
+- name: Download ClusterRunner
+  hosts: clusterrunner_nodes
+  tags:
+    - download
+
+  tasks:
+    - name: Assures .clusterrunner directory exists
+      win_file: path={{home}}\.clusterrunner state=directory
+
+    - name: Download clusterrunner
+      win_get_url:
+        url: 'https://cloud.box.com/shared/static/34xqrf342071xvn75gu9vbwuodlp9adq.zip'
+        dest: '{{home}}\.clusterrunner\clusterrunner.zip'
+
+    - name: Download 7-zip
+      win_get_url:
+        url: 'https://chocolatey.org/7za.exe'
+        dest: '{{home}}\.clusterrunner\7za.exe'
+
+    - name: Unzip clusterrunner.zip
+      raw: '{{home}}\.clusterrunner\7za.exe x -y -o{{home}}\.clusterrunner  {{home}}\.clusterrunner\clusterrunner.zip'
+
+    - name: Copy clusterrunner.conf
+      win_copy: src=files/clusterrunner.conf dest={{home}}\.clusterrunner\clusterrunner.conf
+
+- name: Start ClusterRunner Master
+  hosts: master
+  tags:
+    - start
+    - start_master
+
+  tasks:
+    - name: Start ClusterRunner Master
+      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe master"
+    - pause: seconds=5
+
+- name: Connect ClusterRunner Slaves
+  hosts: slaves
+  tags:
+    - start
+    - connect_slave
+
+  tasks:
+    - name: Connect ClusterRunner slaves
+      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe slave -m {{master}}:43000 -e 10"
+
+- name: Check connection
+  hosts: slaves
+  tags:
+    - check
+
+  tasks:
+    - name: Check all slaves are connected
+      local_action: shell curl http://{{master}}:43000/v1/slave
+      register: curl_output
+      failed_when: "'{{inventory_hostname}}' not in curl_output.stdout"
