@@ -29,7 +29,7 @@ test-unit-with-coverage:
 
 test-unit-via-clusterrunner:
 	$(call print_msg, Running unit tests via ClusterRunner... )
-	./main.py build
+	./main.py build --job-name Unit
 	./main.py stop
 
 test-functional:

@@ -3,3 +3,9 @@ Unit:
         - nosetests --with-xunit --xunit-file $ARTIFACT_DIR/result.xml $TESTPATH
     atomizers:
         - TESTPATH: find "test/unit" -name "test_*.py"
+
+UnitOnWindows:
+    commands:
+        - nosetests --with-xunit --xunit-file !ARTIFACT_DIR!\result.xml !TESTPATH!
+    atomizers:
+        - TESTPATH: cd test\unit && dir test_*.py /b/s
