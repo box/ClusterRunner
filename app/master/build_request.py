@@ -51,6 +51,8 @@ class BuildRequest(object):
         :return: whether the parameters are valid or not
         :rtype: bool
         """
+        if self._build_type is None:
+            return False
         missing_parameters = set(self.required_parameters()) - self._build_parameters.keys()
         return self.is_valid_type() and not missing_parameters
 
@@ -59,6 +61,8 @@ class BuildRequest(object):
         :return: whether the type is valid or not
         :rtype: bool
         """
+        if self._build_type is None:
+            return False
         return util.get_project_type_subclass(self._build_type) is not None
 
     def required_parameters(self):
