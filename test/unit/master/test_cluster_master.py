@@ -1,5 +1,7 @@
-from unittest.mock import MagicMock, Mock
 from genty import genty, genty_dataset
+from hypothesis import given
+from hypothesis.strategies import text, dictionaries, integers
+from unittest.mock import MagicMock, Mock
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
@@ -19,6 +21,7 @@ class TestClusterMaster(BaseUnitTestCase):
         super().setUp()
         self.patch('app.util.fs.create_dir')
         self.patch('app.util.fs.async_delete')
+        self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
 
     @genty_dataset(
@@ -211,3 +214,14 @@ class TestClusterMaster(BaseUnitTestCase):
             master.handle_result_reported_from_slave(slave_url, mock_build.build_id(), subjob_id=888)
 
         self.assertEqual(mock_build.execute_next_subjob_or_teardown_slave.call_count, 1)
+
+    @given(dictionaries(text(), text()))
+    def test_handle_request_for_new_build_does_not_raise_exception(self, build_params):
+        master = ClusterMaster()
+        master.handle_request_for_new_build(build_params)
+
+    @given(integers(), dictionaries(text(), text()))
+    def test_handle_request_to_update_build_does_not_raise_exception(self, build_id, update_params):
+        master = ClusterMaster()
+        master._all_builds_by_id = {build_id: Build({})}
+        master.handle_request_to_update_build(build_id, update_params)
