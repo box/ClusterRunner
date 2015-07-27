@@ -65,7 +65,8 @@ class FunctionalTestCluster(object):
         """
         # Copy default conf file to tmp location
         self._conf_template_path = join(self._clusterrunner_repo_dir, 'conf', 'default_clusterrunner.conf')
-        test_conf_file_path = tempfile.NamedTemporaryFile().name
+        # Create the conf file inside base dir so we can clean up the test at the end just by removing the base dir
+        test_conf_file_path = tempfile.NamedTemporaryFile(dir=base_dir_sys_path).name
         shutil.copy(self._conf_template_path, test_conf_file_path)
         os.chmod(test_conf_file_path, ConfigFile.CONFIG_FILE_MODE)
         conf_file = ConfigFile(test_conf_file_path)
