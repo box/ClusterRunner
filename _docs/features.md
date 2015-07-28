@@ -29,5 +29,10 @@ We've specifically avoided trying to replace functionality provided by the commo
 3. Schedule the execution of jobs
 4. ... many other CI things.
 
+#### Platforms we support
+- Windows (beta)
+- OSX
+- Linux
+
 In summary, whenever you run a test by calling a shell command, ClusterRunner can likely execute those same tests 
 faster, safer, and more efficiently.
