@@ -9,4 +9,4 @@ build: false  # Not a C# project
 
 test_script:
   - nosetests -vv test
-  - run_cr_unit_on_cr.cmd
+  - windows\run_cr_unit_on_cr.cmd
