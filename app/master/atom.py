@@ -28,11 +28,11 @@ class Atom(object):
         :type state: `:class:AtomState` | None
         """
         self._env_var_name = env_var_name
-        self._atom_value = atom_value
+        self.atom_value = atom_value
         self.expected_time = expected_time
         self.actual_time = actual_time
         self.exit_code = exit_code
         self.state = state
 
         # Convert atomizer command output into environment variable export commands.
-        self.command_string = get_environment_variable_setter_command(self._env_var_name, self._atom_value)
+        self.command_string = get_environment_variable_setter_command(self._env_var_name, self.atom_value)

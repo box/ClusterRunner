@@ -2,10 +2,8 @@ from unittest.mock import Mock
 from app.master.atom import Atom
 from app.master.job_config import JobConfig
 
-from app.master.atom import AtomState
 from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
-from app.util.process_utils import get_environment_variable_setter_command
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -47,7 +45,7 @@ class TestSubjob(BaseUnitTestCase):
             'atoms': [
                 {
                     'id': 0,
-                    'atom': get_environment_variable_setter_command('BREAKFAST', 'pancakes'),
+                    'atom': 'pancakes',
                     'expected_time': 23.4,
                     'actual_time': 56.7,
                     'exit_code': 1,
@@ -55,7 +53,7 @@ class TestSubjob(BaseUnitTestCase):
                 },
                 {
                     'id': 1,
-                    'atom': get_environment_variable_setter_command('BREAKFAST', 'cereal'),
+                    'atom': 'cereal',
                     'expected_time': 89.0,
                     'actual_time': 24.6,
                     'exit_code': 0,
