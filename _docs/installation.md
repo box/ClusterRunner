@@ -25,9 +25,9 @@ Pick a set of instructions based on your operating system.
 
 **Windows**
 
-- Download ClusterRunner from [here](https://cloud.box.com/shared/static/u91zg1fmmlxo2reqo8mwi3hjv7kaeazz.zip)
-- Unzip to %HOME%\\.clusterrunner\\dist
-- Copy .\\dist\\conf\\default\_clusterrunner.conf to clusterrunner.conf inside .clusterrunner folder
+{% highlight bash%}
+C:\> @powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((new-object net.webclient).DownloadString('https://cloud.box.com/shared/static/snpz1xcan76rpy112rdu33xjrvdmkcnk.ps1'))"
+{% endhighlight %}
 
 ## Bash Alias
 
