@@ -46,6 +46,7 @@ class Build(object):
         self._project_type = None
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
         self._subjob_assignment_lock = Lock()  # prevents subjobs from being skipped
+        self._subjob_queuing_lock = Lock()
         self._slaves_allocated = []
         self._num_executors_allocated = 0
         self._num_executors_in_use = 0
@@ -119,9 +120,13 @@ class Build(object):
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))
         self._finished_subjobs = Queue(maxsize=len(subjobs))
 
-        for subjob in subjobs:
-            self._all_subjobs_by_id[subjob.subjob_id()] = subjob
-            self._unstarted_subjobs.put(subjob)
+        with self._subjob_queuing_lock:
+            if self._status() in [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED]:
+                self._logger.warn('Could not complete build preparation, build status is {}', self._status())
+                return
+            for subjob in subjobs:
+                self._all_subjobs_by_id[subjob.subjob_id()] = subjob
+                self._unstarted_subjobs.put(subjob)
 
         self._max_executors = job_config.max_executors
         self._max_executors_per_slave = job_config.max_executors_per_slave
@@ -327,13 +332,17 @@ class Build(object):
         self._record_state_timestamp(BuildStatus.CANCELED)
 
         # Deplete the unstarted subjob queue.
-        # TODO: Handle situation where cancel() is called while subjobs are being added to _unstarted_subjobs
-        while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
-            try:
-                # A subjob may be asynchronously pulled from this queue, so we need to avoid blocking when empty.
-                self._unstarted_subjobs.get(block=False)
-            except Empty:
-                break
+        with self._subjob_queuing_lock:
+            while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
+                try:
+                    # A subjob may be asynchronously pulled from this queue, so we need to avoid blocking when empty.
+                    self._unstarted_subjobs.get(block=False)
+                except Empty:
+                    break
+
+        # Tell each allocated slave to teardown
+        for slave in self._slaves_allocated:
+            self.execute_next_subjob_or_teardown_slave(slave)
 
     def validate_update_params(self, update_params):
         """

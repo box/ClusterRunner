@@ -8,6 +8,7 @@ import threading
 import time
 
 from app.subcommands.build_subcommand import BuildSubcommand
+from app.subcommands.cancel_subcommand import CancelSubcommand
 from app.subcommands.deploy_subcommand import DeploySubcommand
 from app.subcommands.master_subcommand import MasterSubcommand
 from app.subcommands.shutdown_subcommand import ShutdownSubcommand
@@ -120,6 +121,19 @@ def _parse_args(args):
     _add_project_type_subparsers(build_parser)
     build_parser.set_defaults(subcommand_class=BuildSubcommand)
 
+    cancel_parser = subparsers.add_parser(
+        'cancel',
+        help='Cancel a running build', formatter_class=ClusterRunnerHelpFormatter
+    )
+    cancel_parser.add_argument(
+        '--build-id',
+        help='The id of the build to cancel'
+    )
+    cancel_parser.add_argument(
+        '--master-url',
+        help='The url of the ClusterRunner master that is executing this build.'
+    )
+    cancel_parser.set_defaults(subcommand_class=CancelSubcommand)
 
     shutdown_parser = subparsers.add_parser(
         'shutdown',
@@ -145,7 +159,7 @@ def _parse_args(args):
 
     shutdown_parser.set_defaults(subcommand_class=ShutdownSubcommand)
 
-    for subparser in (master_parser, slave_parser, build_parser, stop_parser, deploy_parser, shutdown_parser):
+    for subparser in (master_parser, slave_parser, build_parser, stop_parser, deploy_parser, shutdown_parser, cancel_parser):
         subparser.add_argument(
             '-v', '--verbose',
             action='store_const', const='DEBUG', dest='log_level', help='set the log level to "debug"')
