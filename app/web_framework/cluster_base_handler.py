@@ -5,7 +5,7 @@ import tornado.web
 
 from app.util import log
 from app.util.conf.configuration import Configuration
-from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError
+from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError, PreconditionFailedError
 from app.util.network import ENCODED_BODY
 
 
@@ -23,6 +23,7 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         BadRequestError: http.client.BAD_REQUEST,
         AuthenticationError: http.client.UNAUTHORIZED,
         ItemNotFoundError: http.client.NOT_FOUND,
+        PreconditionFailedError: http.client.PRECONDITION_FAILED,
     }
 
     def _handle_request_exception(self, ex):
