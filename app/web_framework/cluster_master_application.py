@@ -2,6 +2,7 @@ import http.client
 import os
 import tornado.web
 import urllib.parse
+import uuid
 
 from app.util import analytics
 from app.util.conf.configuration import Configuration
@@ -20,6 +21,7 @@ class ClusterMasterApplication(ClusterApplication):
         :type cluster_master: ClusterMaster
         """
         default_params = {
+            'session_id': str(uuid.uuid4()),
             'cluster_master': cluster_master,
         }
         # The routes are described using a tree structure.  This is a better representation of a path than a flat list
@@ -59,13 +61,23 @@ class ClusterMasterApplication(ClusterApplication):
 
 
 class _ClusterMasterBaseAPIHandler(ClusterBaseAPIHandler):
-    def initialize(self, route_node=None, cluster_master=None):
+    def initialize(self, route_node=None, cluster_master=None, session_id=None):
         """
         :type route_node: RouteNode | None
         :type cluster_master: ClusterMaster | None
+        :type session_id: str | None
         """
         self._cluster_master = cluster_master
+        self._session_id = session_id
         super().initialize(route_node)
+
+    def write(self, response):
+        """
+        Inject the session id in the header. This is done in the master service only.
+        :type response: dict[str, any]
+        """
+        self.set_header('Session-Id', self._session_id)
+        super().write(response)
 
 
 class _RootHandler(_ClusterMasterBaseAPIHandler):
@@ -248,14 +260,16 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
 
     From the Tornado docs: "for heavy traffic it will be more efficient to use a dedicated static file server".
     """
-    def initialize(self, route_node=None, cluster_master=None):
+    def initialize(self, route_node=None, cluster_master=None, session_id=None):
         """
         :param route_node: This is not used, it is only a param so we can pass route_node to all handlers without error.
         In other routes, route_node is used to find child routes but filehandler routes will never show child routes.
         :type route_node: RouteNode | None
         :type cluster_master: ClusterMaster | None
+        :type session_id: str | None
         """
         self._cluster_master = cluster_master
+        self._session_id = session_id
         super().initialize(path=None)  # we will not set the root path until the get() method is called
 
     def get(self, build_id, path=None):
