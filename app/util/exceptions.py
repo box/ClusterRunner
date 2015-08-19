@@ -27,3 +27,11 @@ class ItemNotFoundError(Exception):
     An exception to represent the case where something was not found. Example: trying to get the status for a
     non-existent build. The web framework should translate this exception to a 404 response.
     """
+
+
+class PreconditionFailedError(Exception):
+    """
+    An exception to represent the case when a non-authentication-related precondition for accessing the resource
+    was not met. For example, the session id token has expired. The web framework should translate this exception
+    to a 412 response.
+    """
