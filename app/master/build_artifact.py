@@ -47,9 +47,10 @@ class BuildArtifact(object):
             self._logger.debug('Created new timing file in {}', timing_file_path)
             return
 
-        # If file exists, only overwrite timing data if there were no failures this build
+        # If file exists, update the timing data only if there were no failures this build
+        # @TODO: in the future we should always update the timing data, but only for passed atom keys.
         if len(self.get_failed_commands()) == 0:
-            self._write_timing_data_to_file(timing_file_path, timing_data)
+            self._update_timing_file(timing_file_path, timing_data)
             self._logger.debug('Overwrote existing timing file in {}', timing_file_path)
             return
 
@@ -104,12 +105,26 @@ class BuildArtifact(object):
             with open(os.path.join(self.build_artifact_dir, 'failures.txt'), 'w') as f:
                 f.write("\n".join(failed_atoms))
 
-    def _write_timing_data_to_file(self, path, timing_data):
+    def _write_timing_data_to_file(self, timing_file_path, timing_data):
         """
-        :type path: str
+        :type timing_file_path: str
         :type timing_data: dict[str, float]
         """
-        app.util.fs.write_file(json.dumps(timing_data), path)
+        app.util.fs.write_file(json.dumps(timing_data), timing_file_path)
+
+    def _update_timing_file(self, timing_file_path, new_timing_data):
+        """
+        Update the timing data for the atoms specified in new_timing_data. This means that new results
+        does not replace the entire timing data file, but rather only replaces the timing data for
+        individual atom keys.
+        :param timing_file_path: str
+        :param new_timing_data: dict[str, float]
+        """
+        with open(timing_file_path) as timing_file:
+            timing_data = json.load(timing_file)
+
+        timing_data.update(new_timing_data)
+        self._write_timing_data_to_file(timing_file_path, timing_data)
 
     @staticmethod
     def atom_artifact_directory(build_id, subjob_id, atom_id, result_root=None):

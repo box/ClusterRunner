@@ -25,7 +25,11 @@ test-unit:
 
 test-unit-with-coverage:
 	$(call print_msg, Running unit tests with coverage... )
-	nosetests -v --with-xcoverage --cover-package=app test/unit test/integration
+	nosetests -v --with-xcoverage --cover-package=app test/unit
+
+test-integration-with-coverage:
+	$(call print_msg, Running unit tests with coverage... )
+	nosetests -v --with-xcoverage --cover-package=app test/integration
 
 test-unit-via-clusterrunner:
 	$(call print_msg, Running unit tests via ClusterRunner... )
