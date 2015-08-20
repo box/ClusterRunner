@@ -16,21 +16,34 @@ from app.util.process_utils import Popen_with_delayed_expansion, get_environment
 
 class ProjectType(object):
 
-    def __init__(self, config=None, job_name=None, remote_files=None):
+    def __init__(self, config=None, job_name=None, remote_files=None, atoms_override=None):
         """
         :param config: A yaml string representing a clusterrunner.yaml file
         :type config: str | None
         :type job_name: str | None
         :param remote_files: key-value pairs of where the key is the output_file and the value is the url
         :type remote_files: dict[str, str] | None
+        :param atoms_override: the list of overriden atoms specified from the build request. If this parameter
+            is specified, then the atomization step is skipped.
+        :type atoms_override: list[str]
         """
         self.project_directory = ''
+        self._atoms_override = atoms_override
         self._config = config
         self._job_name = job_name
         self._remote_files = remote_files if remote_files else {}
-
         self._logger = log.get_logger(__name__)
         self._kill_event = Event()
+
+    @property
+    def atoms_override(self):
+        """
+        :return: The list of atom command strings that were specified in the build request. This is an optional
+            build request parameter that is defaulted to 'None', in which case atomization still occurs during
+            build preparation.
+        :rtype: list[str]|None
+        """
+        return self._atoms_override
 
     @property
     def job_name(self):

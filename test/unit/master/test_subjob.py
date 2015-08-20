@@ -19,15 +19,13 @@ class TestSubjob(BaseUnitTestCase):
             job_config=Mock(spec=JobConfig, command=self._job_config_command),
             atoms=[
                 Atom(
-                    'BREAKFAST',
-                    'pancakes',
+                    'export BREAKFAST="pancakes";',
                     expected_time=23.4,
                     actual_time=56.7,
                     exit_code=1,
                 ),
                 Atom(
-                    'BREAKFAST',
-                    'cereal',
+                    'export BREAKFAST="cereal";',
                     expected_time=89.0,
                     actual_time=24.6,
                     exit_code=0,
@@ -45,7 +43,7 @@ class TestSubjob(BaseUnitTestCase):
             'atoms': [
                 {
                     'id': 0,
-                    'atom': 'pancakes',
+                    'atom': 'export BREAKFAST="pancakes";',
                     'expected_time': 23.4,
                     'actual_time': 56.7,
                     'exit_code': 1,
@@ -53,7 +51,7 @@ class TestSubjob(BaseUnitTestCase):
                 },
                 {
                     'id': 1,
-                    'atom': 'cereal',
+                    'atom': 'export BREAKFAST="cereal";',
                     'expected_time': 89.0,
                     'actual_time': 24.6,
                     'exit_code': 0,

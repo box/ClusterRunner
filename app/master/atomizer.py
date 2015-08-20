@@ -1,5 +1,6 @@
 from app.master.atom import Atom
 from app.util import log
+from app.util.process_utils import get_environment_variable_setter_command
 
 
 class Atomizer(object):
@@ -35,10 +36,12 @@ class Atomizer(object):
                                        '\n{}', atomizer_command, atomizer_var_name, exit_code, atomizer_output)
                     raise AtomizerError('Atomizer command failed!')
 
-                # For purposes of matching atom string values across builds, we must replace the generated/unique
-                # project directory with its corresponding universal environment variable: '$PROJECT_DIR'.
-                new_atoms = [Atom(atomizer_var_name, atom_value.replace(project_type.project_directory, '$PROJECT_DIR'))
-                             for atom_value in atomizer_output.strip().splitlines()]
+                new_atoms = []
+                for atom_value in atomizer_output.strip().splitlines():
+                    # For purposes of matching atom string values across builds, we must replace the generated/unique
+                    # project directory with its corresponding universal environment variable: '$PROJECT_DIR'.
+                    atom_value = atom_value.replace(project_type.project_directory, '$PROJECT_DIR')
+                    new_atoms.append(Atom(get_environment_variable_setter_command(atomizer_var_name, atom_value)))
                 atoms_list.extend(new_atoms)
 
         return atoms_list
