@@ -122,15 +122,11 @@ class TimeBasedAtomGrouper(object):
 
         # Generate list for atoms that have timing data
         for new_atom in new_atoms:
-            new_atom_directory_stripped = new_atom.command_string.replace(project_directory, '')
-
-            # When matching up new atoms with stored atom timing data, we use the project-directory-stripped
-            # atom string for matching.
-            if new_atom_directory_stripped not in old_atoms_with_times:
+            if new_atom.command_string not in old_atoms_with_times:
                 atoms_without_timing_data.append(new_atom)
                 continue
 
-            new_atom.expected_time = old_atoms_with_times[new_atom_directory_stripped]
+            new_atom.expected_time = old_atoms_with_times[new_atom.command_string]
 
             # Discover largest single atom time to use as conservative estimates for atoms with unknown times
             if max_atom_time < new_atom.expected_time:

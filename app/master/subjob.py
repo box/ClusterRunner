@@ -129,12 +129,8 @@ class Subjob(object):
             timings_file_path = os.path.join(artifact_dir, BuildArtifact.TIMING_FILE)
             if os.path.exists(timings_file_path):
                 with open(timings_file_path, 'r') as f:
-                    # Strip out the project directory from atom timing data in order to have all
-                    # atom timing data be relative and project directory agnostic (the project
-                    # directory will be a generated unique path for every build).
-                    atom_key = atom.command_string.replace(self.project_type.project_directory, '')
                     atom.actual_time = float(f.readline())
-                    timings[atom_key] = atom.actual_time
+                    timings[atom.command_string] = atom.actual_time
             else:
                 self._logger.warning('No timing data for subjob {} atom {}.',
                                      self._subjob_id, atom_id)
