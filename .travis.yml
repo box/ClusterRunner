@@ -6,6 +6,7 @@ python:
 # each line defined in env will create a new parallel test job on Travis
 env:
   - TARGETS="lint test-unit-with-coverage"
+  - TARGETS="test-integration-with-coverage"
   - TARGETS="test-functional test-unit-via-clusterrunner"
 
 install:

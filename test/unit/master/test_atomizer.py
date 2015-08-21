@@ -1,6 +1,7 @@
 from unittest.mock import Mock
-from app.master.atomizer import Atomizer, AtomizerError
 
+from app.master.atomizer import Atomizer, AtomizerError
+from app.project_type.project_type import ProjectType
 from app.util.process_utils import get_environment_variable_setter_command
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -13,7 +14,7 @@ _FAILING_EXIT_CODE = 1
 
 class TestAtomizer(BaseUnitTestCase):
     def test_atomizer_returns_expected_atom_list(self):
-        mock_project = Mock()
+        mock_project = Mock(spec=ProjectType)
         mock_project.execute_command_in_project.return_value = (_FAKE_ATOMIZER_COMMAND_OUTPUT, _SUCCESSFUL_EXIT_CODE)
         mock_project.project_directory = '/tmp/test/directory'
 
@@ -31,7 +32,7 @@ class TestAtomizer(BaseUnitTestCase):
         mock_project.execute_command_in_project.assert_called_once_with(_FAKE_ATOMIZER_COMMAND)
 
     def test_atomizer_raises_exception_when_atomize_command_fails(self):
-        mock_project = Mock()
+        mock_project = Mock(spec=ProjectType)
         mock_project.execute_command_in_project.return_value = ('ERROR ERROR ERROR', _FAILING_EXIT_CODE)
 
         atomizer = Atomizer([{'TEST_FILE': _FAKE_ATOMIZER_COMMAND}])
