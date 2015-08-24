@@ -3,6 +3,7 @@ import os
 from queue import Queue
 from threading import Lock
 
+from app.master.atom import Atom
 from app.master.atom_grouper import AtomGrouper
 from app.master.build_request import BuildRequest
 from app.master.subjob import Subjob
@@ -148,7 +149,13 @@ class BuildRequestHandler(object):
         :type project_type: project_type.project_type.ProjectType
         :rtype: list[Subjob]
         """
-        atoms_list = job_config.atomizer.atomize_in_project(project_type)
+        # Users can override the list of atoms to be run in this build. If the atoms_override
+        # was specified, we can skip the atomization step and use those overridden atoms instead.
+        if project_type.atoms_override is not None:
+            atoms_string_list = project_type.atoms_override
+            atoms_list = [Atom(atom_string_value) for atom_string_value in atoms_string_list]
+        else:
+            atoms_list = job_config.atomizer.atomize_in_project(project_type)
 
         # Group the atoms together using some grouping strategy
         timing_file_path = project_type.timing_file_path(job_config.name)

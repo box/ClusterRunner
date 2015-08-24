@@ -70,14 +70,13 @@ class Git(ProjectType):
         :return: A path for storing timing files
         :rtype: str
         """
-
         return Git._generate_path_from_repo_url(Configuration['timings_directory'], url)
 
     # pylint: disable=redefined-builtin
     # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     # todo: Deprecate the "branch" parameter and create a new one named "ref" to replace it.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash='FETCH_HEAD', config=None, job_name=None, remote_files=None):
+                 hash='FETCH_HEAD', config=None, job_name=None, remote_files=None, atoms_override=None):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -100,8 +99,10 @@ class Git(ProjectType):
         :type job_name: list [str] | None
         :param remote_files: dictionary mapping of output file to URL
         :type remote_files: dict[str, str] | None
+        :param atoms_override: The list of overridden atoms (if specified, will not run atomizer).
+        :type atoms_override: list[str] | None
         """
-        super().__init__(config, job_name, remote_files)
+        super().__init__(config, job_name, remote_files, atoms_override)
         self._url = url
         self._remote = remote
         self._branch = branch

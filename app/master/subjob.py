@@ -75,7 +75,7 @@ class Subjob(object):
     def get_atoms(self):
         return [{
             'id': idx,
-            'atom': atom.atom_value,
+            'atom': atom.command_string,
             'expected_time': atom.expected_time,
             'actual_time': atom.actual_time,
             'exit_code': atom.exit_code,
