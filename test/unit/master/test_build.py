@@ -375,6 +375,29 @@ class TestBuild(BaseUnitTestCase):
         self.assertIsNotNone(build.get_state_timestamp(BuildStatus.CANCELED),
                              '"canceled" timestamp should be set when build is canceled.')
 
+    def test_get_failed_atoms_returns_none_if_not_finished(self):
+        build = self._create_test_build(BuildStatus.BUILDING)
+        self.assertIsNone(build._get_failed_atoms())
+
+    def test_get_failed_atoms_returns_empty_list_if_finished_and_all_passed(self):
+        build = self._create_test_build(BuildStatus.FINISHED)
+        build._build_artifact = MagicMock(spec_set=BuildArtifact)
+        build._build_artifact.get_failed_subjob_and_atom_ids.return_value = []
+
+        self.assertEquals([], build._get_failed_atoms())
+
+    def test_get_failed_atoms_returns_failed_atoms_only(self):
+        build = self._create_test_build(BuildStatus.FINISHED, num_subjobs=5, num_atoms_per_subjob=10)
+        build._build_artifact = MagicMock(spec_set=BuildArtifact)
+        # Failed items: (SubjobId: 1, AtomId: 1) and (SubjobId: 3, AtomId: 3)
+        build._build_artifact.get_failed_subjob_and_atom_ids.return_value = [(1, 1), (3, 3)]
+
+        failed_atoms = build._get_failed_atoms()
+        self.assertEquals(failed_atoms, [
+            build._all_subjobs_by_id[1]._atoms[1],
+            build._all_subjobs_by_id[3]._atoms[3],
+        ])
+
     def _create_test_build(
             self,
             build_status=None,
