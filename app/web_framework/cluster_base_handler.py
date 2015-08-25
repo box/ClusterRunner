@@ -79,6 +79,12 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
         except ValueError as ex:
             raise BadRequestError('Invalid JSON in request body.') from ex
 
+    def options(self, *args, **kwargs):
+        """
+        Enable OPTIONS on all endpoints by default (preflight AJAX requests requires this).
+        """
+        self.write({})
+
     def get(self, *args, **kwargs):
         """
         Enable GET on all endpoints by default.  Subclasses can override this without calling super().get()
@@ -115,6 +121,7 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
 
     def set_default_headers(self):
         self.set_header('Content-Type', 'application/json')
+        self.set_header('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Requested-With, Session, Session-Id')
 
         request_origin = self.request.headers.get('Origin')  # usually only set when making API request from a browser
         if request_origin and self._is_request_origin_allowed(request_origin):
