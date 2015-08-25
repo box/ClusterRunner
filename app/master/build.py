@@ -56,6 +56,7 @@ class Build(object):
         self._all_subjobs_by_id = {}
         self._unstarted_subjobs = None
         self._finished_subjobs = None
+        self._failed_atoms = None
         self._postbuild_tasks_are_finished = False
         self._timing_file_path = None
 
@@ -64,6 +65,10 @@ class Build(object):
         self._record_state_timestamp(BuildStatus.QUEUED)
 
     def api_representation(self):
+        failed_atoms_api_representation = None
+        if self.failed_atoms() is not None:
+            failed_atoms_api_representation = [failed_atom.api_representation() for failed_atom in self.failed_atoms()]
+
         return {
             'id': self._build_id,
             'status': self._status(),
@@ -72,7 +77,7 @@ class Build(object):
             'error_message': self._error_message,
             'num_atoms': self._num_atoms,
             'num_subjobs': len(self._all_subjobs_by_id),
-            'failed_atoms': self._failed_atoms(),  # todo: print the file contents instead of paths
+            'failed_atoms': failed_atoms_api_representation,
             'result': self._result(),
             'request_params': self.build_request.build_parameters(),
             # Convert self._state_timestamps to OrderedDict to make raw API response more readable. Sort the entries
@@ -445,18 +450,25 @@ class Build(object):
         else:
             return BuildStatus.BUILDING
 
-    def _failed_atoms(self):
+    def failed_atoms(self):
         """
-        The commands which failed
-        :rtype: list [str] | None
+        The atoms that failed. Returns None if the build hasn't completed yet. Returns empty set if
+        build has completed and no atoms have failed.
+        :rtype: list[Atom] | None
         """
-        if self._is_canceled:
-            return []
+        if self._failed_atoms is None and self.is_finished:
+            # Why was this conditional here in the first place? Don't we only care about whether or not
+            # the build is finished? I think we can remove this.
+            if self._is_canceled:
+                return []
 
-        if self.is_finished:
-            # dict.values() returns a view object in python 3, so wrapping values() in a list
-            return list(self._build_artifact.get_failed_commands().values())
-        return None
+            self._failed_atoms = []
+            for subjob_id, atom_id in self._build_artifact.get_failed_subjob_and_atom_ids():
+                subjob = self.subjob(subjob_id)
+                atom = subjob.atoms[atom_id]
+                self._failed_atoms.append(atom)
+
+        return self._failed_atoms
 
     def _result(self):
         """
@@ -466,7 +478,7 @@ class Build(object):
             return BuildResult.FAILURE
 
         if self.is_finished:
-            if len(self._build_artifact.get_failed_commands()) == 0:
+            if len(self._build_artifact.get_failed_subjob_and_atom_ids()) == 0:
                 return BuildResult.NO_FAILURES
             return BuildResult.FAILURE
         return None

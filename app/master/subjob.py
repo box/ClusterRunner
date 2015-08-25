@@ -26,10 +26,12 @@ class Subjob(object):
         self._subjob_id = subjob_id
         self.project_type = project_type
         self.job_config = job_config
-        self._atoms = atoms
         self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
         self.slave = None  # The slave that had been assigned this subjob. Is None if not started.
+        self._atoms = atoms
+        for idx, atom in enumerate(self._atoms):
+            atom.id = idx
 
     def _set_atom_state(self, state):
         """
@@ -61,26 +63,20 @@ class Subjob(object):
         """
         :rtype: dict [str, str]
         """
+
         return {
             'id': self._subjob_id,
             'command': self.job_config.command,
-            'atoms': self.get_atoms(),
+            'atoms': [atom.api_representation() for atom in self._atoms],
             'slave': self.slave.url if self.slave else None,
         }
 
     @property
     def atoms(self):
+        """
+        :rtype: list[Atom]
+        """
         return self._atoms
-
-    def get_atoms(self):
-        return [{
-            'id': idx,
-            'atom': atom.command_string,
-            'expected_time': atom.expected_time,
-            'actual_time': atom.actual_time,
-            'exit_code': atom.exit_code,
-            'state': atom.state.value,
-        } for idx, atom in enumerate(self._atoms)]
 
     def build_id(self):
         """
