@@ -32,3 +32,23 @@ class TestBuildArtifact(BaseUnitTestCase):
     def test_artifact_directory_raises_value_error_if_subjob_id_or_atom_id_specified(self, subjob_id, atom_id):
         with self.assertRaises(ValueError):
             BuildArtifact._artifact_directory(1, subjob_id, atom_id)
+
+    @genty_dataset(
+        relative_path=('artifact_0_1', 0, 1),
+        absolute_path=('/path/to/build/1/artifact_0_1', 0, 1),
+    )
+    def test_subjob_and_atom_ids_parses_for_properly_formatted_directory(self, artifact_directory, expected_subjob_id,
+                                                                         expected_atom_id):
+        subjob_id, atom_id = BuildArtifact._subjob_and_atom_ids(artifact_directory)
+        self.assertEquals(subjob_id, expected_subjob_id)
+        self.assertEquals(atom_id, expected_atom_id)
+
+    @genty_dataset(
+        'artifact_0',
+        '/full/path/artifact_0',
+        'wrong_0_1',
+    )
+    def test_subjob_and_atom_ids_raises_value_error_with_incorrect_format(self, incorrect_artifact_directory):
+        with self.assertRaises(ValueError):
+            BuildArtifact._subjob_and_atom_ids(incorrect_artifact_directory)
+

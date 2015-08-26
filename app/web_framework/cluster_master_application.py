@@ -164,7 +164,7 @@ class _AtomsHandler(_ClusterMasterBaseAPIHandler):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
         response = {
-            'atoms': subjob.get_atoms(),
+            'atoms': [atom.api_representation() for atom in subjob.atoms()],
         }
         self.write(response)
 
@@ -173,9 +173,9 @@ class _AtomHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id, subjob_id, atom_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
-        atoms = subjob.get_atoms()
+        atoms = subjob.atoms()
         response = {
-            'atom': atoms[int(atom_id)],
+            'atom': atoms[int(atom_id)].api_representation(),
         }
         self.write(response)
 
