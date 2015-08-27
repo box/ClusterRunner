@@ -170,6 +170,9 @@ class BuildRequestHandler(object):
         subjobs = []
         for subjob_id in range(len(grouped_atoms)):
             atoms = grouped_atoms[subjob_id]
+            # The atom id's aren't calculated until it's been assigned grouped in a subjob.
+            for idx, atom in enumerate(atoms):
+                atom.id = idx
             subjobs.append(Subjob(build_id, subjob_id, project_type, job_config, atoms))
         return subjobs
 

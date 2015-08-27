@@ -61,26 +61,20 @@ class Subjob(object):
         """
         :rtype: dict [str, str]
         """
+
         return {
             'id': self._subjob_id,
             'command': self.job_config.command,
-            'atoms': self.get_atoms(),
+            'atoms': [atom.api_representation() for atom in self._atoms],
             'slave': self.slave.url if self.slave else None,
         }
 
     @property
     def atoms(self):
+        """
+        :rtype: list[Atom]
+        """
         return self._atoms
-
-    def get_atoms(self):
-        return [{
-            'id': idx,
-            'atom': atom.command_string,
-            'expected_time': atom.expected_time,
-            'actual_time': atom.actual_time,
-            'exit_code': atom.exit_code,
-            'state': atom.state.value,
-        } for idx, atom in enumerate(self._atoms)]
 
     def build_id(self):
         """

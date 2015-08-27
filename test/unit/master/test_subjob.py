@@ -1,7 +1,6 @@
 from unittest.mock import Mock
-from app.master.atom import Atom
+from app.master.atom import Atom, AtomState
 from app.master.job_config import JobConfig
-
 from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -23,12 +22,16 @@ class TestSubjob(BaseUnitTestCase):
                     expected_time=23.4,
                     actual_time=56.7,
                     exit_code=1,
+                    state=AtomState.NOT_STARTED,
+                    atom_id=0,
                 ),
                 Atom(
                     'export BREAKFAST="cereal";',
                     expected_time=89.0,
                     actual_time=24.6,
                     exit_code=0,
+                    state=AtomState.NOT_STARTED,
+                    atom_id=1,
                 ),
             ],
         )
@@ -43,7 +46,7 @@ class TestSubjob(BaseUnitTestCase):
             'atoms': [
                 {
                     'id': 0,
-                    'atom': 'export BREAKFAST="pancakes";',
+                    'command_string': 'export BREAKFAST="pancakes";',
                     'expected_time': 23.4,
                     'actual_time': 56.7,
                     'exit_code': 1,
@@ -51,7 +54,7 @@ class TestSubjob(BaseUnitTestCase):
                 },
                 {
                     'id': 1,
-                    'atom': 'export BREAKFAST="cereal";',
+                    'command_string': 'export BREAKFAST="cereal";',
                     'expected_time': 89.0,
                     'actual_time': 24.6,
                     'exit_code': 0,
