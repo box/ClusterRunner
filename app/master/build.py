@@ -7,6 +7,8 @@ import time
 import uuid
 
 from app.master.build_artifact import BuildArtifact
+from app.master.build_request import BuildRequest
+from app.project_type.project_type import ProjectType
 from app.util import util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -103,17 +105,29 @@ class Build(object):
         if self._project_type is None:
             raise BuildProjectError('Build failed due to an invalid project type.')
 
-    def prepare(self, subjobs, job_config):
+    def prepare(self, subjob_calculator):
         """
-        :type subjobs: list[Subjob]
-        :type job_config: JobConfig
+        :param subjob_calculator: Used after project fetch to atomize and group subjobs for this build
+        :type subjob_calculator: SubjobCalculator
         """
-        if self._project_type is None:
-            raise RuntimeError('prepare() was called before generate_project_type() on build {}.'
-                               .format(self._build_id))
+        if not isinstance(self.build_request, BuildRequest):
+            raise RuntimeError('Build {} has no associated request object.'.format(self._build_id))
+
+        if not isinstance(self.project_type, ProjectType):
+            raise RuntimeError('Build {} has no project set.'.format(self._build_id))
 
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
+
+        self._logger.info('Fetching project for build {}.', self._build_id)
+        self.project_type.fetch_project()
+        self._logger.info('Successfully fetched project for build {}.', self._build_id)
+
+        job_config = self.project_type.job_config()
+        if job_config is None:
+            raise RuntimeError('Build failed while trying to parse clusterrunner.yaml.')
+
+        subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
 
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))
         self._finished_subjobs = Queue(maxsize=len(subjobs))

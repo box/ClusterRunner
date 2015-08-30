@@ -34,6 +34,7 @@ class ProjectType(object):
         self._remote_files = remote_files if remote_files else {}
         self._logger = log.get_logger(__name__)
         self._kill_event = Event()
+        self._job_config = None
 
     @property
     def atoms_override(self):
@@ -64,8 +65,11 @@ class ProjectType(object):
         Return the job config found in this project_type and matching any job_name parameter passed in
         :rtype: JobConfig
         """
-        config = ClusterRunnerConfig(self._get_config_contents())
-        return config.get_job_config(self._job_name)
+        if not self._job_config:
+            config = ClusterRunnerConfig(self._get_config_contents())
+            self._job_config = config.get_job_config(self._job_name)
+
+        return self._job_config
 
     def _get_config_contents(self):
         """
