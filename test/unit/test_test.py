@@ -13,8 +13,10 @@ class TestTest(BaseUnitTestCase):
         repo_test_dir_path = dirname(dirname(__file__))
         self.assertEqual(basename(repo_test_dir_path), 'test', 'repo_test_dir_path should be the path of the top-level '
                                                                '"test" directory in the ClusterRunner repo.')
+
+        exempt_dirs = ['__pycache__', '.hypothesis']  # skip special directories
         for dir_path, _, files in os.walk(repo_test_dir_path):
-            if '__pycache__' in dir_path:  # skip special directories
+            if any(exempt_dir in dir_path for exempt_dir in exempt_dirs):
                 continue
 
             self.assertIn(

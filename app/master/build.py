@@ -7,8 +7,7 @@ import time
 import uuid
 
 from app.master.build_artifact import BuildArtifact
-from app.master.slave import SlaveMarkedForShutdownError
-from app.util import analytics, util
+from app.util import util
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
 from app.util.exceptions import ItemNotFoundError
@@ -40,21 +39,15 @@ class Build(object):
 
         self._error_message = None
         self.is_prepared = False
+        self._setup_is_started = False
         self._preparation_coin = SingleUseCoin()  # protects against separate threads calling prepare() more than once
         self._is_canceled = False
 
         self._project_type = None
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
-        self._subjob_assignment_lock = Lock()  # prevents subjobs from being skipped
-        self._slaves_allocated = []
-        self._num_executors_allocated = 0
-        self._num_executors_in_use = 0
-
-        self._max_executors = float('inf')
-        self._max_executors_per_slave = float('inf')
 
         self._all_subjobs_by_id = {}
-        self._unstarted_subjobs = None
+        self._unstarted_subjobs = None  # WIP: Move subjob queues to BuildScheduler class.
         self._finished_subjobs = None
         self._failed_atoms = None
         self._postbuild_tasks_are_finished = False
@@ -129,8 +122,6 @@ class Build(object):
             self._all_subjobs_by_id[subjob.subjob_id()] = subjob
             self._unstarted_subjobs.put(subjob)
 
-        self._max_executors = job_config.max_executors
-        self._max_executors_per_slave = job_config.max_executors_per_slave
         self._timing_file_path = self._project_type.timing_file_path(job_config.name)
         self.is_prepared = True
         self._record_state_timestamp(BuildStatus.PREPARED)
@@ -140,29 +131,6 @@ class Build(object):
         :rtype: int
         """
         return self._build_id
-
-    def needs_more_slaves(self):
-        """
-        Determine whether or not this build should have more slaves allocated to it.
-
-        :rtype: bool
-        """
-        return self._num_executors_allocated < self._max_executors and not self._unstarted_subjobs.empty()
-
-    def allocate_slave(self, slave):
-        """
-        Allocate a slave to this build. This tells the slave to execute setup commands for this build.
-
-        :type slave: Slave
-        """
-        if not self._slaves_allocated:
-            # If this is the first slave to be allocated, timestamp a build start event.
-            self._record_state_timestamp(BuildStatus.BUILDING)
-
-        self._slaves_allocated.append(slave)
-        slave.setup(self)
-        self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
-        analytics.record_event(analytics.BUILD_SETUP_START, build_id=self.build_id(), slave_id=slave.id)
 
     def all_subjobs(self):
         """
@@ -181,61 +149,6 @@ class Build(object):
         if subjob is None:
             raise ItemNotFoundError('Invalid subjob id.')
         return subjob
-
-    def begin_subjob_executions_on_slave(self, slave):
-        """
-        Begin subjob executions on a slave. This should be called once after the specified slave has already run
-        build_setup commands for this build.
-
-        :type slave: Slave
-        """
-        analytics.record_event(analytics.BUILD_SETUP_FINISH, build_id=self.build_id(), slave_id=slave.id)
-        for slave_executor_count in range(slave.num_executors):
-            if (self._num_executors_in_use >= self._max_executors
-                    or slave_executor_count >= self._max_executors_per_slave):
-                break
-            slave.claim_executor()
-            self._num_executors_in_use += 1
-            self.execute_next_subjob_or_teardown_slave(slave)
-
-    def execute_next_subjob_or_teardown_slave(self, slave):
-        """
-        Grabs an unstarted subjob off the queue and sends it to the specified slave to be executed. If the unstarted
-        subjob queue is empty, we teardown the slave to free it up for other builds.
-
-        :type slave: Slave
-        """
-        try:
-            # This lock prevents the scenario where a subjob is pulled from the queue but cannot be assigned to this
-            # slave because it is shutdown, so we put it back on the queue but in the meantime another slave enters
-            # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
-            # build would be stuck.
-            with self._subjob_assignment_lock:
-                subjob = self._unstarted_subjobs.get(block=False)
-                self._logger.debug('Sending subjob {} (build {}) to slave {}.',
-                                   subjob.subjob_id(), subjob.build_id(), slave.url)
-                try:
-                    slave.start_subjob(subjob)
-                    subjob.mark_in_progress(slave)
-
-                except SlaveMarkedForShutdownError:
-                    self._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
-                    # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
-                    # Since the slave has been marked for shutdown, we need to free the executor.
-                    self._free_slave_executor(slave)
-
-        except Empty:
-            self._free_slave_executor(slave)
-
-    def _free_slave_executor(self, slave):
-        num_executors_in_use = slave.free_executor()
-        if num_executors_in_use == 0:
-            try:
-                self._slaves_allocated.remove(slave)
-            except ValueError:
-                pass  # We have already deallocated this slave, no need to teardown
-            else:
-                slave.teardown()
 
     def complete_subjob(self, subjob_id, payload=None):
         """
@@ -306,6 +219,10 @@ class Build(object):
         if subjobs_are_finished:
             self._logger.info("All results received for build {}!", self._build_id)
             SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
+
+    def mark_started(self):
+        self._setup_is_started = True
+        self._record_state_timestamp(BuildStatus.BUILDING)
 
     def mark_failed(self, failure_reason):
         """
@@ -385,13 +302,6 @@ class Build(object):
         return self._project_type
 
     @property
-    def num_executors_allocated(self):
-        """
-        :rtype: int
-        """
-        return self._num_executors_allocated
-
-    @property
     def artifacts_archive_file(self):
         return self._artifacts_archive_file
 
@@ -420,7 +330,7 @@ class Build(object):
 
     @property
     def is_unstarted(self):
-        return self.is_prepared and self._num_executors_allocated == 0 and self._unstarted_subjobs.full()
+        return self.is_prepared and not self._setup_is_started and self._unstarted_subjobs.full()
 
     @property
     def has_error(self):

@@ -30,11 +30,15 @@ class BuildRequestHandler(object):
     entity) to pull Builds from.
 
     All of the input of builds come through self.handle_build_request() calls, and all of the output
-    of builds go through self.next_prepared_build() calls.
+    of builds go through self.next_prepared_build_scheduler() calls.
     """
 
-    def __init__(self):
+    def __init__(self, scheduler_pool):
+        """
+        :type scheduler_pool: BuildSchedulerPool
+        """
         self._logger = get_logger(__name__)
+        self._scheduler_pool = scheduler_pool
         self._builds_waiting_for_slaves = Queue()
         self._request_queue = Queue()
         self._request_queue_worker_thread = SafeThread(
@@ -58,16 +62,18 @@ class BuildRequestHandler(object):
         analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
                                log_msg='Queued request for build {build_id}.')
 
-    def next_prepared_build(self):
+    def next_prepared_build_scheduler(self):
         """
-        Get the next build that has successfully completed build preparation.
+        Get the scheduler for the next build that has successfully completed build preparation.
 
         This is a blocking call--if there are no more builds that have completed build preparation and this
         method gets invoked, the execution will hang until the next build has completed build preparation.
 
-        :rtype: Build
+        :rtype: BuildScheduler
         """
-        return self._builds_waiting_for_slaves.get()
+        build = self._builds_waiting_for_slaves.get()
+        build_scheduler = self._scheduler_pool.get(build)
+        return build_scheduler
 
     def _build_preparation_loop(self):
         """

@@ -5,6 +5,7 @@ from app.common.cluster_service import ClusterService
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
+from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
@@ -26,7 +27,8 @@ class ClusterMaster(ClusterService):
         self._master_results_path = Configuration['results_directory']
         self._all_slaves_by_url = {}
         self._all_builds_by_id = OrderedDict()
-        self._build_request_handler = BuildRequestHandler()
+        self._scheduler_pool = BuildSchedulerPool()
+        self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._build_request_handler)
         self._slave_allocator.start()
@@ -203,7 +205,8 @@ class ClusterMaster(ClusterService):
         :type slave: Slave
         """
         build = self.get_build(slave.current_build_id)
-        build.begin_subjob_executions_on_slave(slave)
+        scheduler = self._scheduler_pool.get(build)
+        scheduler.begin_subjob_executions_on_slave(slave)
 
     def _handle_setup_failure_on_slave(self, slave):
         """
@@ -275,7 +278,8 @@ class ClusterMaster(ClusterService):
             try:
                 build.complete_subjob(subjob_id, payload)
             finally:
-                build.execute_next_subjob_or_teardown_slave(slave)
+                scheduler = self._scheduler_pool.get(build)
+                scheduler.execute_next_subjob_or_free_executor(slave)
 
     def get_build(self, build_id):
         """

@@ -50,10 +50,10 @@ class TestSlave(BaseUnitTestCase):
             'url': 'ssh://new-url-for-clusterrunner-master',
             'extra': 'something_extra',
         }))
-        mock_build = MagicMock(spec=Build, num_executors_allocated=777, build_request=build_request,
+        mock_build = MagicMock(spec=Build, build_request=build_request,
                                build_id=Mock(return_value=888), project_type=mock_git)
 
-        slave.setup(mock_build)
+        slave.setup(mock_build, executor_start_index=777)
 
         slave._network.post_with_digest.assert_called_with(
             'http://{}/v1/build/888/setup'.format(self._FAKE_SLAVE_URL),
@@ -78,7 +78,7 @@ class TestSlave(BaseUnitTestCase):
                              'slave.current_build_id should be set before the master tells the slave to do setup.')
 
         slave._network.post_with_digest = Mock(side_effect=assert_slave_build_id_is_already_set)
-        slave.setup(mock_build)
+        slave.setup(mock_build, executor_start_index=0)
 
         self.assertEqual(slave._network.post_with_digest.call_count, 1,
                          'The behavior that this test is checking depends on slave setup being triggered via '
