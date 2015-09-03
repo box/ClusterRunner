@@ -23,6 +23,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('app.util.fs.async_delete')
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
+        self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),
@@ -151,15 +152,16 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_setup_completed_state_should_tell_build_to_begin_subjob_execution(self):
         master = ClusterMaster()
-        fake_build = MagicMock()
+        fake_build = MagicMock(spec_set=Build)
         master.get_build = MagicMock(return_value=fake_build)
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
+        mock_scheduler = self.mock_scheduler_pool.get(fake_build)
 
         master.handle_slave_state_update(slave, SlaveState.SETUP_COMPLETED)
 
-        fake_build.begin_subjob_executions_on_slave.assert_called_once_with(slave)
+        mock_scheduler.begin_subjob_executions_on_slave.assert_called_once_with(slave)
 
     def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
         master = ClusterMaster()
@@ -188,17 +190,17 @@ class TestClusterMaster(BaseUnitTestCase):
         build._is_canceled = True
         self.patch_object(build, '_handle_subjob_payload')
         self.patch_object(build, '_mark_subjob_complete')
-        self.patch_object(build, 'execute_next_subjob_or_teardown_slave')
 
         master = ClusterMaster()
         master._all_builds_by_id[build_id] = build
         master._all_slaves_by_url[slave_url] = Mock()
+        mock_scheduler = self.mock_scheduler_pool.get(build)
 
         master.handle_result_reported_from_slave(slave_url, build_id, 1)
 
         self.assertEqual(build._handle_subjob_payload.call_count, 0, "Build is canceled, should not handle payload")
         self.assertEqual(build._mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
-        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, 0,
+        self.assertEqual(mock_scheduler.execute_next_subjob_or_free_executor.call_count, 0,
                          "Build is canceled, should not do next subjob")
 
     def test_exception_raised_during_complete_subjob_does_not_prevent_slave_teardown(self):
@@ -209,11 +211,12 @@ class TestClusterMaster(BaseUnitTestCase):
         master = ClusterMaster()
         master._all_builds_by_id[mock_build.build_id()] = mock_build
         master._all_slaves_by_url[slave_url] = Mock()
+        mock_scheduler = self.mock_scheduler_pool.get(mock_build)
 
         with self.assertRaisesRegex(RuntimeError, 'Write failed'):
             master.handle_result_reported_from_slave(slave_url, mock_build.build_id(), subjob_id=888)
 
-        self.assertEqual(mock_build.execute_next_subjob_or_teardown_slave.call_count, 1)
+        self.assertEqual(mock_scheduler.execute_next_subjob_or_free_executor.call_count, 1)
 
     @given(dictionaries(text(), text()))
     def test_handle_request_for_new_build_does_not_raise_exception(self, build_params):

@@ -36,9 +36,9 @@ class SlaveAllocator(object):
         """
         while True:
             # This is a blocking call that will block until there is a prepared build.
-            build_waiting_for_slave = self._build_request_handler.next_prepared_build()
+            build_scheduler = self._build_request_handler.next_prepared_build_scheduler()
 
-            while build_waiting_for_slave.needs_more_slaves():
+            while build_scheduler.needs_more_slaves():
                 claimed_slave = self._idle_slaves.get()
 
                 # Remove dead and shutdown slaves from the idle queue
@@ -46,16 +46,16 @@ class SlaveAllocator(object):
                     continue
 
                 # The build may have completed while we were waiting for an idle slave, so check one more time.
-                if build_waiting_for_slave.needs_more_slaves():
+                if build_scheduler.needs_more_slaves():
                     # Potential race condition here!  If the build completes after the if statement is checked,
                     # a slave will be allocated needlessly (and run slave.setup(), which can be significant work).
                     self._logger.info('Allocating slave {} to build {}.',
-                                      claimed_slave.url, build_waiting_for_slave.build_id())
-                    build_waiting_for_slave.allocate_slave(claimed_slave)
+                                      claimed_slave.url, build_scheduler.build_id)
+                    build_scheduler.allocate_slave(claimed_slave)
                 else:
                     self.add_idle_slave(claimed_slave)
 
-            self._logger.info('Done allocating slaves for build {}.', build_waiting_for_slave.build_id())
+            self._logger.info('Done allocating slaves for build {}.', build_scheduler.build_id)
 
     def add_idle_slave(self, slave):
         """

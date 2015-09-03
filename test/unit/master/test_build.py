@@ -10,6 +10,7 @@ from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_artifact import BuildArtifact
 from app.master.build_request import BuildRequest
+from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.job_config import JobConfig
 from app.master.slave import Slave, SlaveMarkedForShutdownError
 from app.master.subjob import Subjob
@@ -34,27 +35,30 @@ class TestBuild(BaseUnitTestCase):
         self.patch('app.master.build.BuildArtifact.__new__')  # patch __new__ to mock instances but keep static methods
         self.mock_util = self.patch('app.master.build.app.util')  # stub out util - it often interacts with the fs
         self.mock_open = self.patch('app.master.build.open', autospec=False, create=True)
+        self.scheduler_pool = BuildSchedulerPool()
 
     def test_allocate_slave_calls_slave_setup(self):
         mock_slave = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
+        scheduler = self.scheduler_pool.get(build)
 
-        build.allocate_slave(mock_slave)
+        scheduler.allocate_slave(mock_slave)
 
-        mock_slave.setup.assert_called_once_with(build)
+        mock_slave.setup.assert_called_once_with(build, executor_start_index=0)
 
     def test_build_doesnt_use_more_than_max_executors(self):
         mock_slaves = [self._create_mock_slave(num_executors=5) for _ in range(3)]  # 15 total available executors
         expected_num_executors_used = 12  # We expect the build to use 12 out of 15 available executors.
         job_config = self._create_job_config(max_executors=expected_num_executors_used)
         build = self._create_test_build(BuildStatus.PREPARED, job_config=job_config)
-        build.execute_next_subjob_or_teardown_slave = Mock()
+        scheduler = self.scheduler_pool.get(build)
+        scheduler.execute_next_subjob_or_free_executor = Mock()
 
         for mock_slave in mock_slaves:
-            build.allocate_slave(mock_slave)
-            build.begin_subjob_executions_on_slave(mock_slave)
+            scheduler.allocate_slave(mock_slave)
+            scheduler.begin_subjob_executions_on_slave(mock_slave)
 
-        self.assertEqual(build.execute_next_subjob_or_teardown_slave.call_count, expected_num_executors_used,
+        self.assertEqual(scheduler.execute_next_subjob_or_free_executor.call_count, expected_num_executors_used,
                          'Build should start executing as many subjobs as its max_executors setting.')
 
     def test_build_doesnt_use_more_than_max_executors_per_slave(self):
@@ -62,11 +66,12 @@ class TestBuild(BaseUnitTestCase):
         max_executors_per_slave = 2
         job_config = self._create_job_config(max_executors_per_slave=max_executors_per_slave)
         build = self._create_test_build(build_status=BuildStatus.PREPARED, job_config=job_config)
-        build.execute_next_subjob_or_teardown_slave = Mock()
+        scheduler = self.scheduler_pool.get(build)
+        scheduler.execute_next_subjob_or_free_executor = Mock()
 
         for mock_slave in mock_slaves:
-            build.allocate_slave(mock_slave)
-            build.begin_subjob_executions_on_slave(mock_slave)
+            scheduler.allocate_slave(mock_slave)
+            scheduler.begin_subjob_executions_on_slave(mock_slave)
 
         # Even though each slave has 5 executors, we should only start subjobs on 2 of those executors per slave.
         expected_subjob_execution_calls = [
@@ -78,7 +83,7 @@ class TestBuild(BaseUnitTestCase):
             call(mock_slaves[2]),
         ]
         self.assertEqual(
-            build.execute_next_subjob_or_teardown_slave.mock_calls,
+            scheduler.execute_next_subjob_or_free_executor.mock_calls,
             expected_subjob_execution_calls,
             'Build should start executing as many subjobs per slave as its max_executors_per_slave setting.')
 
@@ -97,8 +102,9 @@ class TestBuild(BaseUnitTestCase):
     def test_build_status_returns_building_after_setup_has_started(self):
         mock_slave = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
+        scheduler = self.scheduler_pool.get(build)
 
-        build.allocate_slave(mock_slave)
+        scheduler.allocate_slave(mock_slave)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
                          'Build status should be BUILDING after setup has started on slaves.')
@@ -175,11 +181,12 @@ class TestBuild(BaseUnitTestCase):
     ):
         job_config = self._create_job_config(max_executors=max_executors_for_build)
         build = self._create_test_build(BuildStatus.PREPARED, num_subjobs=100, job_config=job_config)
+        scheduler = self.scheduler_pool.get(build)
 
         mock_slave = self._create_mock_slave(num_executors=5)
-        build.allocate_slave(slave=mock_slave)
+        scheduler.allocate_slave(slave=mock_slave)
 
-        self.assertEqual(build.needs_more_slaves(), build_should_need_more_slaves,
+        self.assertEqual(scheduler.needs_more_slaves(), build_should_need_more_slaves,
                          'If and only if the maximum number of executors is allocated we should not need more slaves.')
 
     def test_build_cannot_be_prepared_more_than_once(self):
@@ -280,10 +287,11 @@ class TestBuild(BaseUnitTestCase):
     def test_execute_next_subjob_with_no_more_subjobs_should_not_teardown_same_slave_twice(self):
         mock_slave = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.BUILDING, slaves=[mock_slave])
+        scheduler = self.scheduler_pool.get(build)
         self._finish_test_build(build, assert_postbuild_tasks_complete=False)
 
-        build.execute_next_subjob_or_teardown_slave(mock_slave)
-        build.execute_next_subjob_or_teardown_slave(mock_slave)
+        scheduler.execute_next_subjob_or_free_executor(mock_slave)
+        scheduler.execute_next_subjob_or_free_executor(mock_slave)
 
         self.assertEqual(mock_slave.teardown.call_count, 1, "Teardown should only be called once")
 
@@ -332,13 +340,14 @@ class TestBuild(BaseUnitTestCase):
         mock_slave1 = self._create_mock_slave()
         mock_slave2 = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
+        scheduler = self.scheduler_pool.get(build)
 
         self.assertIsNone(build.get_state_timestamp(BuildStatus.BUILDING),
                           '"building" timestamp should not be set until slave allocated.')
 
-        build.allocate_slave(slave=mock_slave1)
+        scheduler.allocate_slave(slave=mock_slave1)
         building_timestamp1 = build.get_state_timestamp(BuildStatus.BUILDING)
-        build.allocate_slave(slave=mock_slave2)
+        scheduler.allocate_slave(slave=mock_slave2)
         building_timestamp2 = build.get_state_timestamp(BuildStatus.BUILDING)
 
         self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first slave allocated.')
@@ -429,6 +438,7 @@ class TestBuild(BaseUnitTestCase):
 
         # PREPARED: Create a fake job config and subjobs and hand them off to the build.
         job_config = job_config or self._create_job_config()
+        mock_project_type.job_config.return_value = job_config
         subjobs = self._create_subjobs(count=num_subjobs, num_atoms_each=num_atoms_per_subjob, job_config=job_config)
         build.prepare(subjobs=subjobs, job_config=job_config)
         if build_status is BuildStatus.PREPARED:
@@ -436,9 +446,10 @@ class TestBuild(BaseUnitTestCase):
 
         # BUILDING: Allocate a slave and begin subjob executions on that slave.
         slaves = slaves or [self._create_mock_slave()]
+        scheduler = self.scheduler_pool.get(build)
         for slave in slaves:
-            build.allocate_slave(slave=slave)
-            build.begin_subjob_executions_on_slave(slave=slave)
+            scheduler.allocate_slave(slave=slave)
+            scheduler.begin_subjob_executions_on_slave(slave=slave)
         if build_status is BuildStatus.BUILDING:
             return build
 
@@ -466,7 +477,7 @@ class TestBuild(BaseUnitTestCase):
                 subjob_id=i,
                 project_type=None,
                 job_config=job_config,
-                atoms=[Atom('NAME', 'Leonardo') for _ in range(num_atoms_each)],
+                atoms=[Atom('NAME=Leonardo') for _ in range(num_atoms_each)],
             )
             for i in range(count)
         ]
@@ -504,6 +515,8 @@ class TestBuild(BaseUnitTestCase):
         :type build: Build
         :type assert_postbuild_tasks_complete: bool
         """
+        build_scheduler = self.scheduler_pool.get(build)
+
         # Inject an event into the build's postbuild task so that we can detect when it completes.
         postbuild_tasks_complete_event = Event()
         self._on_async_postbuild_tasks_completed(build, postbuild_tasks_complete_event.set)
@@ -513,14 +526,16 @@ class TestBuild(BaseUnitTestCase):
         while build_has_running_subjobs:
             build_has_running_subjobs = False
 
-            for mock_slave in build._slaves_allocated.copy():  # copy since slaves may get deallocated during loop
+            # copy allocated_slaves list since slaves may get deallocated during loop
+            slaves_allocated = build_scheduler._slaves_allocated.copy()
+            for mock_slave in slaves_allocated:
                 self.assertIsInstance(mock_slave, Mock,
                                       '_finish_test_build() can only be used on builds with mock slaves.')
 
                 for subjob in self._get_in_progress_subjobs_for_mock_slave(mock_slave):
                     build_has_running_subjobs = True
                     build.complete_subjob(subjob.subjob_id())
-                    build.execute_next_subjob_or_teardown_slave(mock_slave)
+                    build_scheduler.execute_next_subjob_or_free_executor(mock_slave)
 
         # Wait for the async postbuild thread to complete executing postbuild tasks.
         if assert_postbuild_tasks_complete:

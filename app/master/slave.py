@@ -54,13 +54,15 @@ class Slave(object):
             self.kill()
             raise SlaveMarkedForShutdownError
 
-    def setup(self, build):
+    def setup(self, build, executor_start_index):
         """
         Execute a setup command on the slave for the specified build. The setup process executes asynchronously on the
         slave and the slave will alert the master when setup is complete and it is ready to start working on subjobs.
 
         :param build: The build to set up this slave to work on
         :type build: Build
+        :param executor_start_index: The index the slave should number its executors from for this build
+        :type executor_start_index: int
         """
         slave_project_type_params = build.build_request.build_parameters().copy()
         slave_project_type_params.update(build.project_type.slave_param_overrides())
@@ -68,7 +70,7 @@ class Slave(object):
         setup_url = self._slave_api.url('build', build.build_id(), 'setup')
         post_data = {
             'project_type_params': slave_project_type_params,
-            'build_executor_start_index': build.num_executors_allocated,
+            'build_executor_start_index': executor_start_index,
         }
 
         self.current_build_id = build.build_id()
