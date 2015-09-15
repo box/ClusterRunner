@@ -1,17 +1,18 @@
-from genty import genty, genty_dataset
 from unittest.mock import Mock
 from app.master.build_scheduler_pool import BuildSchedulerPool
 
-from app.project_type.project_type import ProjectType
+from genty import genty, genty_dataset
+
 from app.master.atom import Atom
-from app.master.build_request_handler import BuildRequestHandler
 from app.master.atomizer import Atomizer
 from app.master.job_config import JobConfig
+from app.master.subjob_calculator import SubjobCalculator
+from app.project_type.project_type import ProjectType
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 @genty
-class TestBuildRequestHandler(BaseUnitTestCase):
+class TestSubjobCalculator(BaseUnitTestCase):
     @genty_dataset(
         atoms_override_specified=(['override1', 'override2'], None, False),
         atoms_override_not_specified=(None, [Atom('atom_value_1'), Atom('atom_value_2')], True),
@@ -34,10 +35,9 @@ class TestBuildRequestHandler(BaseUnitTestCase):
         mock_job_config.name = 'some_config'
         mock_job_config.max_executors = 1
         mock_job_config.atomizer = mock_atomizer
-        mock_scheduler_pool = Mock(spec_set=BuildSchedulerPool)
 
-        build_request_handler = BuildRequestHandler(mock_scheduler_pool)
-        build_request_handler._compute_subjobs_for_build(build_id=1, job_config=mock_job_config,
-                                                         project_type=mock_project)
+        subjob_calculator = SubjobCalculator()
+        subjob_calculator.compute_subjobs_for_build(build_id=1, job_config=mock_job_config,
+                                                    project_type=mock_project)
 
         self.assertEquals(mock_atomizer.atomize_in_project.called, atomizer_called)

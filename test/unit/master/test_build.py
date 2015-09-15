@@ -14,6 +14,7 @@ from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.job_config import JobConfig
 from app.master.slave import Slave, SlaveMarkedForShutdownError
 from app.master.subjob import Subjob
+from app.master.subjob_calculator import SubjobCalculator
 from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -193,11 +194,12 @@ class TestBuild(BaseUnitTestCase):
         build = self._create_test_build(BuildStatus.QUEUED)
         job_config = self._create_job_config()
         subjobs = self._create_subjobs(count=3, job_config=job_config)
+        subjob_calculator = self._create_mock_subjob_calc(subjobs)
 
-        build.prepare(subjobs=subjobs, job_config=job_config)
+        build.prepare(subjob_calculator)
 
         with self.assertRaisesRegex(RuntimeError, r'prepare\(\) was called more than once'):
-            build.prepare(subjobs=subjobs, job_config=job_config)
+            build.prepare(subjob_calculator)
 
     def test_teardown_called_on_slave_when_no_subjobs_remain(self):
         mock_slave = self._create_mock_slave(num_executors=1)
@@ -326,12 +328,13 @@ class TestBuild(BaseUnitTestCase):
     def test_preparing_build_sets_prepared_timestamps(self):
         job_config = self._create_job_config()
         subjobs = self._create_subjobs(job_config=job_config)
+        subjob_calculator = self._create_mock_subjob_calc(subjobs)
         build = self._create_test_build(BuildStatus.QUEUED)
 
         self.assertIsNone(build.get_state_timestamp(BuildStatus.PREPARED),
                           '"prepared" timestamp should not be set before build preparation.')
 
-        build.prepare(subjobs=subjobs, job_config=job_config)
+        build.prepare(subjob_calculator)
 
         self.assertIsNotNone(build.get_state_timestamp(BuildStatus.PREPARED),
                              '"prepared" timestamp should not be set before build preparation.')
@@ -440,7 +443,8 @@ class TestBuild(BaseUnitTestCase):
         job_config = job_config or self._create_job_config()
         mock_project_type.job_config.return_value = job_config
         subjobs = self._create_subjobs(count=num_subjobs, num_atoms_each=num_atoms_per_subjob, job_config=job_config)
-        build.prepare(subjobs=subjobs, job_config=job_config)
+        subjob_calculator = self._create_mock_subjob_calc(subjobs)
+        build.prepare(subjob_calculator)
         if build_status is BuildStatus.PREPARED:
             return build
 
@@ -506,6 +510,15 @@ class TestBuild(BaseUnitTestCase):
         mock_slave.free_executor.side_effect = counter.decrement
 
         return mock_slave
+
+    def _create_mock_subjob_calc(self, subjobs):
+        """
+        :type subjobs: list[Subjob]
+        :rtype: SubjobCalculator
+        """
+        mock_subjob_calculator = MagicMock(spec_set=SubjobCalculator)
+        mock_subjob_calculator.compute_subjobs_for_build.return_value = subjobs
+        return mock_subjob_calculator
 
     def _finish_test_build(self, build, assert_postbuild_tasks_complete=True):
         """

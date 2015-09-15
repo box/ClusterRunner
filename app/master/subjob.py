@@ -72,7 +72,7 @@ class Subjob(object):
     @property
     def atoms(self):
         """
-        :rtype: list[Atom]
+        :rtype: list[app.master.atom.Atom]
         """
         return self._atoms
 
