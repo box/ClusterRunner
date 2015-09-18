@@ -36,6 +36,12 @@ class TestSubjob(BaseUnitTestCase):
             ],
         )
 
+    def test_set_atoms_subjob_id(self):
+        atoms = [Mock(), Mock()]
+        self._subjob._set_atoms_subjob_id(atoms, 4)
+        for atom in atoms:
+            self.assertEqual(atom.subjob_id, 4)
+
     def test_api_representation_matches_expected(self):
         actual_api_repr = self._subjob.api_representation()
 
@@ -51,6 +57,7 @@ class TestSubjob(BaseUnitTestCase):
                     'actual_time': 56.7,
                     'exit_code': 1,
                     'state': 'NOT_STARTED',
+                    'subjob_id': 34
                 },
                 {
                     'id': 1,
@@ -59,6 +66,7 @@ class TestSubjob(BaseUnitTestCase):
                     'actual_time': 24.6,
                     'exit_code': 0,
                     'state': 'NOT_STARTED',
+                    'subjob_id': 34
                 },
             ]
         }
