@@ -27,9 +27,21 @@ class Subjob(object):
         self.project_type = project_type
         self.job_config = job_config
         self._atoms = atoms
+        self._set_atoms_subjob_id(atoms, subjob_id)
         self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
         self.slave = None  # The slave that had been assigned this subjob. Is None if not started.
+
+    def _set_atoms_subjob_id(self, atoms, subjob_id):
+        """
+        Set the subjob_id on each atom
+        :param atoms: an array of atoms to set the subjob_id on
+        :type atoms: list[app.master.atom.Atom]
+        :param subjob_id: the subjob_id to set on the atoms
+        :type subjob_id: int
+        """
+        for atom in atoms:
+            atom.subjob_id = subjob_id
 
     def _set_atom_state(self, state):
         """

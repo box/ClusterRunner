@@ -15,7 +15,8 @@ class Atom(object):
             actual_time=None,
             exit_code=None,
             state=None,
-            atom_id=None
+            atom_id=None,
+            subjob_id=None
     ):
         """
         :type command_string: str
@@ -24,12 +25,14 @@ class Atom(object):
         :type exit_code: int | None
         :type state: `:class:AtomState` | None
         :type atom_id: int | None
+        :type subjob_id: int | None
         """
         self.command_string = command_string
         self.expected_time = expected_time
         self.actual_time = actual_time
         self.exit_code = exit_code
         self.state = state
+        self.subjob_id = subjob_id
         self.id = atom_id
 
     def api_representation(self):
@@ -40,4 +43,5 @@ class Atom(object):
             'exit_code': self.exit_code,
             'state': self.state,
             'id': self.id,
+            'subjob_id': self.subjob_id,
         }
