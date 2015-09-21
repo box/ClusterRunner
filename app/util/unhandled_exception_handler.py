@@ -47,7 +47,7 @@ class UnhandledExceptionHandler(Singleton):
         try:
             signal.signal(self.SIGINFO, self._application_info_dump_signal_handler)
         except ValueError:
-            self._logger.warning('Failed at registering signal handler for SIGINFO. This is expected if ClusterRunner'
+            self._logger.warning('Failed to register signal handler for SIGINFO. This is expected if ClusterRunner '
                                  'is running on Windows.')
 
     @classmethod

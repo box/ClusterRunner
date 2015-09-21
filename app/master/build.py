@@ -3,10 +3,10 @@ from enum import Enum
 import os
 from queue import Queue, Empty
 from threading import Lock
-import time
 import uuid
 
 from app.master.build_artifact import BuildArtifact
+from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
 from app.project_type.project_type import ProjectType
 from app.util import util
@@ -25,6 +25,13 @@ class Build(object):
         - exposes the overall status of the build
         - keeps track of the build's subjobs and their completion state
         - manages slaves that have been assigned to accept this build's subjobs
+
+    :type _build_id: int
+    :type _build_request: BuildRequest
+    :type _build_artifact: None | BuildArtifact
+    :type _error_message: None | str
+    :type _project_type: None | ProjectType
+    :type _timing_file_path: None | str
     """
     _build_id_counter = Counter()  # class-level counter for assigning build ids
 
@@ -34,40 +41,44 @@ class Build(object):
         """
         self._logger = get_logger(__name__)
         self._build_id = self._build_id_counter.increment()
-        self.build_request = build_request
+        self._build_request = build_request
         self._artifacts_archive_file = None
         self._build_artifact = None
-        """ :type : BuildArtifact"""
 
         self._error_message = None
-        self.is_prepared = False
-        self._setup_is_started = False
         self._preparation_coin = SingleUseCoin()  # protects against separate threads calling prepare() more than once
-        self._is_canceled = False
 
         self._project_type = None
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
 
         self._all_subjobs_by_id = {}
-        self._unstarted_subjobs = None  # WIP: Move subjob queues to BuildScheduler class.
+        self._unstarted_subjobs = None  # WIP(joey): Move subjob queues to BuildScheduler class.
         self._finished_subjobs = None
         self._failed_atoms = None
-        self._postbuild_tasks_are_finished = False
+        self._postbuild_tasks_are_finished = False  # WIP(joey): Remove and use build state.
         self._timing_file_path = None
 
-        self._state_timestamps = {status: None
-                                  for status in BuildStatus}   # initialize all timestamps to None
-        self._record_state_timestamp(BuildStatus.QUEUED)
+        self._state_machine = BuildFsm(
+            build_id=self._build_id,
+            enter_state_callbacks={
+                BuildState.ERROR: self._on_enter_error_state,
+                BuildState.CANCELED: self._on_enter_canceled_state,
+            }
+        )
 
     def api_representation(self):
         failed_atoms_api_representation = None
         if self._get_failed_atoms() is not None:
             failed_atoms_api_representation = [failed_atom.api_representation()
                                                for failed_atom in self._get_failed_atoms()]
+        build_state = self._status()
+        # todo: PREPARING/PREPARED are new states -- make sure clients can handle them before exposing.
+        if build_state in (BuildState.PREPARING, BuildState.PREPARED):
+            build_state = BuildState.QUEUED
 
         return {
             'id': self._build_id,
-            'status': self._status(),
+            'status': build_state,
             'artifacts': self._artifacts_archive_file,  # todo: this should probably be a url, not a file path
             'details': self._detail_message,
             'error_message': self._error_message,
@@ -79,7 +90,7 @@ class Build(object):
             # Convert self._state_timestamps to OrderedDict to make raw API response more readable. Sort the entries
             # by numerically increasing dict value, with None values sorting highest.
             'state_timestamps': OrderedDict(sorted(
-                [(state.lower(), timestamp) for state, timestamp in self._state_timestamps.items()],
+                [(state.lower(), timestamp) for state, timestamp in self._state_machine.transition_timestamps.items()],
                 key=lambda item: item[1] or float('inf'))),
         }
 
@@ -119,6 +130,10 @@ class Build(object):
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
 
+        self._state_machine.trigger(BuildEvent.START_PREPARE)
+        # WIP(joey): Move the following code into a PREPARING state callback
+        #  (so that it won't execute if the build has already been canceled.)
+
         self._logger.info('Fetching project for build {}.', self._build_id)
         self.project_type.fetch_project()
         self._logger.info('Successfully fetched project for build {}.', self._build_id)
@@ -129,22 +144,29 @@ class Build(object):
 
         subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
 
-        self._unstarted_subjobs = Queue(maxsize=len(subjobs))
-        self._finished_subjobs = Queue(maxsize=len(subjobs))
+        self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
+        self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
 
         for subjob in subjobs:
             self._all_subjobs_by_id[subjob.subjob_id()] = subjob
             self._unstarted_subjobs.put(subjob)
 
         self._timing_file_path = self._project_type.timing_file_path(job_config.name)
-        self.is_prepared = True
-        self._record_state_timestamp(BuildStatus.PREPARED)
+
+        self._state_machine.trigger(BuildEvent.FINISH_PREPARE)
 
     def build_id(self):
         """
         :rtype: int
         """
         return self._build_id
+
+    @property
+    def build_request(self):
+        """
+        :rtype: BuildRequest
+        """
+        return self._build_request
 
     def all_subjobs(self):
         """
@@ -227,43 +249,48 @@ class Build(object):
         subjob.mark_completed()
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
-            subjobs_are_finished = self._subjobs_are_finished
+            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self._is_stopped()
 
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
-        if subjobs_are_finished:
+        if should_trigger_postbuild_tasks:
             self._logger.info("All results received for build {}!", self._build_id)
             SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
 
     def mark_started(self):
-        self._setup_is_started = True
-        self._record_state_timestamp(BuildStatus.BUILDING)
+        """
+        Mark the build as started.
+        """
+        self._state_machine.trigger(BuildEvent.START_BUILDING)
 
     def mark_failed(self, failure_reason):
         """
         Mark a build as failed and set a failure reason. The failure reason should be something we can present to the
         end user of ClusterRunner, so try not to include detailed references to internal implementation.
-
         :type failure_reason: str
         """
-        self._logger.error('Build {} failed: {}', self.build_id(), failure_reason)
-        self._error_message = failure_reason
-        self._record_state_timestamp(BuildStatus.ERROR)
+        self._state_machine.trigger(BuildEvent.FAIL, error_msg=failure_reason)
+
+    def _on_enter_error_state(self, event):
+        """
+        Store an error message for the build and log the failure. This method is triggered by
+        a state machine transition to the ERROR state.
+        :param event: The Fysom event object
+        """
+        # WIP(joey): Should this be a reenter_state callback also? Should it check for previous error message?
+        default_error_msg = 'An unspecified error occurred.'
+        self._error_message = getattr(event, 'error_msg', default_error_msg)
+        self._logger.warning('Build {} failed: {}', self.build_id(), self._error_message)
 
     def cancel(self):
         """
-        Cancel a running build
+        Cancel a running build.
         """
-        # Early exit if build is not running
-        if self._status() in [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED]:
-            self._logger.notice('Ignoring cancel request for build {}. Build is already in state {}.',
-                                self._build_id, self._status())
-            return
+        self._logger.notice('Request received to cancel build {}.', self._build_id)
+        self._state_machine.trigger(BuildEvent.CANCEL)
 
-        self._logger.notice('Canceling build {}.', self._build_id)
-        self._is_canceled = True
-        self._record_state_timestamp(BuildStatus.CANCELED)
-
+    def _on_enter_canceled_state(self, event):
         # Deplete the unstarted subjob queue.
+        # WIP(joey): Just remove this completely and adjust behavior of other methods based on self._is_canceled().
         # TODO: Handle situation where cancel() is called while subjobs are being added to _unstarted_subjobs
         while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
             try:
@@ -319,6 +346,7 @@ class Build(object):
     def artifacts_archive_file(self):
         return self._artifacts_archive_file
 
+    # WIP(joey): Change some of these private @properties to methods.
     @property
     def _num_subjobs_total(self):
         return len(self._all_subjobs_by_id)
@@ -329,26 +357,18 @@ class Build(object):
 
     @property
     def _num_atoms(self):
-        if self._status() not in [BuildStatus.BUILDING, BuildStatus.FINISHED]:
+        # todo: blacklist states instead of whitelist, or just check _all_subjobs_by_id directly
+        if self._status() not in [BuildState.BUILDING, BuildState.FINISHED]:
             return None
         return sum([len(subjob.atomic_commands()) for subjob in self._all_subjobs_by_id.values()])
 
-    @property
-    def _subjobs_are_finished(self):
-        return self._is_canceled or (self.is_prepared and self._finished_subjobs.full())
+    def _all_subjobs_are_finished(self):
+        return self._finished_subjobs and self._finished_subjobs.full()
 
     @property
     def is_finished(self):
-        # TODO: Clean up this logic or move everything into a state machine
-        return self._is_canceled or self._postbuild_tasks_are_finished
-
-    @property
-    def is_unstarted(self):
-        return self.is_prepared and not self._setup_is_started and self._unstarted_subjobs.full()
-
-    @property
-    def has_error(self):
-        return self._error_message is not None
+        # WIP(joey): Calling logic should check _is_canceled if it needs to instead of including the check here.
+        return self._is_canceled() or self._postbuild_tasks_are_finished
 
     @property
     def _detail_message(self):
@@ -360,20 +380,21 @@ class Build(object):
             )
         return None
 
-    def _status(self):
+    def _status(self):  # WIP(joey): Rename to _state.
         """
-        :rtype: BuildStatus
+        :rtype: BuildState
         """
-        if self.has_error:
-            return BuildStatus.ERROR
-        elif self._is_canceled:
-            return BuildStatus.CANCELED
-        elif not self.is_prepared or self.is_unstarted:
-            return BuildStatus.QUEUED
-        elif self.is_finished:
-            return BuildStatus.FINISHED
-        else:
-            return BuildStatus.BUILDING
+        return self._state_machine.state
+
+    @property
+    def has_error(self):
+        return self._status() is BuildState.ERROR
+
+    def _is_canceled(self):
+        return self._status() is BuildState.CANCELED
+
+    def _is_stopped(self):
+        return self._status() in (BuildState.ERROR, BuildState.CANCELED)
 
     def _get_failed_atoms(self):
         """
@@ -382,7 +403,7 @@ class Build(object):
         :rtype: list[Atom] | None
         """
         if self._failed_atoms is None and self.is_finished:
-            if self._is_canceled:
+            if self._is_canceled():
                 return []
 
             self._failed_atoms = []
@@ -395,9 +416,13 @@ class Build(object):
 
     def _result(self):
         """
-        :rtype: str | None
+        Can return three states:
+            None:
+            FAILURE:
+            NO_FAILURES:
+        :rtype: BuildResult | None
         """
-        if self._is_canceled:
+        if self._is_canceled():
             return BuildResult.FAILURE
 
         if self.is_finished:
@@ -411,9 +436,8 @@ class Build(object):
         Once a build is complete, certain tasks can be performed asynchronously.
         """
         self._create_build_artifact()
-        self._logger.debug('Postbuild tasks completed for build {}', self.build_id())
         self._postbuild_tasks_are_finished = True
-        self._record_state_timestamp(BuildStatus.FINISHED)
+        self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
 
     def _create_build_artifact(self):
         self._build_artifact = BuildArtifact(self._build_results_dir())
@@ -431,31 +455,8 @@ class Build(object):
         """
         return os.path.join(Configuration['build_symlink_directory'], str(uuid.uuid4()))
 
-    def get_state_timestamp(self, build_status):
-        """
-        Get the recorded timestamp for a given build status. This may be None if the build has not yet reached
-        the specified state.
-        :param build_status: The build status for which to retrieve the corresponding timestamp
-        :type build_status: BuildStatus
-        :return: The timestamp for the specified status
-        :rtype: float | None
-        """
-        return self._state_timestamps.get(build_status)
 
-    def _record_state_timestamp(self, build_status):
-        """
-        Record a timestamp for a given build status. This is used to record the timing of the various build phases and
-        is exposed via the Build object's API representation.
-        :param build_status: The build status for which to record a timestamp
-        :type build_status: BuildStatus
-        """
-        if self._state_timestamps.get(build_status) is not None:
-            self._logger.warning(
-                'Overwriting timestamp for build {}, status {}'.format(self.build_id(), build_status))
-        self._state_timestamps[build_status] = time.time()
-
-
-class BuildStatus(str, Enum):
+class BuildStatus(str, Enum):  # WIP(joey): Remove this class.
     """
     An enum of possible build statuses. Also inherits from string to allow comparisons with other strings (which is
     useful for client code in parsing API responses).

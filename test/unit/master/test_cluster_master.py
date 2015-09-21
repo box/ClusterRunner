@@ -187,7 +187,7 @@ class TestClusterMaster(BaseUnitTestCase):
         build_id = 1
         slave_url = "url"
         build = Build(BuildRequest({}))
-        build._is_canceled = True
+        build.cancel()
         self.patch_object(build, '_handle_subjob_payload')
         self.patch_object(build, '_mark_subjob_complete')
 

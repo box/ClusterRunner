@@ -1,5 +1,4 @@
 from unittest.mock import Mock
-from app.master.build_scheduler_pool import BuildSchedulerPool
 
 from genty import genty, genty_dataset
 
