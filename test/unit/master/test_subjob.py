@@ -36,9 +36,9 @@ class TestSubjob(BaseUnitTestCase):
             ],
         )
 
-    def test_set_atoms_subjob_id(self):
+    def test_subjob_constructor_sets_subjob_id_on_atoms(self):
         atoms = [Mock(), Mock()]
-        self._subjob._set_atoms_subjob_id(atoms, 4)
+        Subjob(build_id=1, subjob_id=4, project_type=Mock(), job_config=Mock(), atoms=atoms)
         for atom in atoms:
             self.assertEqual(atom.subjob_id, 4)
 
