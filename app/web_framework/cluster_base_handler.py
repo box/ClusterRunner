@@ -121,11 +121,15 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
 
     def set_default_headers(self):
         self.set_header('Content-Type', 'application/json')
-        self.set_header('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Requested-With, Session, Session-Id')
 
         request_origin = self.request.headers.get('Origin')  # usually only set when making API request from a browser
         if request_origin and self._is_request_origin_allowed(request_origin):
             self.set_header('Access-Control-Allow-Origin', request_origin)
+            self.set_header(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Accept, X-Requested-With, Session, Session-Id',
+            )
+            self.set_header('Access-Control-Allow-Methods', 'GET')
 
     def _is_request_origin_allowed(self, request_origin):
         """
