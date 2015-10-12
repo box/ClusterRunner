@@ -2,7 +2,8 @@ from genty import genty, genty_dataset
 import sys
 
 from app.master.atomizer import Atomizer
-from app.master.cluster_runner_config import ClusterRunnerConfig, ConfigParseError, ConfigValidationError
+from app.master.job_config import ConfigValidationError
+from app.master.cluster_runner_config import ClusterRunnerConfig, ConfigParseError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
