@@ -1,5 +1,6 @@
 import os
 import tempfile
+import yaml
 
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.functional.job_configs import JOB_WITH_SETUP_AND_TEARDOWN
@@ -46,7 +47,7 @@ class TestShutdown(BaseFunctionalTestCase):
         project_dir = tempfile.TemporaryDirectory()
         build_resp = master.post_new_build({
             'type': 'directory',
-            'config': JOB_WITH_SETUP_AND_TEARDOWN.config[os.name],
+            'config': yaml.safe_load(JOB_WITH_SETUP_AND_TEARDOWN.config[os.name])['JobWithSetupAndTeardown'],
             'project_directory': project_dir.name,
             })
         build_id = build_resp['build_id']

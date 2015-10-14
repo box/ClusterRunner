@@ -241,6 +241,22 @@ class TestProjectType(BaseUnitTestCase):
         self.mock_popen.wait.side_effect = fake_wait
         self.mock_popen.returncode = fake_returncode
 
+    def test_job_config_uses_passed_in_config_instead_of_clusterrunner_yaml(self):
+        config_dict = {
+            'commands': ['shell command 1', 'shell command 2;'],
+            'atomizers': [{'TESTPATH': 'atomizer command'}],
+            'max_executors': 100,
+            'max_executors_per_slave': 2,
+        }
+        project_type = ProjectType(config=config_dict, job_name='some_job_name')
+
+        job_config = project_type.job_config()
+
+        self.assertEquals(job_config.name, 'some_job_name')
+        self.assertEquals(job_config.command, 'shell command 1 && shell command 2')
+        self.assertEquals(job_config.max_executors, 100)
+        self.assertEquals(job_config.max_executors_per_slave, 2)
+
 
 class _FakeEnvWithoutDefaultArgs(ProjectType):
     def __init__(self, earth, wind, water, fire, heart):
