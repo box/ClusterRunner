@@ -9,6 +9,7 @@ from threading import Event
 import time
 
 from app.master.cluster_runner_config import ClusterRunnerConfig
+from app.master.job_config import JobConfig
 from app.util import log
 from app.util.conf.configuration import Configuration
 from app.util.process_utils import Popen_with_delayed_expansion, get_environment_variable_setter_command
@@ -18,8 +19,9 @@ class ProjectType(object):
 
     def __init__(self, config=None, job_name=None, remote_files=None, atoms_override=None):
         """
-        :param config: A yaml string representing a clusterrunner.yaml file
-        :type config: str | None
+        :param config: A dictionary containing the job configuration for a single clusterrunner job, with the
+            top-level keys being 'commands', 'atomizers', etc.
+        :type config: dict | None
         :type job_name: str | None
         :param remote_files: key-value pairs of where the key is the output_file and the value is the url
         :type remote_files: dict[str, str] | None
@@ -66,21 +68,25 @@ class ProjectType(object):
         :rtype: JobConfig
         """
         if not self._job_config:
-            config = ClusterRunnerConfig(self._get_config_contents())
+            # If the config was specified in the POST request, then there is no need to parse clusterrunner.yaml
+            if self._config is not None:
+                self._job_config = JobConfig.construct_from_dict(self._job_name, self._config)
+                return self._job_config
+
+            # Get job configuration from clusterrunner.yaml in repo.
+            config = ClusterRunnerConfig(self._get_clusterrunner_config_file_contents())
             self._job_config = config.get_job_config(self._job_name)
 
         return self._job_config
 
-    def _get_config_contents(self):
+    def _get_clusterrunner_config_file_contents(self):
         """
-        Default method for retriving the contents of clusterrunner.yaml.  Override this in project types using a
-        different method
+        Method for retrieving the contents of clusterrunner.yaml. Override this in project types using a different
+        method.
+
         :return: The contents of clusterrunner.yaml
         :rtype: str
         """
-        if self._config is not None:
-            return self._config
-
         yaml_file = os.path.join(self.project_directory, Configuration['project_yaml_filename'])
         if not os.path.exists(yaml_file):
             raise FileNotFoundError('Could not find project yaml file {}'.format(yaml_file))

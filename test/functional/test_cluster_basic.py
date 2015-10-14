@@ -1,6 +1,7 @@
 import os
 import tempfile
 from unittest import skip
+import yaml
 
 from genty import genty, genty_dataset
 
@@ -13,18 +14,18 @@ from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, JOB_WITH_S
 class TestClusterBasic(BaseFunctionalTestCase):
 
     @genty_dataset(
-        basic_job=(BASIC_JOB,),
-        basic_failing_job=(BASIC_FAILING_JOB,),
-        job_with_setup_and_teardown=(JOB_WITH_SETUP_AND_TEARDOWN,),
+        basic_job=(BASIC_JOB, 'BasicJob'),
+        basic_failing_job=(BASIC_FAILING_JOB, 'BasicFailingJob'),
+        job_with_setup_and_teardown=(JOB_WITH_SETUP_AND_TEARDOWN, 'JobWithSetupAndTeardown'),
     )
-    def test_basic_directory_configs_end_to_end(self, test_job_config):
+    def test_basic_directory_configs_end_to_end(self, test_job_config, job_name):
         master = self.cluster.start_master()
         slave = self.cluster.start_slave()
 
         project_dir = tempfile.TemporaryDirectory()
         build_resp = master.post_new_build({
             'type': 'directory',
-            'config': test_job_config.config[os.name],
+            'config': yaml.safe_load(test_job_config.config[os.name])[job_name],
             'project_directory': project_dir.name,
         })
         build_id = build_resp['build_id']

@@ -19,9 +19,18 @@ class BuildRequest(object):
         "type": "git",
         "url": "ssh://github.com/drobertduke/some-project",
         "branch": "master",
-        "job_name": "clusterrunner_configured_job",
+        [OPTIONAL] "job_name": "clusterrunner_configured_job",
+            - This field is optional if the "config" section is specified
         [OPTIONAL] "atoms_override": ['export VAR="overridden_atom_value_1";', ...],
         [OPTIONAL] "hash": "123456789123456789123456789"
+        [OPTIONAL] "config": {
+            "commands" : [...],
+            "atomizers" : {...},
+            "setup_build": [...],
+            "teardown_build": [...],
+            "max_executors": ...,
+            "max_executors_per_slave": ...
+        }
     }
     """
     def __init__(self, build_parameters):
