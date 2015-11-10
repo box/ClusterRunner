@@ -1,0 +1,309 @@
+#!/bin/bash
+# clusterrunner_ha - start, stop, and restart ClusterRunner in HA mode.#
+#
+# description: clusterrunner_ha is a wrapper around the ClusterRunnner
+# services with an nginx proxy in front for automatic failover.
+
+CONF_PATH=/etc/sysconfig/clusterrunner_ha
+test -e "$CONF_PATH" || { echo "$CONF_PATH doesn't exist"; exit 1; }
+test -r "$CONF_PATH" || { echo "$CONF_PATH not readable. Perhaps you forgot 'sudo'?"; exit 1; }
+source "$CONF_PATH"
+
+##################################################################################
+# Execute commmand as the jenkins LDAP user on target remote.
+# This is usually necessary in order to utilize the jenkins user's ssh keys.
+#
+# Args:
+#   TARGET str - Remote host name.
+#   COMMAND str - Command to execute on remote.
+#   IS_ASYNC bool (optional) - Should this remote command be async? Default: false.
+##################################################################################
+run_as_jenkins_on_remote()
+{
+    # Gather bash function arugments
+    TARGET=$1
+    COMMAND=$2
+    IS_ASYNC=${3:-false}
+
+    # Build ssh/scp command
+    SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $TARGET \"$COMMAND\""
+    if $IS_ASYNC
+    then
+        SSH_COMMAND="$SSH_COMMAND &"
+    fi
+
+    # Execute remote command as jenkins
+    sudo su jenkins -c "$SSH_COMMAND"
+}
+
+##################################################################################
+# This function is responsible for killing all clusterrunner processes on the
+# master and slave machines
+##################################################################################
+kill_clusterrunner()
+{
+    KILL_TARGETS_CSV="$MASTER_HOSTS_CSV,$SLAVE_HOSTS_CSV"
+
+    # Kill them all!
+    echo "Killing all ClusterRunner processes..."
+    IFS=',' read -ra KILL_TARGETS <<< "$KILL_TARGETS_CSV"
+
+    for TARGET in "${KILL_TARGETS[@]}"
+    do
+        run_as_jenkins_on_remote $TARGET 'sudo pkill -15 clusterrunner' true
+    done
+
+    # Wait for master and slave processes to gracefully shutdown.
+    wait
+    sleep 10
+
+    # Validate that none of the machines have clusterrunner processes running
+    printf "\nValidating that all ClusterRunner processes are dead...\n"
+
+    for TARGET in "${KILL_TARGETS[@]}"
+    do
+        run_as_jenkins_on_remote $TARGET "pgrep 'clusterrunner'"
+
+        if [ "$?" -eq 0 ]
+        then
+            echo "There are still clusterrunner processes running on host $TARGET. Exiting."
+            exit 1
+        fi
+    done
+
+    printf "\nSuccessfully killed all clusterrunner processes on hosts: $KILL_TARGETS_CSV\n"
+}
+
+##################################################################################
+# Deploy packages and conf to a single host.
+#
+# Args:
+#   TARGET str - Single host to deploy to.
+#
+##################################################################################
+deploy_packages_to_host()
+{
+    # Gather bash function arguments
+    TARGET=$1
+
+    echo "Deploying to host: $TARGET..."
+
+    # Clear out existing binaries and conf file if they exist.
+    run_as_jenkins_on_remote $TARGET 'cd ~ && mkdir -p .clusterrunner && rm -rf .clusterrunner/dist && rm -f .clusterrunner/clusterrunner.conf'
+
+    if [ "$?" -ne 0 ]; then
+        echo "Failed to deploy to host $TARGET."
+        exit 1
+    fi
+
+    # scp the new binary package.
+    sudo su jenkins -c "scp -o ConnectTimeout=5 -o BatchMode=yes -o PasswordAuthentication=no -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $CLUSTERRUNNER_CONF_PATH clusterrunner.tar.gz $TARGET:~/.clusterrunner"
+
+    if [ "$?" -ne 0 ]; then
+        echo "Failed to scp packages/conf to host $TARGET."
+        exit 1
+    fi
+
+    # Change clusterrunner conf permissions and unzip the package into the proper directory
+    run_as_jenkins_on_remote $TARGET 'mkdir -p ~/.clusterrunner/dist && cd ~/.clusterrunner && chmod 600 clusterrunner.conf && cd dist && tar -zxf ~/.clusterrunner/clusterrunner.tar.gz'
+
+    if [ "$?" -ne 0 ]; then
+        echo "Failed to unzip packages on host $TARGET."
+        exit 1
+    fi
+}
+
+##################################################################################
+# This function is responsible for ensuring that the specified version of the
+# ClusterRunner binary is placed on the target hosts in the correct directory.
+#
+# Specifically, this entails:
+# - Place this binary in the ~/.clusterrunner/dist directory for each host.
+# - Place the clusterrunner conf in the ~/.clusterrunner directory for each host.
+#
+# Args:
+#   CLUSTERRUNNER_BINARY_PATH str - Absolute path to clusterrunner tar binary.
+#   DEPLOY_TARGETS_CSV str - CSV of hosts to deploy to.
+#   IGNORE_FAILURES bool - If set to false, we will exit 1 on any failure to deploy.
+#
+##################################################################################
+deploy_packages()
+{
+    # Gather bash function arguments
+    CLUSTERRUNNER_BINARY_PATH=$1
+    DEPLOY_TARGETS_CSV=$2
+    IGNORE_FAILURES=$3
+
+    # Deploy this tarball to each of the target hosts asynchronously, as
+    # the deployment can take a long time with 100+ hosts.
+    PIDS=()
+    IFS=',' read -ra DEPLOY_TARGETS <<< "$DEPLOY_TARGETS_CSV"
+
+    for TARGET in "${DEPLOY_TARGETS[@]}"
+    do
+        deploy_packages_to_host $TARGET &
+        PIDS+=("$!")
+    done
+
+    # Wait for all async processes to complete
+    NUM_FAILURES=0
+    for PID in "${PIDS[@]}"
+    do
+        wait $PID || let "NUM_FAILURES+=1"
+    done
+
+    # Analyze number of failures.
+    if [ "$NUM_FAILURES" -eq 0 ]; then
+        printf "\nCompleted deployment of ClusterRunner packages to hosts: $DEPLOY_TARGETS_CSV\n"
+    else
+        printf "\nFailed to deploy on $NUM_FAILURES hosts when attempting to deploy to $DEPLOY_TARGETS_CSV\n"
+
+        if [ "$IGNORE_FAILURES" = false ]; then
+            printf "\nIGNORE_FAILURES is set to false. Exiting.\n"
+            exit 1
+        fi
+    fi
+}
+
+##########################################################################
+# This function is responsible for starting the master and slave service(s)
+# and waiting/verifying that the services are successfully running.
+#
+# Args:
+#   SLAVE_THRESHOLD_PERCENTAGE int - Percentage (out of 100, not a
+#       decimal) of slaves that must successfully connect in order
+#       for the deployment to be considered a success.
+##########################################################################
+start_services()
+{
+    # Gather bash function arguments
+    SLAVE_THRESHOLD_PERCENTAGE=$1
+
+    # Start master services
+    printf "\nStarting the ClusterRunner master services...\n"
+    IFS=',' read -ra MASTER_HOSTS <<< "$MASTER_HOSTS_CSV"
+
+    for MASTER in "${MASTER_HOSTS[@]}"
+    do
+        run_as_jenkins_on_remote $MASTER "nohup ~/.clusterrunner/dist/clusterrunner master --port $MASTER_PORT > /dev/null 2>&1 &"
+    done
+
+    # Validate that the master services are responsive
+    printf "\nValidating that the ClusterRunner master services are up and responsive...\n"
+    sleep 3 # Arbitrary wait time
+
+    for MASTER in "${MASTER_HOSTS[@]}"
+    do
+        curl --connect-timeout 5 --output /dev/null --silent --head --fail -X GET $MASTER:$MASTER_PORT/v1
+
+        if [ "$?" -ne 0 ]; then
+            echo "Master service on $MASTER:$MASTER_PORT failed to respond with a 200 status code. Exiting."
+            exit 1
+        fi
+    done
+
+    printf "\nMaster service(s) successfully launched on hosts: $MASTER_HOSTS_CSV on port: $MASTER_PORT\n"
+
+    # Start slave services
+    printf "\nStarting the ClusterRunner slave services...\n"
+    IFS=',' read -ra SLAVE_HOSTS <<< "$SLAVE_HOSTS_CSV"
+
+    for SLAVE in "${SLAVE_HOSTS[@]}"
+    do
+        SLAVE_PORT=$SLAVE_STARTING_PORT
+
+        for MASTER in "${MASTER_HOSTS[@]}"
+        do
+            run_as_jenkins_on_remote $SLAVE "nohup ~/.clusterrunner/dist/clusterrunner slave --master-url $MASTER:$MASTER_PORT --port $SLAVE_PORT --num-executors 10 > /dev/null 2>&1 &"
+            ((SLAVE_PORT++))
+        done
+    done
+
+    # Validate that at least THRESHOLD % of slaves have connected
+    NUM_SLAVES=${#SLAVE_HOSTS[@]}
+    printf "\nValidating that the all slaves have connected...\n"
+    sleep 2 # Arbitrary wait time
+
+    for MASTER in "${MASTER_HOSTS[@]}"
+    do
+        NUM_FAILED_SLAVES=0
+        SLAVES_ENDPOINT_OUTPUT=$(curl --connect-timeout 5 --silent -X GET $MASTER:$MASTER_PORT/v1/slave)
+
+        for SLAVE in "${SLAVE_HOSTS[@]}"
+        do
+            echo $SLAVES_ENDPOINT_OUTPUT | grep $SLAVE > /dev/null
+
+            if [ "$?" -ne 0 ]; then
+                printf "Slave $SLAVE failed to register with $MASTER.\n"
+                ((NUM_FAILED_SLAVES++))
+            fi
+        done
+
+        # Perform slave connection percentage calculation
+        PERCENT_FAILED=$(((NUM_FAILED_SLAVES * 100) / NUM_SLAVES))
+        PERCENT_CONNECTED=$((100 - PERCENT_FAILED))
+
+        if [ "$PERCENT_CONNECTED" -ge "$SLAVE_THRESHOLD_PERCENTAGE" ]; then
+            printf "\nClusterRunner service successfully started on master: $MASTER with $PERCENT_CONNECTED%% of slaves.\n"
+        else
+            printf "\nCluster master $MASTER only had $PERCENT_CONNECTED%% of slaves connect, which is below the minimum of $SLAVE_THRESHOLD_PERCENTAGE.\nExiting.\n"
+            exit 1
+        fi
+    done
+}
+
+# Finally, the case statements for available service commands
+case "$1" in
+    start|restart)
+        kill_clusterrunner
+
+        # Download the artifact
+        printf "\nDownloading ClusterRunner binary...\n"
+        TMPDIR=$(mktemp -d)
+        cd $TMPDIR
+        curl -f -o clusterrunner.tar.gz $CLUSTERRUNNER_BINARY_URL
+
+        if [ "$?" -ne 0 ]
+        then
+            echo 'Failed to download clusterrunner binary. Exiting.'
+            exit 1
+        fi
+
+        printf "\nSuccessfully downloaded ClusterRunner binary.\n"
+        sudo chown -R jenkins $TMPDIR
+        CLUSTERRUNNER_PATH="$TMPDIR/clusterrunner.tar.gz"
+
+        # Deploy to masters. All of these must succeed.
+        deploy_packages $CLUSTERRUNNER_PATH $MASTER_HOSTS_CSV false
+
+        # Deploy to slaves. It's okay for some of these to fail.
+        deploy_packages $CLUSTERRUNNER_PATH $SLAVE_HOSTS_CSV true
+
+        # Cleanup artifact
+        rm -rf $TMPDIR
+        cd ~
+
+        # Start services
+        start_services $SLAVE_THRESHOLD_PERCENTAGE
+        ;;
+    stop)
+        kill_clusterrunner
+        ;;
+    status)
+        CLUSTERMASTER_API_ENDPOINT="$CLUSTERMASTER_PROXY_HOSTNAME:$CLUSTERRUNNER_HA_PORT/v1"
+        curl --connect-timeout 5 --output /dev/null --silent --head --fail -X GET $CLUSTERMASTER_API_ENDPOINT
+
+        if [ "$?" -ne 0 ]; then
+            echo "The endpoint $CLUSTERMASTER_API_ENDPOINT is non-responsive."
+            exit 1
+        else
+            echo "ClusterRunner is responsive on $CLUSTERMASTER_API_ENDPOINT."
+            exit 0
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+

@@ -1,0 +1,70 @@
+## Type:        string
+## Default:     "cluster-master.dev.box.net"
+## ServiceRestart: clusterrunner_ha
+#
+# The hostname of the proxy for the Cluster Master service.
+#
+CLUSTERMASTER_PROXY_HOSTNAME="master_host.domain.net"
+
+## Type:        string
+## ServiceRestart: clusterrunner_ha
+#
+# A comma-separated list of hostnames that will run the ClusterRunner
+# master service.
+#
+MASTER_HOSTS_CSV="master_host.domain.met"
+
+## Type:        integer(0:65535)
+## ServiceRestart: clusterrunner_ha
+#
+# Port that the clusterrunner ha proxy service will listen on.
+#
+CLUSTERRUNNER_HA_PORT="43000"
+
+## Type:        integer(0:65535)
+## ServiceRestart: clusterrunner_ha
+#
+# Port all of the ClusterMaster services will listen on.
+#
+MASTER_PORT="43000"
+
+## Type:        string
+## ServiceRestart: clusterrunner_ha
+#
+# A comma-separated list of hostnames that will run the ClusterRunner
+# slave service.
+#
+SLAVE_HOSTS_CSV="slave_host_1.domain.net,slave_host_2.domain.net,slave_host_3.domain.net"
+
+## Type:        integer(0:65535)
+## Default:     43001
+## ServiceRestart: clusterrunner_ha
+#
+# The starting port number that the ClusterRunner slave services
+# will listen on. Each additional slave service that is run on
+# the same machine will increment the port number by 1.
+#
+SLAVE_STARTING_PORT="43001"
+
+## Type:        string
+## ServiceRestart: clusterrunner_ha
+#
+# The path to where the clusterrunner.conf file lives on the
+# current host.
+#
+CLUSTERRUNNER_CONF_PATH="/home/jenkins/.clusterrunner/clusterrunner.conf"
+
+## Type:        string
+## ServiceRestart: clusterrunner_ha
+#
+# The URL to the linux tarball of ClusterRunner binaries.
+#
+CLUSTERRUNNER_BINARY_URL="https://cloud.box.com/shared/static/2pl4pi6ykvrbb9d06t4m.tgz"
+
+## Type:        int
+## ServiceRestart: clusterrunner_ha
+#
+# The minimum percentage (between 0 and 100) of slaves that must connect
+# to the master in order to consider the deployment a success.
+#
+SLAVE_THRESHOLD_PERCENTAGE="90"
