@@ -1,10 +1,11 @@
+import requests.exceptions
+
 from app.util import analytics, log
 from app.util.counter import Counter
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
-import requests.exceptions
 
 
 class Slave(object):

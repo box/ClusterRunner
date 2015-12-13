@@ -9,6 +9,9 @@ from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFou
 from app.util.network import ENCODED_BODY
 
 
+# pylint: disable=attribute-defined-outside-init
+#   Handler classes are not designed to have __init__ overridden.
+
 class ClusterBaseHandler(tornado.web.RequestHandler):
     """
     ClusterBaseHandler is the base handler for all request handlers of ClusterRunner services.

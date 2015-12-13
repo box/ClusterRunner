@@ -1,7 +1,8 @@
 import http.client
 import os
-import tornado.web
 import urllib.parse
+
+import tornado.web
 
 from app.util import analytics
 from app.util import log
@@ -14,6 +15,9 @@ from app.web_framework.cluster_application import ClusterApplication
 from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler, ClusterBaseHandler
 from app.web_framework.route_node import RouteNode
 
+
+# pylint: disable=attribute-defined-outside-init
+#   Handler classes are not designed to have __init__ overridden.
 
 class ClusterMasterApplication(ClusterApplication):
 
