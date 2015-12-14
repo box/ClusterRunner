@@ -1,6 +1,7 @@
-import requests
 from subprocess import DEVNULL
 import time
+
+import requests
 
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger

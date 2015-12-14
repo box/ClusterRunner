@@ -1,12 +1,12 @@
 import json
+import socket
+
 import requests
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE
-import socket
 
 from app.util.decorators import retry_on_exception_exponential_backoff
 from app.util.log import get_logger
 from app.util.secret import Secret
-
 
 ENCODED_BODY = '__encoded_body__'
 

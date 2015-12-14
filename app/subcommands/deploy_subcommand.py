@@ -2,9 +2,10 @@ import getpass
 from multiprocessing.dummy import Pool
 import os
 from os.path import join
-import requests
 import sys
 from urllib.parse import urlparse
+
+import requests
 
 from app.client.build_runner import BuildRunner
 from app.deployment.deploy_target import DeployTarget

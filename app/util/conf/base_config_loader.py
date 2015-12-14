@@ -178,7 +178,7 @@ class BaseConfigLoader(object):
 
         if isinstance(default_value, bool):  # bool is a subclass of int so should be checked first
             value_mapping = {'true': True, 'false': False}
-            if not isinstance(value, str) and not value.lower() in value_mapping.keys():
+            if not isinstance(value, str) and value.lower() not in value_mapping.keys():
                 raise InvalidConfigError('The value for {} should be True or False, but it is "{}"'.format(key, value))
             config.set(key, value_mapping[value.lower()])
 

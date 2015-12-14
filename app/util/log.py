@@ -1,12 +1,13 @@
 from collections import defaultdict
-import logbook
-from logbook import Logger, NullHandler, RotatingFileHandler, StreamHandler
-import logbook.compat
 import logging
 import os
 import sys
-from termcolor import colored
 import threading
+
+import logbook
+from logbook import Logger, NullHandler, RotatingFileHandler, StreamHandler
+import logbook.compat
+from termcolor import colored
 
 from app.util import autoversioning, fs
 from app.util.conf.configuration import Configuration

@@ -1,6 +1,7 @@
-from configobj import ConfigObj
 import os
 import stat
+
+from configobj import ConfigObj
 
 from app.util import fs
 from app.util.process_utils import is_windows

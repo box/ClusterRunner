@@ -42,12 +42,11 @@ class SubjobCalculator(object):
 
         # Generate subjobs for each group of atoms
         subjobs = []
-        for subjob_id in range(len(grouped_atoms)):
-            atoms = grouped_atoms[subjob_id]
-            # The atom id's aren't calculated until it's been assigned grouped in a subjob.
-            for idx, atom in enumerate(atoms):
-                atom.id = idx
-            subjobs.append(Subjob(build_id, subjob_id, project_type, job_config, atoms))
+        for subjob_id, subjob_atoms in enumerate(grouped_atoms):
+            # The atom id isn't calculated until the atom has been grouped into a subjob.
+            for atom_id, atom in enumerate(subjob_atoms):
+                atom.id = atom_id
+            subjobs.append(Subjob(build_id, subjob_id, project_type, job_config, subjob_atoms))
         return subjobs
 
     def _grouped_atoms(self, atoms, max_executors, timing_file_path, project_directory):

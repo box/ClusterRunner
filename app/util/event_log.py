@@ -1,15 +1,15 @@
 import collections
 import json
-from logbook import RotatingFileHandler, StreamHandler
-from logbook.more import TaggingHandler, TaggingLogger
 import os
 import sys
 import time
 
+from logbook import RotatingFileHandler, StreamHandler
+from logbook.more import TaggingHandler, TaggingLogger
+
 from app.util import fs, log
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
-
 
 LOG_CACHE_EXPIRE_TIME_IN_HOURS = 5
 LOG_CACHE_THRESHOLD = 100000

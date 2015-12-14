@@ -1,8 +1,9 @@
 from enum import Enum
 from queue import Queue
-import requests
 import sys
 import time
+
+import requests
 
 from app.common.cluster_service import ClusterService
 from app.project_type.project_type import SetupFailureError
@@ -52,6 +53,7 @@ class ClusterSlave(ClusterService):
         self._project_type = None  # this will be instantiated during build setup
         self._current_build_id = None
         self._build_teardown_coin = None
+        self._base_executor_index = None
 
     def api_representation(self):
         """
@@ -184,6 +186,7 @@ class ClusterSlave(ClusterService):
         self._logger.info('Build teardown complete for build {}.', self._current_build_id)
         self._current_build_id = None
         self._project_type = None
+        self._base_executor_index = None
 
     def _send_master_idle_notification(self):
         if not self._is_master_responsive():

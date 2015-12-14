@@ -46,7 +46,7 @@ class RouteNode(object):
         # for the handler's get() method
         if self.regex_part.startswith('('):
             if hasattr(self.handler, 'get'):
-                get_params = inspect.getargspec(self.handler.get).args
+                get_params = inspect.getargspec(self.handler.get).args  # pylint: disable=deprecated-method
                 if len(get_params) > 1:
                     return '[{}]'.format(get_params[-1])
         return self.regex_part
