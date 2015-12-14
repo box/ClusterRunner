@@ -1,6 +1,7 @@
 from os.path import abspath, join
 import sys
 from threading import Event
+from unittest import skip
 from unittest.mock import MagicMock, Mock, mock_open, call
 
 from genty import genty, genty_dataset
@@ -9,6 +10,7 @@ from app.master.atom import Atom, AtomState
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_artifact import BuildArtifact
+from app.master.build_fsm import BuildState
 from app.master.build_request import BuildRequest
 from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.job_config import JobConfig
@@ -94,11 +96,18 @@ class TestBuild(BaseUnitTestCase):
         self.assertEqual(build._status(), BuildStatus.QUEUED,
                          'Build status should be QUEUED immediately after build has been created.')
 
-    def test_build_status_returns_queued_after_build_preparation(self):
+    @skip('PREPARING not yet supported in _create_test_build()')  # WIP(joey): Support PREPARING state.
+    def test_build_status_returns_preparing_after_build_begins_prep(self):
+        build = self._create_test_build(BuildState.PREPARING)
+
+        self.assertEqual(build._status(), BuildState.PREPARING,
+                         'Build status should be PREPARING after build has begun preparation.')
+
+    def test_build_status_returns_prepared_after_build_preparation(self):
         build = self._create_test_build(BuildStatus.PREPARED)
 
-        self.assertEqual(build._status(), BuildStatus.QUEUED,
-                         'Build status should be QUEUED after build has been prepared.')
+        self.assertEqual(build._status(), BuildStatus.PREPARED,
+                         'Build status should be PREPARED after build has been prepared.')
 
     def test_build_status_returns_building_after_setup_has_started(self):
         mock_slave = self._create_mock_slave()
@@ -124,7 +133,7 @@ class TestBuild(BaseUnitTestCase):
 
         # Verify build artifacts was called after subjobs completed
         build._create_build_artifact.assert_called_once_with()
-        self.assertTrue(build._subjobs_are_finished)
+        self.assertTrue(build._all_subjobs_are_finished())
         self.assertEqual(build._status(), BuildStatus.FINISHED)
 
     def test_complete_subjob_parses_payload_and_stores_value_in_atom_objects(self):
@@ -226,7 +235,7 @@ class TestBuild(BaseUnitTestCase):
 
         mock_slave.teardown.assert_called_with()
 
-    def test_cancel_prevents_further_subjob_starts_and_sets_canceled(self):
+    def test_cancel_prevents_further_subjob_starts_and_sets_canceled(self):  # dev: this is flaky now
         mock_slave = self._create_mock_slave(num_executors=5)
         build = self._create_test_build(BuildStatus.BUILDING, num_subjobs=30, slaves=[mock_slave])
 
@@ -322,7 +331,7 @@ class TestBuild(BaseUnitTestCase):
 
     def test_creating_build_sets_queued_timestamp(self):
         build = self._create_test_build()
-        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.QUEUED),
+        self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.QUEUED),
                              '"queued" timestamp should be set immediately after build creation.')
 
     def test_preparing_build_sets_prepared_timestamps(self):
@@ -331,12 +340,12 @@ class TestBuild(BaseUnitTestCase):
         subjob_calculator = self._create_mock_subjob_calc(subjobs)
         build = self._create_test_build(BuildStatus.QUEUED)
 
-        self.assertIsNone(build.get_state_timestamp(BuildStatus.PREPARED),
+        self.assertIsNone(self._get_build_state_timestamp(build, BuildState.PREPARED),
                           '"prepared" timestamp should not be set before build preparation.')
 
         build.prepare(subjob_calculator)
 
-        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.PREPARED),
+        self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.PREPARED),
                              '"prepared" timestamp should not be set before build preparation.')
 
     def test_allocating_slave_to_build_sets_building_timestamp_only_on_first_slave_allocation(self):
@@ -345,13 +354,13 @@ class TestBuild(BaseUnitTestCase):
         build = self._create_test_build(BuildStatus.PREPARED)
         scheduler = self.scheduler_pool.get(build)
 
-        self.assertIsNone(build.get_state_timestamp(BuildStatus.BUILDING),
+        self.assertIsNone(self._get_build_state_timestamp(build, BuildState.BUILDING),
                           '"building" timestamp should not be set until slave allocated.')
 
         scheduler.allocate_slave(slave=mock_slave1)
-        building_timestamp1 = build.get_state_timestamp(BuildStatus.BUILDING)
+        building_timestamp1 = self._get_build_state_timestamp(build, BuildState.BUILDING)
         scheduler.allocate_slave(slave=mock_slave2)
-        building_timestamp2 = build.get_state_timestamp(BuildStatus.BUILDING)
+        building_timestamp2 = self._get_build_state_timestamp(build, BuildState.BUILDING)
 
         self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first slave allocated.')
         self.assertEqual(building_timestamp1, building_timestamp2,
@@ -360,31 +369,31 @@ class TestBuild(BaseUnitTestCase):
     def test_finishing_build_sets_finished_timestamp(self):
         build = self._create_test_build(BuildStatus.BUILDING)
 
-        self.assertIsNone(build.get_state_timestamp(BuildStatus.FINISHED),
+        self.assertIsNone(self._get_build_state_timestamp(build, BuildState.FINISHED),
                           '"finished" timestamp should not be set until build finishes.')
 
         self._finish_test_build(build)
-        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.FINISHED),
+        self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.FINISHED),
                              '"finished" timestamp should be set when build finishes.')
 
     def test_marking_build_failed_sets_error_timestamp(self):
         build = self._create_test_build(BuildStatus.BUILDING)
 
-        self.assertIsNone(build.get_state_timestamp(BuildStatus.ERROR),
+        self.assertIsNone(self._get_build_state_timestamp(build, BuildState.ERROR),
                           '"error" timestamp should not be set unless build fails.')
 
         build.mark_failed('Test build was intentionally marked failed.')
-        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.ERROR),
+        self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.ERROR),
                              '"error" timestamp should be set when build fails.')
 
     def test_canceling_build_sets_canceled_timestamp(self):
         build = self._create_test_build(BuildStatus.BUILDING)
 
-        self.assertIsNone(build.get_state_timestamp(BuildStatus.CANCELED),
+        self.assertIsNone(self._get_build_state_timestamp(build, BuildState.CANCELED),
                           '"canceled" timestamp should not be set unless build is canceled.')
 
         build.cancel()
-        self.assertIsNotNone(build.get_state_timestamp(BuildStatus.CANCELED),
+        self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.CANCELED),
                              '"canceled" timestamp should be set when build is canceled.')
 
     def test_get_failed_atoms_returns_none_if_not_finished(self):
@@ -571,3 +580,13 @@ class TestBuild(BaseUnitTestCase):
             callback()
 
         build._perform_async_postbuild_tasks = async_postbuild_tasks_with_callback
+
+    def _get_build_state_timestamp(self, build, build_state):
+        """
+        Get the recorded timestamp for a given build status. This may be None if the build has
+        not yet reached the specified state.
+        :type build: Build
+        :type build_state: BuildState
+        :rtype: float | None
+        """
+        return build.api_representation()['state_timestamps'].get(build_state.lower())

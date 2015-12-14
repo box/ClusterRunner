@@ -13,7 +13,7 @@ class BuildRequestHandler(object):
 
     Implementation notes:
 
-    This class manages two critical Queue's in ClusterRunner: request_queue and builds_waiting_for_slaves.
+    This class manages two critical Queues in ClusterRunner: request_queue and builds_waiting_for_slaves.
 
     The request_queue is the queue of non-prepared Build instances that the BuildRequestHandler has
     yet to prepare. This queue is populated by the ClusterMaster instance.
@@ -107,6 +107,6 @@ class BuildRequestHandler(object):
                     self._builds_waiting_for_slaves.put(build)
 
             except Exception as ex:  # pylint: disable=broad-except
-                build.mark_failed(str(ex))
+                build.mark_failed(str(ex))  # WIP(joey): Build should do this internally.
                 self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
                 analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=False)

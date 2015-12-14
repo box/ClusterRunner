@@ -230,7 +230,7 @@ class ClusterMaster(ClusterService):
         if build_request.is_valid():
             build = Build(build_request)
             self._all_builds_by_id[build.build_id()] = build
-            build.generate_project_type()
+            build.generate_project_type()  # WIP(joey): This should be internal to the Build object.
             self._build_request_handler.handle_build_request(build)
             response = {'build_id': build.build_id()}
             success = True
@@ -274,7 +274,7 @@ class ClusterMaster(ClusterService):
         build = self._all_builds_by_id[int(build_id)]
         slave = self._all_slaves_by_url[slave_url]
         # If the build has been canceled, don't work on the next subjob.
-        if not build.is_finished:
+        if not build.is_finished:  # WIP(joey): This check should be internal to the Build object.
             try:
                 build.complete_subjob(subjob_id, payload)
             finally:

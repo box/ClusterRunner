@@ -19,6 +19,7 @@ class TestMasterEndpoints(BaseFunctionalTestCase):
 
     def test_cancel_build(self):
         master, build_id = self._start_master_only_and_post_a_new_job()
+
         master.cancel_build(build_id)
         master.block_until_build_finished(build_id)
 
@@ -26,8 +27,10 @@ class TestMasterEndpoints(BaseFunctionalTestCase):
 
     def test_get_artifact_before_it_is_ready(self):
         master, build_id = self._start_master_only_and_post_a_new_job()
+
         # Since we didn't start any slaves so the artifacts is actually not ready.
         _, status_code = master.get_build_artifacts(build_id)
         self.assertEqual(status_code, 202)
 
-
+        # Cancel the started build just to speed up teardown (avoid teardown timeout waiting for empty queue)
+        master.cancel_build(build_id)

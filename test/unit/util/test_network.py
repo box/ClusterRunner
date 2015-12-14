@@ -84,7 +84,7 @@ class TestNetwork(BaseUnitTestCase):
         self._patch_socket_gethostbyname(side_effect=side_effect)
         self.assertEqual(Network.are_hosts_same(*host_to_id), expect_hosts_are_same)
 
-    def test_get_host_id_of_localhost(self):
+    def test_get_host_id_of_localhost(self):  # todo: this is an integration test -- move it to integration dir
         local_host_name = socket.gethostname()
         self.assertEqual(
             Network.get_host_id('localhost'),

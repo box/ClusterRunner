@@ -21,7 +21,7 @@ class BuildSchedulerPool(object):
         with self._scheduler_creation_lock:
             scheduler = self._schedulers_by_build_id.get(build.build_id())
             if scheduler is None:
-                # WIP: clean up old schedulers (search through list and remove any with finished builds)
+                # WIP(joey): clean up old schedulers (search through list and remove any with finished builds)
                 scheduler = BuildScheduler(build)
                 self._schedulers_by_build_id[build.build_id()] = scheduler
 
