@@ -2,7 +2,7 @@ from queue import LifoQueue, Queue
 import signal
 from threading import current_thread, Lock, main_thread
 
-from app.util import app_info, log
+from app.util import app_info, log, process_utils
 from app.util.singleton import Singleton
 
 
@@ -21,11 +21,10 @@ class UnhandledExceptionHandler(Singleton):
     HANDLED_EXCEPTION_EXIT_CODE = 1
     EXCEPTION_DURING_TEARDOWN_EXIT_CODE = 2
 
-    SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
     _SIGINFO_DEBUG_LOG = '/tmp/clusterrunner.debug.log'
 
     _signal_names = {
-        SIGINFO: 'SIGINFO',
+        process_utils.SIGINFO: 'SIGINFO',
         signal.SIGINT: 'SIGINT',
         signal.SIGTERM: 'SIGTERM',
     }
@@ -45,7 +44,7 @@ class UnhandledExceptionHandler(Singleton):
         signal.signal(signal.SIGTERM, self._application_teardown_signal_handler)
         signal.signal(signal.SIGINT, self._application_teardown_signal_handler)
         try:
-            signal.signal(self.SIGINFO, self._application_info_dump_signal_handler)
+            signal.signal(process_utils.SIGINFO, self._application_info_dump_signal_handler)
         except ValueError:
             self._logger.warning('Failed at registering signal handler for SIGINFO. This is expected if ClusterRunner'
                                  'is running on Windows.')
@@ -57,7 +56,7 @@ class UnhandledExceptionHandler(Singleton):
         want to inherit all the signal handlers.
         """
         signals_to_reset = dict(cls._signal_names)
-        signals_to_reset.pop(cls.SIGINFO, None)  # Leave the SIGINFO handler for forked subprocesses
+        signals_to_reset.pop(process_utils.SIGINFO, None)  # Leave the SIGINFO handler for forked subprocesses
         for signal_num in signals_to_reset:
             signal.signal(signal_num, signal.SIG_DFL)  # SIG_DFL restores the default behavior for each signal
 
