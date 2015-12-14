@@ -1,7 +1,10 @@
 from contextlib import suppress
 import os
 import subprocess
-from subprocess import TimeoutExpired
+import time
+
+
+SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
 
 
 def kill_gracefully(process, timeout=2):
@@ -10,7 +13,7 @@ def kill_gracefully(process, timeout=2):
     does not exit within the given timeout, the process is killed (SIGKILL).
 
     :param process: The process to terminate or kill
-    :type process: Popen
+    :type process: subprocess.Popen
     :param timeout: Number of seconds to wait after terminate before killing
     :type timeout: int
     :return: The exit code, stdout, and stderr of the process
@@ -20,7 +23,11 @@ def kill_gracefully(process, timeout=2):
         with suppress(ProcessLookupError):
             process.terminate()
         stdout, stderr = process.communicate(timeout=timeout)
-    except TimeoutExpired:
+
+    except subprocess.TimeoutExpired:
+        if not is_windows():
+            process.send_signal(SIGINFO)  # this assumes a debug handler has been registered for SIGINFO
+            time.sleep(1)  # give the logger a chance to write out debug info
         process.kill()
         stdout, stderr = process.communicate()
 
