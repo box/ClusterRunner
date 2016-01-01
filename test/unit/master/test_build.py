@@ -334,6 +334,13 @@ class TestBuild(BaseUnitTestCase):
         self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.QUEUED),
                              '"queued" timestamp should be set immediately after build creation.')
 
+    def test_preparing_build_with_no_atoms_raises_error(self):
+        mock_subjob_calc = self._create_mock_subjob_calc([])
+        build = self._create_test_build(BuildStatus.QUEUED)
+
+        with self.assertRaises(RuntimeError, msg='Atomizer for build found no atoms to run.'):
+            build.prepare(mock_subjob_calc)
+
     def test_preparing_build_sets_prepared_timestamps(self):
         job_config = self._create_job_config()
         subjobs = self._create_subjobs(job_config=job_config)

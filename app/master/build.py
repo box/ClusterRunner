@@ -143,6 +143,8 @@ class Build(object):
             raise RuntimeError('Build failed while trying to parse clusterrunner.yaml.')
 
         subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
+        if len(subjobs) == 0:
+            raise RuntimeError('Atomizer for build found no atoms to run.')
 
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
         self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
