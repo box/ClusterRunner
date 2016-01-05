@@ -181,16 +181,18 @@ class TestBuild(BaseUnitTestCase):
             build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
     @genty_dataset(
-        max_executors_reached=(1, False),
-        max_executors_not_reached=(30, True),
+        max_executors_reached=(1, False, 100),
+        max_executors_not_reached=(30, True, 100),
+        fewer_subjobs_than_max_executors=(30, False, 1),
     )
-    def test_need_more_slaves_returns_false_if_and_only_if_max_executors_is_reached(
+    def test_need_more_slaves(
             self,
             max_executors_for_build,
-            build_should_need_more_slaves
+            build_should_need_more_slaves,
+            num_subjobs
     ):
         job_config = self._create_job_config(max_executors=max_executors_for_build)
-        build = self._create_test_build(BuildStatus.PREPARED, num_subjobs=100, job_config=job_config)
+        build = self._create_test_build(BuildStatus.PREPARED, num_subjobs=num_subjobs, job_config=job_config)
         scheduler = self.scheduler_pool.get(build)
 
         mock_slave = self._create_mock_slave(num_executors=5)

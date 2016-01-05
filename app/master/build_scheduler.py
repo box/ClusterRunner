@@ -49,7 +49,13 @@ class BuildScheduler(object):
 
         :rtype: bool
         """
-        return self._num_executors_allocated < self._max_executors and not self._build._unstarted_subjobs.empty()
+        if self._num_executors_allocated >= self._max_executors:
+            return False
+        if self._build._unstarted_subjobs.empty():
+            return False
+        if self._num_executors_allocated >= len(self._build.all_subjobs()):
+            return False
+        return True
 
     def allocate_slave(self, slave):
         """
