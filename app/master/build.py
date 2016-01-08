@@ -112,9 +112,12 @@ class Build(object):
         project_type_params = self.build_request.build_parameters()
         project_type_params.update({'build_project_directory': build_specific_project_directory})
         self._project_type = util.create_project_type(project_type_params)
-
         if self._project_type is None:
             raise BuildProjectError('Build failed due to an invalid project type.')
+
+        # Create the build results directory.
+        if not os.path.exists(self._build_results_dir()):
+            os.mkdir(self._build_results_dir())
 
     def prepare(self, subjob_calculator):
         """
@@ -254,7 +257,7 @@ class Build(object):
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
             self._logger.info("All results received for build {}!", self._build_id)
-            SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
+            SafeThread(target=self.perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
 
     def mark_started(self):
         """
@@ -431,7 +434,7 @@ class Build(object):
             return BuildResult.FAILURE
         return None
 
-    def _perform_async_postbuild_tasks(self):
+    def perform_async_postbuild_tasks(self):
         """
         Once a build is complete, certain tasks can be performed asynchronously.
         """
