@@ -32,12 +32,6 @@ class BaseConfigLoader(object):
         conf.set('main_executable_path', sys.argv[0])
         conf.set('version', autoversioning.get_version())
 
-        # Where the clusterrunner service will save the process id to. These settings are set in base_config_loader
-        # and not in master_config_loader and slave_config_loader because CLI tools such as "clusterrunner stop"
-        # needs to read in these settings.
-        conf.set('master_pid_file', '/tmp/.clusterrunner_master.pid')
-        conf.set('slave_pid_file', '/tmp/.clusterrunner_slave.pid')
-
         # If the user installed ClusterRunner manually, the directories used by the manual install should take
         # precedence over the default install location (the home directory).
         static_configured_base_directory = join('/var', 'lib', 'clusterrunner')
@@ -52,6 +46,12 @@ class BaseConfigLoader(object):
         # the path to the clusterrunner config file. We have to specify this in defaults since it cannot depend on
         # values in the file it refers to.
         conf.set('config_file', join(base_directory, 'clusterrunner.conf'))
+
+        # Where the clusterrunner service will save the process id to. These settings are set in base_config_loader
+        # and not in master_config_loader and slave_config_loader because CLI tools such as "clusterrunner stop"
+        # needs to read in these settings.
+        conf.set('master_pid_file', join(base_directory, '.clusterrunner_master.pid'))
+        conf.set('slave_pid_file', join(base_directory, '.clusterrunner_slave.pid'))
 
         # contains symlinks to build-specific repos
         conf.set('build_symlink_directory', join('/tmp', 'clusterrunner_build_symlinks'))
