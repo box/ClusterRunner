@@ -115,10 +115,6 @@ class Build(object):
         if self._project_type is None:
             raise BuildProjectError('Build failed due to an invalid project type.')
 
-        # Create the build results directory.
-        if not os.path.exists(self._build_results_dir()):
-            os.mkdir(self._build_results_dir())
-
     def prepare(self, subjob_calculator):
         """
         :param subjob_calculator: Used after project fetch to atomize and group subjobs for this build
@@ -155,7 +151,7 @@ class Build(object):
             self._unstarted_subjobs.put(subjob)
 
         self._timing_file_path = self._project_type.timing_file_path(job_config.name)
-
+        app.util.fs.create_dir(self._build_results_dir())
         self._state_machine.trigger(BuildEvent.FINISH_PREPARE)
 
     def build_id(self):
@@ -257,13 +253,20 @@ class Build(object):
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
             self._logger.info("All results received for build {}!", self._build_id)
-            SafeThread(target=self.perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
+            SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
 
     def mark_started(self):
         """
         Mark the build as started.
         """
         self._state_machine.trigger(BuildEvent.START_BUILDING)
+
+    def finish(self):
+        """
+        Perform postbuild task and mark this build as finished.
+        """
+        # This method also transitions the FSM to finished after the postbuild tasks are complete.
+        self._perform_async_postbuild_tasks()
 
     def mark_failed(self, failure_reason):
         """
@@ -434,7 +437,7 @@ class Build(object):
             return BuildResult.FAILURE
         return None
 
-    def perform_async_postbuild_tasks(self):
+    def _perform_async_postbuild_tasks(self):
         """
         Once a build is complete, certain tasks can be performed asynchronously.
         """

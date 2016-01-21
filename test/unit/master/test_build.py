@@ -575,13 +575,13 @@ class TestBuild(BaseUnitTestCase):
 
     def _on_async_postbuild_tasks_completed(self, build, callback):
         # Patch a build so it executes the specified callback after its PostBuild thread finishes.
-        original_async_postbuild_method = build.perform_async_postbuild_tasks
+        original_async_postbuild_method = build._perform_async_postbuild_tasks
 
         def async_postbuild_tasks_with_callback():
             original_async_postbuild_method()
             callback()
 
-        build.perform_async_postbuild_tasks = async_postbuild_tasks_with_callback
+        build._perform_async_postbuild_tasks = async_postbuild_tasks_with_callback
 
     def _get_build_state_timestamp(self, build, build_state):
         """

@@ -31,7 +31,7 @@ class BuildEvent(str, Enum):
 
 class BuildFsm(object):
     """
-                          +--------+
+                      +--------+
       (initial state) >>> | QUEUED |-----+
                           +--------+     |
                                |         |
@@ -46,15 +46,15 @@ class BuildFsm(object):
                          +----------+    |                 |
                          | PREPARED |----|                 |
                          +----------+    |                 | FAIL
-                               |         |                 v
-                START_BUILDING |         |   FAIL   +---------+
-                               v         |-----+--->|  ERROR  |<--+
-                         +----------+    |     |    +---------+   |
-                         | BUILDING |----+     |          |       |
-                         +----------+          |          +-------+
-                               |               |             FAIL
-      POSTBUILD_TASKS_COMPLETE |               |            CANCEL
-                               v               |
+                               |   |     |                 v
+                START_BUILDING |   |     |   FAIL   +---------+
+                               v   |     |-----+--->|  ERROR  |<--+
+                      +----------+ |     |     |    +---------+   |
+                      | BUILDING |-(-----+     |          |       |
+                      +----------+ |           |          +-------+
+                               |   |           |             FAIL
+      POSTBUILD_TASKS_COMPLETE |   |           |            CANCEL
+                               v   v           |
                          +----------+          |
                      +-->| FINISHED |----------+
                      |   +----------+
@@ -97,7 +97,10 @@ class BuildFsm(object):
                  'dst': BuildState.BUILDING},
 
                 {'name': BuildEvent.POSTBUILD_TASKS_COMPLETE,
-                 'src': BuildState.BUILDING,
+                 'src': [
+                     BuildState.PREPARED,
+                     BuildState.BUILDING,
+                 ],
                  'dst': BuildState.FINISHED},
 
                 {'name': BuildEvent.CANCEL,
