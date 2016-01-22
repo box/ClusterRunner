@@ -102,6 +102,10 @@ class BuildRequestHandler(object):
             try:
                 build.prepare(self._subjob_calculator)
                 if not build.has_error:
+                    # If the atomizer found no work to do, perform build cleanup and skip the slave allocation.
+                    if len(build.all_subjobs()) == 0:
+                        self._logger.info('Build {} has no work to perform and is exiting.', build.build_id())
+                        build.finish()
                     analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=True,
                                            log_msg='Build {build_id} successfully prepared and waiting for slaves.')
                     self._builds_waiting_for_slaves.put(build)

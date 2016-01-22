@@ -112,7 +112,6 @@ class Build(object):
         project_type_params = self.build_request.build_parameters()
         project_type_params.update({'build_project_directory': build_specific_project_directory})
         self._project_type = util.create_project_type(project_type_params)
-
         if self._project_type is None:
             raise BuildProjectError('Build failed due to an invalid project type.')
 
@@ -152,7 +151,7 @@ class Build(object):
             self._unstarted_subjobs.put(subjob)
 
         self._timing_file_path = self._project_type.timing_file_path(job_config.name)
-
+        app.util.fs.create_dir(self._build_results_dir())
         self._state_machine.trigger(BuildEvent.FINISH_PREPARE)
 
     def build_id(self):
@@ -261,6 +260,13 @@ class Build(object):
         Mark the build as started.
         """
         self._state_machine.trigger(BuildEvent.START_BUILDING)
+
+    def finish(self):
+        """
+        Perform postbuild task and mark this build as finished.
+        """
+        # This method also transitions the FSM to finished after the postbuild tasks are complete.
+        self._perform_async_postbuild_tasks()
 
     def mark_failed(self, failure_reason):
         """
