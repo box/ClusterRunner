@@ -350,6 +350,14 @@ class TestBuild(BaseUnitTestCase):
         self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.PREPARED),
                              '"prepared" timestamp should not be set before build preparation.')
 
+    def test_preparing_build_creates_empty_results_directory(self):
+        subjob_calculator = self._create_mock_subjob_calc([])
+        build = self._create_test_build(BuildStatus.QUEUED)
+
+        build.prepare(subjob_calculator)
+
+        self.mock_util.fs.create_dir.assert_called_once_with(build._build_results_dir())
+
     def test_allocating_slave_to_build_sets_building_timestamp_only_on_first_slave_allocation(self):
         mock_slave1 = self._create_mock_slave()
         mock_slave2 = self._create_mock_slave()
