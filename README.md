@@ -7,7 +7,7 @@
 
 ClusterRunner makes it easy to execute test-suites across your infrastructure in the fastest and most efficient way possible.
 
-By using cluster runner in your testing pipeline, you will be able to easily:
+By using ClusterRunner in your testing pipeline, you will be able to easily:
 
 - Make linear (i.e.: single-threaded) test jobs run in parallel
 - Consistently utilize 100% of your testing infrastructure
