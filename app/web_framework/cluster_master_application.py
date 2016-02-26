@@ -4,6 +4,9 @@ import urllib.parse
 
 import tornado.web
 
+import prometheus_client
+from prometheus_client import Histogram
+
 from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -19,6 +22,9 @@ from app.web_framework.route_node import RouteNode
 # pylint: disable=attribute-defined-outside-init
 #   Handler classes are not designed to have __init__ overridden.
 
+request_latency = Histogram('request_latency_seconds', 'Latency of HTTP requests in seconds')  # pylint: disable=no-value-for-parameter
+
+
 class ClusterMasterApplication(ClusterApplication):
 
     def __init__(self, cluster_master):
@@ -33,6 +39,7 @@ class ClusterMasterApplication(ClusterApplication):
         root_route = \
             RouteNode(r'/', _RootHandler).add_children([
                 RouteNode(r'v1', _APIVersionOneHandler).add_children([
+                    RouteNode(r'metrics', _MetricsHandler),
                     RouteNode(r'version', _VersionHandler),
                     RouteNode(r'build', _BuildsHandler, 'builds').add_children([
                         RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
@@ -100,6 +107,7 @@ class _RootHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _APIVersionOneHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self):
         response = {
             'master': self._cluster_master.api_representation(),
@@ -108,6 +116,7 @@ class _APIVersionOneHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _VersionHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self):
         response = {
             'version': Configuration['version'],
@@ -115,7 +124,14 @@ class _VersionHandler(_ClusterMasterBaseAPIHandler):
         self.write(response)
 
 
+class _MetricsHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
+    def get(self):
+        self.write_text(prometheus_client.exposition.generate_latest(prometheus_client.core.REGISTRY))
+
+
 class _QueueHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self):
         response = {
             'queue': [build.api_representation() for build in self._cluster_master.active_builds()]
@@ -124,6 +140,7 @@ class _QueueHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _SubjobsHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, build_id):
         build = self._cluster_master.get_build(int(build_id))
         response = {
@@ -133,6 +150,7 @@ class _SubjobsHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _SubjobHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, build_id, subjob_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -143,6 +161,7 @@ class _SubjobHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _SubjobResultHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def post(self, build_id, subjob_id):
         slave_url = self.decoded_body.get('slave')
         slave = self._cluster_master.get_slave(slave_url=slave_url)
@@ -158,12 +177,14 @@ class _SubjobResultHandler(_ClusterMasterBaseAPIHandler):
             slave_url, int(build_id), int(subjob_id), file_payload[0])
         self._write_status()
 
+    @request_latency.time()
     def get(self, build_id, subjob_id):
         # TODO: return the subjob's result archive here?
         self.write({'status': 'not implemented'})
 
 
 class _AtomsHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, build_id, subjob_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -174,6 +195,7 @@ class _AtomsHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _AtomHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, build_id, subjob_id, atom_id):
         build = self._cluster_master.get_build(int(build_id))
         subjob = build.subjob(int(subjob_id))
@@ -185,6 +207,7 @@ class _AtomHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _AtomConsoleHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, build_id, subjob_id, atom_id):
         """
         :type build_id: int
@@ -231,12 +254,14 @@ class _AtomConsoleHandler(_ClusterMasterBaseAPIHandler):
 
 class _BuildsHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
+    @request_latency.time()
     def post(self):
         build_params = self.decoded_body
         success, response = self._cluster_master.handle_request_for_new_build(build_params)
         status_code = http.client.ACCEPTED if success else http.client.BAD_REQUEST
         self._write_status(response, success, status_code=status_code)
 
+    @request_latency.time()
     def get(self):
         response = {
             'builds': [build.api_representation() for build in self._cluster_master.builds()]
@@ -246,12 +271,14 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
 
 class _BuildHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
+    @request_latency.time()
     def put(self, build_id):
         update_params = self.decoded_body
         success, response = self._cluster_master.handle_request_to_update_build(build_id, update_params)
         status_code = http.client.OK if success else http.client.BAD_REQUEST
         self._write_status(response, success, status_code=status_code)
 
+    @request_latency.time()
     def get(self, build_id):
         response = {
             'build': self._cluster_master.get_build(int(build_id)).api_representation(),
@@ -263,6 +290,7 @@ class _BuildResultRedirectHandler(_ClusterMasterBaseAPIHandler):
     """
     Redirect to the actual build results file download URL.
     """
+    @request_latency.time()
     def get(self, build_id):
         self.redirect('/v1/build/{}/artifacts.tar.gz'.format(build_id))
 
@@ -275,6 +303,7 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
 
     From the Tornado docs: "for heavy traffic it will be more efficient to use a dedicated static file server".
     """
+    @request_latency.time()
     def initialize(self, route_node=None, cluster_master=None):
         """
         :param route_node: This is not used, it is only a param so we can pass route_node to all handlers without error.
@@ -285,6 +314,7 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
         self._cluster_master = cluster_master
         super().initialize(path=None)  # we will not set the root path until the get() method is called
 
+    @request_latency.time()
     def get(self, build_id, path=None):
         artifact_file_path = self._cluster_master.get_path_for_build_results_archive(int(build_id))
         self.root, artifact_filename = os.path.split(artifact_file_path)
@@ -293,12 +323,14 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
 
 
 class _SlavesHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def post(self):
         slave_url = self.decoded_body.get('slave')
         num_executors = int(self.decoded_body.get('num_executors'))
         response = self._cluster_master.connect_slave(slave_url, num_executors)
         self._write_status(response, status_code=201)
 
+    @request_latency.time()
     def get(self):
         response = {
             'slaves': [slave.api_representation() for slave in self._cluster_master.all_slaves_by_id().values()]
@@ -307,6 +339,7 @@ class _SlavesHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _SlaveHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self, slave_id):
         slave = self._cluster_master.get_slave(int(slave_id))
         response = {
@@ -315,6 +348,7 @@ class _SlaveHandler(_ClusterMasterBaseAPIHandler):
         self.write(response)
 
     @authenticated
+    @request_latency.time()
     def put(self, slave_id):
         new_slave_state = self.decoded_body.get('slave', {}).get('state')
         slave = self._cluster_master.get_slave(int(slave_id))
@@ -326,6 +360,7 @@ class _SlaveHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _EventlogHandler(_ClusterMasterBaseAPIHandler):
+    @request_latency.time()
     def get(self):
         # all arguments are optional, so default to None
         since_timestamp = self.get_query_argument('since_timestamp', None)
@@ -337,6 +372,7 @@ class _EventlogHandler(_ClusterMasterBaseAPIHandler):
 
 class _SlaveShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
+    @request_latency.time()
     def post(self, slave_id):
         slaves_to_shutdown = [int(slave_id)]
 
@@ -345,6 +381,7 @@ class _SlaveShutdownHandler(_ClusterMasterBaseAPIHandler):
 
 class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
+    @request_latency.time()
     def post(self):
         shutdown_all = self.decoded_body.get('shutdown_all')
         slaves_to_shutdown = self._cluster_master.all_slaves_by_id().keys() if shutdown_all else\
