@@ -29,6 +29,9 @@ class Slave(object):
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
         self._logger = log.get_logger(__name__)
 
+    def __str__(self):
+        return '<slave #{} - {}>'.format(self.id, self.url)
+
     def api_representation(self):
         return {
             'url': self.url,
