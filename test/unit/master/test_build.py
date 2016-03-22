@@ -38,7 +38,6 @@ class TestBuild(BaseUnitTestCase):
         self.patch('app.master.build.BuildArtifact.__new__')  # patch __new__ to mock instances but keep static methods
         self.mock_util = self.patch('app.master.build.app.util')  # stub out util - it often interacts with the fs
         self.mock_open = self.patch('app.master.build.open', autospec=False, create=True)
-        self.mock_rmtree = self.patch('shutil.rmtree')
         self.mock_listdir = self.patch('os.listdir')
         self.scheduler_pool = BuildSchedulerPool()
 
@@ -434,11 +433,11 @@ class TestBuild(BaseUnitTestCase):
     def test_delete_temporary_build_artifact_files_skips_results_tarball(self):
         build = self._create_test_build(BuildStatus.BUILDING)
         self.mock_listdir.return_value = ['some_dir1', 'results.tar.gz']
-        expected_rmtree_call_path = join(build._build_results_dir(), 'some_dir1')
+        expected_async_delete_call_path = join(build._build_results_dir(), 'some_dir1')
 
         build._delete_temporary_build_artifact_files()
 
-        self.mock_rmtree.assert_called_once_with(expected_rmtree_call_path)
+        self.mock_util.fs.async_delete.assert_called_once_with(expected_async_delete_call_path)
 
     def _create_test_build(
             self,

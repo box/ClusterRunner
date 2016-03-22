@@ -466,11 +466,7 @@ class Build(object):
             # skip deleting it.
             if path == 'results.tar.gz':
                 continue
-            full_path = os.path.join(build_result_dir, path)
-            if os.path.isdir(full_path):
-                shutil.rmtree(full_path)
-            else:
-                os.remove(full_path)
+            app.util.fs.async_delete(os.path.join(build_result_dir, path))
 
     def _build_results_dir(self):
         return BuildArtifact.build_artifact_directory(self.build_id(), result_root=Configuration['results_directory'])
