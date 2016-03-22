@@ -450,20 +450,20 @@ class Build(object):
         self._build_artifact = BuildArtifact(self._build_results_dir())
         self._build_artifact.generate_failures_file()
         self._build_artifact.write_timing_data(self._timing_file_path, self._read_subjob_timings_from_results())
-        self._artifacts_archive_file = app.util.fs.compress_directory(self._build_results_dir(), 'results.tar.gz')
+        self._artifacts_archive_file = app.util.fs.compress_directory(self._build_results_dir(),
+                                                                      BuildArtifact.ARTIFACT_FILE_NAME)
 
     def _delete_temporary_build_artifact_files(self):
         """
         Delete the temporary build result files that are no longer needed, due to the creation of the
-        build artifact tarball (results.tar.gz).
+        build artifact tarball.
 
         ONLY call this method after _create_build_artifact() has completed. Otherwise we have lost the build results.
         """
         build_result_dir = self._build_results_dir()
         for path in os.listdir(build_result_dir):
-            # The build result tar-ball (results.tar.gz) is also stored in this same directory, so we must
-            # skip deleting it.
-            if path == 'results.tar.gz':
+            # The build result tar-ball is also stored in this same directory, so we must not delete it.
+            if path == BuildArtifact.ARTIFACT_FILE_NAME:
                 continue
             app.util.fs.async_delete(os.path.join(build_result_dir, path))
 

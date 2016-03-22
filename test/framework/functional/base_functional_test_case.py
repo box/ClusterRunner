@@ -11,6 +11,7 @@ from app.util.fs import create_dir, extract_tar
 from app.util.process_utils import is_windows
 from app.util.network import Network
 from app.util.secret import Secret
+from app.master.build_artifact import BuildArtifact
 from test.framework.functional.fs_item import Directory
 from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
 
@@ -182,7 +183,7 @@ class BaseFunctionalTestCase(TestCase):
         :type download_dir: str
         """
         download_artifacts_url = master_api.url('build', build_id, 'result')
-        download_filepath = os.path.join(download_dir, 'results.tar.gz')
+        download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_FILE_NAME)
         response = self._network.get(download_artifacts_url)
 
         if response.status_code == http.client.OK:

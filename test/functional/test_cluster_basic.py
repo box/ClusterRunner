@@ -5,6 +5,7 @@ import yaml
 
 from genty import genty, genty_dataset
 
+from app.master.build_artifact import BuildArtifact
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.framework.functional.fs_item import Directory, File
 from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, JOB_WITH_SETUP_AND_TEARDOWN
@@ -74,7 +75,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
             ])
             for i in range(10)
         ]
-        expected_artifact_contents.append(File('results.tar.gz'))
+        expected_artifact_contents.append(File(BuildArtifact.ARTIFACT_FILE_NAME))
 
         self.assert_build_has_successful_status(build_id=build_id)
         self.assert_build_status_contains_expected_data(
