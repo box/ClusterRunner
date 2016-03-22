@@ -49,7 +49,6 @@ BasicJob:
         Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
         Directory('artifact_3_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 3\n')]),
         Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
-        File('results.tar.gz'),
     ],
 )
 
@@ -83,7 +82,6 @@ BasicFailingJob:
         Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
         Directory('artifact_3_0', DEFAULT_ATOM_FILES),
         Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
-        File('results.tar.gz'),
         File('failures.txt', contents='artifact_3_0'),
     ],
 )

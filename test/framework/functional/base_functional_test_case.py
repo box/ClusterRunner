@@ -1,4 +1,5 @@
 from contextlib import suppress
+import http.client
 import os
 from os import path
 import shutil
@@ -6,8 +7,11 @@ import tempfile
 from unittest import TestCase
 
 from app.util import log
+from app.util.fs import create_dir, extract_tar
 from app.util.process_utils import is_windows
+from app.util.network import Network
 from app.util.secret import Secret
+from app.master.build_artifact import BuildArtifact
 from test.framework.functional.fs_item import Directory
 from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
 
@@ -25,6 +29,7 @@ class BaseFunctionalTestCase(TestCase):
         Secret.set('testsecret')
 
         self.cluster = FunctionalTestCluster(verbose=self._get_test_verbosity())
+        self._network = Network()
 
     def _create_test_config_file(self, conf_values_to_set=None):
         """
@@ -142,17 +147,19 @@ class BaseFunctionalTestCase(TestCase):
             }
         self.assert_build_status_contains_expected_data(build_id, expected_failure_build_params)
 
-    def assert_build_artifact_contents_match_expected(self, build_id, expected_build_artifact_contents):
+    def assert_build_artifact_contents_match_expected(self, master_api, build_id, expected_build_artifact_contents):
         """
         Assert that artifact files for this build have the expected contents.
 
+        :type master_api: app.util.url_builder.UrlBuilder
         :param build_id: The id of the build whose artifacts to check
         :type build_id: int
         :param expected_build_artifact_contents: A list of FSItems corresponding to the expected artifact dir contents
         :type expected_build_artifact_contents: list[FSItem]
         """
-        build_artifacts_dir_path = os.path.join(self.cluster.master_app_base_dir.name, 'results', 'master', str(build_id))
-        self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
+        with tempfile.TemporaryDirectory() as build_artifacts_dir_path:
+            self._download_and_extract_results(master_api, build_id, build_artifacts_dir_path)
+            self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
 
     def assert_directory_contents_match_expected(self, dir_path, expected_dir_contents):
         """
@@ -168,3 +175,22 @@ class BaseFunctionalTestCase(TestCase):
             expected_dir_name = os.path.basename(dir_path)
             expected_build_artifacts = Directory(expected_dir_name, expected_dir_contents)
             expected_build_artifacts.assert_matches_path(dir_path, allow_extra_items=False)
+
+    def _download_and_extract_results(self, master_api, build_id, download_dir):
+        """
+        :type master_api: app.util.url_builder.UrlBuilder
+        :type build_id: int
+        :type download_dir: str
+        """
+        download_artifacts_url = master_api.url('build', build_id, 'result')
+        download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_FILE_NAME)
+        response = self._network.get(download_artifacts_url)
+
+        if response.status_code == http.client.OK:
+            # save tar file to disk, decompress, and delete
+            with open(download_filepath, 'wb') as file:
+                chunk_size = 500 * 1024
+                for chunk in response.iter_content(chunk_size):
+                    file.write(chunk)
+
+            extract_tar(download_filepath, delete=True)
