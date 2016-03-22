@@ -43,7 +43,10 @@ class TestClusterBasic(BaseFunctionalTestCase):
                 'num_atoms': test_job_config.expected_num_atoms,
                 'num_subjobs': test_job_config.expected_num_atoms})
         self.assert_build_artifact_contents_match_expected(
-            build_id=build_id, expected_build_artifact_contents=test_job_config.expected_artifact_contents)
+            master_api=master._api,
+            build_id=build_id,
+            expected_build_artifact_contents=test_job_config.expected_artifact_contents
+        )
         self.assert_directory_contents_match_expected(
             dir_path=project_dir.name, expected_dir_contents=test_job_config.expected_project_dir_contents)
 
