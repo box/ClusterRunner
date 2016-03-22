@@ -2,7 +2,6 @@ from collections import OrderedDict
 from enum import Enum
 import os
 from queue import Queue, Empty
-import shutil
 from threading import Lock
 import uuid
 
