@@ -2,6 +2,8 @@ from collections import OrderedDict
 from enum import Enum
 import os
 from queue import Queue, Empty
+import shutil
+import time
 from threading import Lock
 import uuid
 
@@ -461,11 +463,20 @@ class Build(object):
         ONLY call this method after _create_build_artifact() has completed. Otherwise we have lost the build results.
         """
         build_result_dir = self._build_results_dir()
+        start_time = time.time()
         for path in os.listdir(build_result_dir):
             # The build result tar-ball is also stored in this same directory, so we must not delete it.
             if path == BuildArtifact.ARTIFACT_FILE_NAME:
                 continue
-            app.util.fs.async_delete(os.path.join(build_result_dir, path))
+            full_path = os.path.join(build_result_dir, path)
+            # Do NOT use app.util.fs.async_delete() here. That call will generate a temp directory for every
+            # atom, which can be in the thousands per build, and can lead to running up against the ulimit -Hn.
+            if os.path.isdir:
+                shutil.rmtree(full_path, ignore_errors=True)
+            else:
+                os.remove(full_path)
+        end_time = time.time() - start_time
+        self._logger.info('Completed deleting artifact files for {}, took {:.1f} seconds.', self._build_id, end_time)
 
     def _build_results_dir(self):
         return BuildArtifact.build_artifact_directory(self.build_id(), result_root=Configuration['results_directory'])

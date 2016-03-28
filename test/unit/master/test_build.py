@@ -434,10 +434,12 @@ class TestBuild(BaseUnitTestCase):
         build = self._create_test_build(BuildStatus.BUILDING)
         self.mock_listdir.return_value = ['some_dir1', BuildArtifact.ARTIFACT_FILE_NAME]
         expected_async_delete_call_path = join(build._build_results_dir(), 'some_dir1')
+        self.patch('os.path.isdir').return_value = True
+        mock_shutil = self.patch('app.master.build.shutil')
 
         build._delete_temporary_build_artifact_files()
 
-        self.mock_util.fs.async_delete.assert_called_once_with(expected_async_delete_call_path)
+        mock_shutil.rmtree.assert_called_once_with(expected_async_delete_call_path, ignore_errors=True)
 
     def _create_test_build(
             self,
