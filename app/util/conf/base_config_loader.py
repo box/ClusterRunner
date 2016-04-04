@@ -92,6 +92,10 @@ class BaseConfigLoader(object):
         # the same way how the master gets the project.
         conf.set('get_project_from_master', True)
 
+        # Should we have shallow or full clones of the repository?
+        # The master must have full clones, as slaves fetch from the master, and one cannot fetch from a shallow clone.
+        conf.set('shallow_clones', False)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory

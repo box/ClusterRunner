@@ -14,11 +14,10 @@ class MasterConfigLoader(BaseConfigLoader):
         :type conf: Configuration
         """
         super().configure_defaults(conf)
-
         conf.set('port', 43000)
-
         conf.set('log_filename', 'clusterrunner_master.log')
         conf.set('eventlog_filename', 'eventlog_master.log')
+        conf.set('shallow_clones', False)
 
     def configure_postload(self, conf):
         """

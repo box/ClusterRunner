@@ -13,15 +13,13 @@ class SlaveConfigLoader(BaseConfigLoader):
         :type conf: Configuration
         """
         super().configure_defaults(conf)
-
         conf.set('port', 43001)
         conf.set('num_executors', 1)
-
         conf.set('log_filename', 'clusterrunner_slave.log')
         conf.set('eventlog_filename', 'eventlog_slave.log')
-
         conf.set('master_hostname', 'localhost')
         conf.set('master_port', 43000)
+        conf.set('shallow_clones', True)
 
     def configure_postload(self, conf):
         """
