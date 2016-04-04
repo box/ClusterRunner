@@ -72,11 +72,9 @@ class Git(ProjectType):
         """
         return Git._generate_path_from_repo_url(Configuration['timings_directory'], url)
 
-    # pylint: disable=redefined-builtin
-    # Disable "redefined-builtin" because renaming the "hash" parameter would be a breaking change.
     # todo: Deprecate the "branch" parameter and create a new one named "ref" to replace it.
     def __init__(self, url, build_project_directory='', project_directory='', remote='origin', branch='master',
-                 hash='FETCH_HEAD', config=None, job_name=None, remote_files=None, atoms_override=None):
+                 config=None, job_name=None, remote_files=None, atoms_override=None):
         """
         Note: the first line of each parameter docstring will be exposed as command line argument documentation for the
         clusterrunner build client.
@@ -91,8 +89,6 @@ class Git(ProjectType):
         :type remote: str
         :param branch: The git branch name on the remote to fetch
         :type branch: str
-        :param hash: The hash to reset hard on. If hash is not set, we use the FETCH_HEAD of <branch>.
-        :type hash: str
         :param config: a yaml string representing the project_type's config
         :type config: str|None
         :param job_name: a list of job names we intend to run
@@ -106,7 +102,6 @@ class Git(ProjectType):
         self._url = url
         self._remote = remote
         self._branch = branch
-        self._hash = hash
         self._repo_directory = self.get_full_repo_directory(self._url)
         self._timing_file_directory = self.get_timing_file_directory(self._url)
         self._local_ref = None
@@ -180,22 +175,22 @@ class Git(ProjectType):
         )
 
         # Validate and convert the user-specified hash/refspec to a full git hash
-        self._hash = self._execute_git_command_in_repo_and_raise_on_failure(
-            git_command='rev-parse {}'.format(self._hash),
-            error_msg='Could not rev-parse "{}" to a commit hash.'.format(self._hash)
+        fetch_head_hash = self._execute_git_command_in_repo_and_raise_on_failure(
+            git_command='rev-parse FETCH_HEAD',
+            error_msg='Could not rev-parse FETCH_HEAD of {} to a commit hash.'.format(self._branch)
         ).strip()
 
         # Save this hash as a local ref. Named local refs are necessary for slaves to fetch correctly from the master.
         # The local ref will be passed on to slaves instead of the user-specified branch.
-        self._local_ref = 'refs/clusterrunner/' + self._hash
+        self._local_ref = 'refs/clusterrunner/{}'.format(fetch_head_hash)
         self._execute_git_command_in_repo_and_raise_on_failure(
-            git_command='update-ref {} {}'.format(self._local_ref, self._hash),
+            git_command='update-ref {} {}'.format(self._local_ref, fetch_head_hash),
             error_msg='Could not update local ref.'
         )
 
         # The '--' argument acts as a delimiter to differentiate values that can be "tree-ish" or a "path"
         self._execute_git_command_in_repo_and_raise_on_failure(
-            git_command='reset --hard {} --'.format(self._hash),
+            git_command='reset --hard {} --'.format(fetch_head_hash),
             error_msg='Could not reset Git repo.'
         )
 
