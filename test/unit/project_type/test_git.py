@@ -136,25 +136,6 @@ class TestGit(BaseUnitTestCase):
 
         self.assertEqual(expected_timing_directory, actual_timing_directory)
 
-    def test_fetch_project_when_existing_repo_is_shallow_deletes_repo(self):
-        self.os_path_isfile_mock.return_value = True
-        self.os_path_exists_mock.return_value = True
-        mock_fs = self.patch('app.project_type.git.fs')
-        mock_rmtree = self.patch('shutil.rmtree')
-
-        git = Git('url')
-        git._repo_directory = 'fake/repo_path'
-        git._execute_and_raise_on_failure = MagicMock()
-        git.execute_command_in_project = Mock(return_value=('', 0))
-
-        mock_fs.create_dir.call_count = 0  # only measure calls made in _fetch_project
-        mock_rmtree.call_count = 0
-
-        git._fetch_project()
-
-        mock_rmtree.assert_called_once_with('fake/repo_path')
-        mock_fs.create_dir.assert_called_once_with('fake/repo_path', Git.DIRECTORY_PERMISSIONS)
-
     @genty_dataset(
         failed_rev_parse=(1, True),
         successful_rev_parse=(0, False),
@@ -168,7 +149,7 @@ class TestGit(BaseUnitTestCase):
         git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
         git.fetch_project()
 
-        git_clone_call = call(AnyStringMatching('git clone'), start_new_session=ANY,
+        git_clone_call = call(AnyStringMatching('git clone --depth=1'), start_new_session=ANY,
                               stdout=ANY, stderr=ANY, cwd=ANY, shell=ANY)
         if expect_git_clone_call:
             self.assertIn(git_clone_call, mock_popen.call_args_list, 'If "git rev-parse" returns a failing exit code, '

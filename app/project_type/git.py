@@ -1,5 +1,4 @@
 import os
-import shutil
 from urllib.parse import urlparse
 
 from app.project_type.project_type import ProjectType
@@ -149,28 +148,22 @@ class Git(ProjectType):
         """
         Clones the project if necessary, fetches from the remote repo and resets to the requested commit
         """
-        # For backward compatibility: If a shallow repo exists, delete it.  Shallow cloning is no longer supported,
-        # it causes failures when fetching refs that depend on commits which are excluded from the shallow clone.
-        existing_repo_is_shallow = os.path.isfile(os.path.join(self._repo_directory, '.git', 'shallow'))
-        if existing_repo_is_shallow:
-            if os.path.exists(self._repo_directory):
-                shutil.rmtree(self._repo_directory)
-                fs.create_dir(self._repo_directory, self.DIRECTORY_PERMISSIONS)
-
         # Clone the repo if it doesn't exist
         try:
             self._execute_git_command_in_repo_and_raise_on_failure('rev-parse')  # rev-parse succeeds if repo exists
         except RuntimeError:
             self._logger.notice('No valid repo in "{}". Cloning fresh from "{}".', self._repo_directory, self._url)
+            # Clone with --depth=1 for shallow clones in order to improve performance.
             self._execute_git_command_in_repo_and_raise_on_failure(
-                git_command='clone {} {}'. format(self._url, self._repo_directory),
+                git_command='clone --depth=1 {} {}'. format(self._url, self._repo_directory),
                 error_msg='Could not clone repo.'
             )
 
         # Must add the --update-head-ok in the scenario that the current branch of the working directory
         # is equal to self._branch, otherwise the git fetch will exit with a non-zero exit code.
+        # Must add the --depth=1 in order to have shallow fetches in order to improve performance.
         self._execute_git_command_in_repo_and_raise_on_failure(
-            git_command='fetch --update-head-ok {} {}'.format(self._remote, self._branch),
+            git_command='fetch --depth=1 --update-head-ok {} {}'.format(self._remote, self._branch),
             error_msg='Could not fetch specified branch "{}" from remote "{}".'.format(self._branch, self._remote)
         )
 
