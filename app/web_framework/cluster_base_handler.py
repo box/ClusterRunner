@@ -91,7 +91,10 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
         the current instance's session id, then the requester is asking for a resource that has expired and
         no longer exists.
         """
-        session_id = self.request.headers.get(SessionId.SESSION_HEADER_KEY)
+        # An expected session header in a *request* should be declared using the "Expected-Session-Id" header
+        # but for legacy support an expected header can also be specified with the "Session-Id" header.
+        session_id = self.request.headers.get(SessionId.SESSION_HEADER_KEY) \
+            or self.request.headers.get(SessionId.EXPECTED_SESSION_HEADER_KEY)
 
         if session_id is not None and session_id != SessionId.get():
             raise PreconditionFailedError('Specified session id: {} has expired and is invalid.'.format(session_id))

@@ -5,6 +5,7 @@ from app.util.counter import Counter
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
+from app.util.session_id import SessionId
 from app.util.url_builder import UrlBuilder
 
 
@@ -137,6 +138,9 @@ class Slave(object):
         """
         Is the slave API responsive?
 
+        Note that if the slave API responds but its session id does not match the one we've stored in this
+        instance, then this method will still return false.
+
         :param use_cached: Should we use the last returned value of the network check to the slave? If True,
             will return cached value. If False, this method will perform an actual network call to the slave.
         :type use_cached: bool
@@ -146,7 +150,7 @@ class Slave(object):
             return self._is_alive
 
         try:
-            response = self._network.get(self._slave_api.url())
+            response = self._network.get(self._slave_api.url(), headers=self._expected_session_header())
 
             if not response.ok:
                 self._is_alive = False
@@ -204,6 +208,23 @@ class Slave(object):
         """
         self.set_is_alive(False)
         self.current_build_id = None
+
+    def _expected_session_header(self):
+        """
+        Return headers that should be sent with slave requests to verify that the master is still talking to
+        the same slave service that it originally connected to.
+
+        Note that adding these headers to existing requests may add new failure cases (e.g., slave API would
+        start returning a 412) so we should make sure all potential 412 errors are handled appropriately when
+        adding these headers to existing requests.
+
+        :rtype: dict
+        """
+        headers = {}
+        if self._session_id:
+            headers[SessionId.EXPECTED_SESSION_HEADER_KEY] = self._session_id
+
+        return headers
 
 
 class DeadSlaveError(Exception):

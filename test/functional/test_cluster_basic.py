@@ -67,7 +67,6 @@ class TestClusterBasic(BaseFunctionalTestCase):
         self.assert_build_artifact_contents_match_expected(
             build_id=build_id, expected_build_artifact_contents=expected_artifact_contents)
 
-    @skip('This test currently fails due to https://github.com/box/ClusterRunner/issues/296.')
     def test_slave_reconnection_does_not_take_down_master(self):
         test_config = JOB_WITH_SETUP_AND_TEARDOWN
         job_config = yaml.safe_load(test_config.config[os.name])['JobWithSetupAndTeardown']
