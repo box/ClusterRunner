@@ -108,15 +108,17 @@ class ClusterMaster(ClusterService):
 
         raise ItemNotFoundError('Requested slave ({}) does not exist.'.format(slave_id))
 
-    def connect_slave(self, slave_url, num_executors):
+    def connect_slave(self, slave_url, num_executors, slave_session_id=None):
         """
         Connect a slave to this master.
 
         :type slave_url: str
         :type num_executors: int
+        :type slave_session_id: str | None
         :return: The response with the slave id of the slave.
         :rtype: dict[str, str]
         """
+        # todo: Validate arg types for this and other methods called via API.
         # If a slave had previously been connected, and is now being reconnected, the cleanest way to resolve this
         # bookkeeping is for the master to forget about the previous slave instance and start with a fresh instance.
         if slave_url in self._all_slaves_by_url:
@@ -138,7 +140,7 @@ class ClusterMaster(ClusterService):
                     self._logger.info('Failed to find build {} that was running on {}', old_slave.current_build_id,
                                       slave_url)
 
-        slave = Slave(slave_url, num_executors)
+        slave = Slave(slave_url, num_executors, slave_session_id)
         self._all_slaves_by_url[slave_url] = slave
         self._slave_allocator.add_idle_slave(slave)
         self._logger.info('Slave on {} connected to master with {} executors. (id: {})',

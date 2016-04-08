@@ -13,10 +13,11 @@ class Slave(object):
     API_VERSION = 'v1'
     _slave_id_counter = Counter()
 
-    def __init__(self, slave_url, num_executors):
+    def __init__(self, slave_url, num_executors, slave_session_id=None):
         """
         :type slave_url: str
         :type num_executors: int
+        :type slave_session_id: str
         """
         self.url = slave_url
         self.num_executors = num_executors
@@ -27,12 +28,14 @@ class Slave(object):
         self._is_alive = True
         self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
+        self._session_id = slave_session_id
         self._logger = log.get_logger(__name__)
 
     def api_representation(self):
         return {
             'url': self.url,
             'id': self.id,
+            'session_id': self._session_id,
             'num_executors': self.num_executors,
             'num_executors_in_use': self.num_executors_in_use(),
             'current_build_id': self.current_build_id,

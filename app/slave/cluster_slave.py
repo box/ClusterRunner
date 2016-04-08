@@ -13,6 +13,7 @@ from app.util.exceptions import BadRequestError
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
 from app.util.secret import Secret
+from app.util.session_id import SessionId
 from app.util.single_use_coin import SingleUseCoin
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from app.util.url_builder import UrlBuilder
@@ -67,6 +68,7 @@ class ClusterSlave(ClusterService):
             'current_build_id': self._current_build_id,
             'slave_id': self._slave_id,
             'executors': executors_representation,
+            'session_id': SessionId.get(),
         }
 
     def get_status(self):
@@ -226,6 +228,7 @@ class ClusterSlave(ClusterService):
         data = {
             'slave': '{}:{}'.format(self.host, self.port),
             'num_executors': self._num_executors,
+            'session_id': SessionId.get()
         }
         response = self._network.post(connect_url, data=data)
         self._slave_id = int(response.json().get('slave_id'))
