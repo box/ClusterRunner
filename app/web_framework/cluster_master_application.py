@@ -8,8 +8,7 @@ from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
-from app.util.exceptions import ItemNotFoundError, PreconditionFailedError
-from app.util.session_id import SessionId
+from app.util.exceptions import ItemNotFoundError
 from app.util.url_builder import UrlBuilder
 from app.web_framework.cluster_application import ClusterApplication
 from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler, ClusterBaseHandler
@@ -73,26 +72,6 @@ class _ClusterMasterBaseAPIHandler(ClusterBaseAPIHandler):
         self._logger = log.get_logger(__name__)
         self._cluster_master = cluster_master
         super().initialize(route_node)
-
-    def prepare(self):
-        """
-        If the request has specified the session id, which is optional, and the session id does not match
-        the current instance's session id, then the client is asking for a resource that has expired and
-        no longer exists.
-        """
-        session_id = self.request.headers.get(SessionId.SESSION_HEADER_KEY)
-
-        if session_id is not None and session_id != SessionId.get():
-            raise PreconditionFailedError('Specified session id: {} has expired and is invalid.'.format(session_id))
-
-        super().prepare()
-
-    def set_default_headers(self):
-        """
-        Inject the session id in the header.
-        """
-        self.set_header(SessionId.SESSION_HEADER_KEY, SessionId.get())
-        super().set_default_headers()
 
 
 class _RootHandler(_ClusterMasterBaseAPIHandler):
@@ -296,7 +275,8 @@ class _SlavesHandler(_ClusterMasterBaseAPIHandler):
     def post(self):
         slave_url = self.decoded_body.get('slave')
         num_executors = int(self.decoded_body.get('num_executors'))
-        response = self._cluster_master.connect_slave(slave_url, num_executors)
+        session_id = self.decoded_body.get('session_id')
+        response = self._cluster_master.connect_slave(slave_url, num_executors, session_id)
         self._write_status(response, status_code=201)
 
     def get(self):

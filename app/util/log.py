@@ -11,6 +11,7 @@ from termcolor import colored
 
 from app.util import autoversioning, fs
 from app.util.conf.configuration import Configuration
+from app.util.session_id import SessionId
 
 
 # This custom format string takes care of setting field widths to make logs more aligned and readable.
@@ -123,7 +124,7 @@ def configure_logging(log_level=None, log_file=None, simplified_console_logs=Fal
             event_handler.log_application_summary()
 
 
-def application_summary(logfile_count):
+def application_summary(logfile_count):  # todo: move this method to app_info.py
     """
     Return a string summarizing general info about the application. This will be output at the start of every logfile.
 
@@ -133,8 +134,9 @@ def application_summary(logfile_count):
     separator = '*' * 50
     summary_lines = [
         ' ClusterRunner',
-        '  * Version: {}'.format(autoversioning.get_version()),
-        '  * PID:     {}'.format(os.getpid()),
+        '  * Version:    {}'.format(autoversioning.get_version()),
+        '  * PID:        {}'.format(os.getpid()),
+        '  * Session id: {}'.format(SessionId.get()),
     ]
     if logfile_count > 1:
         summary_lines.append('  * Logfile count: {}'.format(logfile_count))
