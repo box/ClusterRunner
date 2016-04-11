@@ -49,8 +49,7 @@ class SlaveAllocator(object):
                 if build_scheduler.needs_more_slaves():
                     # Potential race condition here!  If the build completes after the if statement is checked,
                     # a slave will be allocated needlessly (and run slave.setup(), which can be significant work).
-                    self._logger.info('Allocating slave {} to build {}.',
-                                      claimed_slave.url, build_scheduler.build_id)
+                    self._logger.info('Allocating {} to build {}.', claimed_slave, build_scheduler.build_id)
                     build_scheduler.allocate_slave(claimed_slave)
                 else:
                     self.add_idle_slave(claimed_slave)

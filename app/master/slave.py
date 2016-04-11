@@ -31,6 +31,9 @@ class Slave(object):
         self._session_id = slave_session_id
         self._logger = log.get_logger(__name__)
 
+    def __str__(self):
+        return '<slave #{} - {}>'.format(self.id, self.url)
+
     def api_representation(self):
         return {
             'url': self.url,

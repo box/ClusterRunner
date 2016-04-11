@@ -3,7 +3,6 @@ import os
 import subprocess
 import time
 
-
 SIGINFO = 29  # signal.SIGINFO is not present in all Python distributions
 
 
@@ -25,12 +24,27 @@ def kill_gracefully(process, timeout=2):
         stdout, stderr = process.communicate(timeout=timeout)
 
     except subprocess.TimeoutExpired:
+        _, stdout, stderr = kill_hard(process)
+
+    return process.returncode, stdout, stderr
+
+
+def kill_hard(process):
+    """
+    Kill the specified process immediately using SIGKILL.
+
+    :param process: The process to terminate or kill
+    :type process: subprocess.Popen
+    :return: The exit code, stdout, and stderr of the process
+    :rtype: (int, str, str)
+    """
+    with suppress(ProcessLookupError):
         if not is_windows():
             process.send_signal(SIGINFO)  # this assumes a debug handler has been registered for SIGINFO
             time.sleep(1)  # give the logger a chance to write out debug info
         process.kill()
-        stdout, stderr = process.communicate()
 
+    stdout, stderr = process.communicate()
     return process.returncode, stdout, stderr
 
 

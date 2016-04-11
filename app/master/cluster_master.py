@@ -122,23 +122,23 @@ class ClusterMaster(ClusterService):
         # If a slave had previously been connected, and is now being reconnected, the cleanest way to resolve this
         # bookkeeping is for the master to forget about the previous slave instance and start with a fresh instance.
         if slave_url in self._all_slaves_by_url:
-            self._logger.warning('Slave on {} requested to connect to master, even though previously connected. ' +
-                                 'Removing existing slave instance from the master\'s bookkeeping.', slave_url)
             old_slave = self._all_slaves_by_url.get(slave_url)
+            self._logger.warning('Slave requested to connect to master, even though previously connected as {}. ' +
+                                 'Removing existing slave instance from the master\'s bookkeeping.', old_slave)
 
             # If a slave has requested to reconnect, we have to assume that whatever build the dead slave was
             # working on no longer has valid results.
             if old_slave.current_build_id is not None:
-                self._logger.info('{} has build [{}] running on it. Attempting to cancel build.', slave_url,
+                self._logger.info('{} has build [{}] running on it. Attempting to cancel build.', old_slave,
                                   old_slave.current_build_id)
                 try:
                     build = self.get_build(old_slave.current_build_id)
                     build.cancel()
                     self._logger.info('Cancelled build {} due to dead slave {}', old_slave.current_build_id,
-                                      slave_url)
+                                      old_slave)
                 except ItemNotFoundError:
                     self._logger.info('Failed to find build {} that was running on {}', old_slave.current_build_id,
-                                      slave_url)
+                                      old_slave)
 
         slave = Slave(slave_url, num_executors, slave_session_id)
         self._all_slaves_by_url[slave_url] = slave

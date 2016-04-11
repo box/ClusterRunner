@@ -92,7 +92,7 @@ class FunctionalTestCluster(object):
         self._start_master_process()
         return self.master_api_client
 
-    def start_slaves(self, num_slaves, num_executors_per_slave=1):
+    def start_slaves(self, num_slaves, num_executors_per_slave=1, start_port=None):
         """
         Start slave services for this cluster.
 
@@ -100,10 +100,13 @@ class FunctionalTestCluster(object):
         :type num_slaves: int
         :param num_executors_per_slave: The number of executors that each slave will be configured to use
         :type num_executors_per_slave: int
+        :param start_port: The port number of the first slave to launch. If None, default to the current counter.
+            Subsequent slaves will be started on subsequent port numbers.
+        :type start_port: int | None
         :return: A list of API client objects through which API calls to each slave can be made
         :rtype: list[ClusterSlaveAPIClient]
         """
-        new_slaves = self._start_slave_processes(num_slaves, num_executors_per_slave)
+        new_slaves = self._start_slave_processes(num_slaves, num_executors_per_slave, start_port)
         return [ClusterSlaveAPIClient(base_api_url=slave.url) for slave in new_slaves]
 
     def start_slave(self, **kwargs):
@@ -172,7 +175,7 @@ class FunctionalTestCluster(object):
         if not master_is_ready:
             raise TestClusterTimeoutError('Master service did not start up before timeout.')
 
-    def _start_slave_processes(self, num_slaves, num_executors_per_slave):
+    def _start_slave_processes(self, num_slaves, num_executors_per_slave, start_port=None):
         """
         Start the slave processes on localhost.
 
@@ -180,12 +183,18 @@ class FunctionalTestCluster(object):
         :type num_slaves: int
         :param num_executors_per_slave: The number of executors to start each slave with
         :type num_executors_per_slave: int
+        :param start_port: The port number of the first slave to launch. If None, default to the current counter.
+            Subsequent slaves will be started on subsequent port numbers.
+        :type start_port: int | None
         :return: A list of ClusterController objects which wrap the slave services' Popen instances
         :rtype: list[ClusterController]
         """
         popen_kwargs = {}
         if not self._verbose:
             popen_kwargs.update({'stdout': DEVNULL, 'stderr': DEVNULL})  # hide output of slave process
+
+        if start_port is not None:
+            self._next_slave_port = start_port
 
         slave_hostname = 'localhost'
         new_slaves = []
@@ -295,16 +304,18 @@ class FunctionalTestCluster(object):
         master, self.master = self.master, None
         return master
 
-    def kill_slaves(self):
+    def kill_slaves(self, kill_gracefully=True):
         """
         Kill all the slave processes and return objects wrapping the return code, stdout, and stderr of each process.
 
+        :param kill_gracefully: If True do a gracefull kill (sigterm), else do a sigkill
+        :type kill_gracefully: bool
         :return: The killed slave services with return code, stdout, and stderr set.
         :rtype: list[ClusterController]
         """
         for service in self.slaves:
             if service:
-                service.kill()
+                service.kill(kill_gracefully)
 
         slaves, self.slaves = self.slaves, []
         return slaves
@@ -356,14 +367,25 @@ class ClusterController(object):
         self.stdout = None
         self.stderr = None
 
-    def kill(self):
+        self._logger = log.get_logger(__name__)
+
+    def kill(self, kill_gracefully=True):
         """
         Kill the underlying process for this service object and set the return code and output.
 
+        :param kill_gracefully: If True do a gracefull kill (sigterm), else do a sigkill
+        :type kill_gracefully: bool
         :return: The return code, stdout, and stderr of the process
         :rtype: (int, str, str)
         """
-        self.return_code, self.stdout, self.stderr = process_utils.kill_gracefully(self.process, timeout=15)
+        if kill_gracefully:
+            self._logger.notice('Gracefully killing process with pid {}...'.format(self.process.pid))
+            output = process_utils.kill_gracefully(self.process, timeout=15)
+        else:
+            self._logger.notice('Hard killing process with pid {}...'.format(self.process.pid))
+            output = process_utils.kill_hard(self.process)
+
+        self.return_code, self.stdout, self.stderr = output
         return self.return_code, self.stdout, self.stderr
 
     @property
