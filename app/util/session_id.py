@@ -2,7 +2,9 @@ import uuid
 
 
 class SessionId(object):
+    EXPECTED_SESSION_HEADER_KEY = 'Expected-Session-Id'
     SESSION_HEADER_KEY = 'Session-Id'
+
     _session_id = None
 
     @classmethod

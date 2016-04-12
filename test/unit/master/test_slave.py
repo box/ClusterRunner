@@ -6,6 +6,7 @@ from app.master.build_request import BuildRequest
 from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave
 from app.master.subjob import Subjob
 from app.util.secret import Secret
+from app.util.session_id import SessionId
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
@@ -118,6 +119,17 @@ class TestSlave(BaseUnitTestCase):
         is_slave_alive = slave.is_alive(use_cached=False)
 
         self.assertTrue(is_slave_alive)
+
+    def test_is_alive_makes_correct_network_call_to_slave(self):
+        slave = self._create_slave(
+            slave_url='fake.slave.gov:43001',
+            slave_session_id='abc-123')
+
+        slave.is_alive(use_cached=False)
+
+        self.mock_network.get.assert_called_once_with(
+            'http://fake.slave.gov:43001/v1',
+            headers={SessionId.EXPECTED_SESSION_HEADER_KEY: 'abc-123'})
 
     def test_mark_as_idle_raises_when_executors_are_in_use(self):
         slave = self._create_slave()
