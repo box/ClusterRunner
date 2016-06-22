@@ -110,12 +110,12 @@ class TestBuild(BaseUnitTestCase):
         self.assertEqual(build._status(), BuildStatus.PREPARED,
                          'Build status should be PREPARED after build has been prepared.')
 
-    def test_build_status_returns_building_after_setup_has_started(self):
+    def test_build_status_returns_building_after_first_subjob_has_been_executed(self):
         mock_slave = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
         scheduler = self.scheduler_pool.get(build)
-
         scheduler.allocate_slave(mock_slave)
+        scheduler.execute_next_subjob_or_free_executor(mock_slave)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
                          'Build status should be BUILDING after setup has started on slaves.')
@@ -359,23 +359,22 @@ class TestBuild(BaseUnitTestCase):
 
         self.mock_util.fs.create_dir.assert_called_once_with(build._build_results_dir())
 
-    def test_allocating_slave_to_build_sets_building_timestamp_only_on_first_slave_allocation(self):
+    def test_execute_next_subjob_or_free_executor_sets_building_timestamp_only_on_first_execution(self):
         mock_slave1 = self._create_mock_slave()
-        mock_slave2 = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
         scheduler = self.scheduler_pool.get(build)
+        scheduler.allocate_slave(slave=mock_slave1)
 
         self.assertIsNone(self._get_build_state_timestamp(build, BuildState.BUILDING),
                           '"building" timestamp should not be set until slave allocated.')
 
-        scheduler.allocate_slave(slave=mock_slave1)
+        scheduler.execute_next_subjob_or_free_executor(mock_slave1)
         building_timestamp1 = self._get_build_state_timestamp(build, BuildState.BUILDING)
-        scheduler.allocate_slave(slave=mock_slave2)
+        scheduler.execute_next_subjob_or_free_executor(mock_slave1)
         building_timestamp2 = self._get_build_state_timestamp(build, BuildState.BUILDING)
-
-        self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first slave allocated.')
+        self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first subjob is started.')
         self.assertEqual(building_timestamp1, building_timestamp2,
-                         '"building" timestamp should not change upon further slave allocation.')
+                         '"building" timestamp should not change upon further subjob execution.')
 
     def test_finishing_build_sets_finished_timestamp(self):
         build = self._create_test_build(BuildStatus.BUILDING)

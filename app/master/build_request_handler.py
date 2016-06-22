@@ -23,15 +23,14 @@ class BuildRequestHandler(object):
     entity) to pull Builds from.
 
     All of the input of builds come through self.handle_build_request() calls, and all of the output
-    of builds go through self.next_prepared_build_scheduler() calls.
+    of builds go through self._scheduler_pool.next_prepared_build_scheduler() calls.
     """
     def __init__(self, scheduler_pool):
         """
-        :type scheduler_pool: BuildSchedulerPool
+        :type scheduler_pool: app.master.build_scheduler_pool.BuildSchedulerPool
         """
         self._logger = get_logger(__name__)
         self._scheduler_pool = scheduler_pool
-        self._builds_waiting_for_slaves = Queue()
         self._request_queue = Queue()
         self._request_queue_worker_thread = SafeThread(
             target=self._build_preparation_loop, name='RequestHandlerLoop', daemon=True)
@@ -54,19 +53,6 @@ class BuildRequestHandler(object):
         self._request_queue.put(build)
         analytics.record_event(analytics.BUILD_REQUEST_QUEUED, build_id=build.build_id(),
                                log_msg='Queued request for build {build_id}.')
-
-    def next_prepared_build_scheduler(self):
-        """
-        Get the scheduler for the next build that has successfully completed build preparation.
-
-        This is a blocking call--if there are no more builds that have completed build preparation and this
-        method gets invoked, the execution will hang until the next build has completed build preparation.
-
-        :rtype: BuildScheduler
-        """
-        build = self._builds_waiting_for_slaves.get()
-        build_scheduler = self._scheduler_pool.get(build)
-        return build_scheduler
 
     def _build_preparation_loop(self):
         """
@@ -111,7 +97,7 @@ class BuildRequestHandler(object):
                     # If there is work to be done, this build must queue to be allocated slaves.
                     else:
                         self._logger.info('Build {} is waiting for slaves.', build.build_id())
-                        self._builds_waiting_for_slaves.put(build)
+                        self._scheduler_pool.add_build_waiting_for_slaves(build)
 
             except Exception as ex:  # pylint: disable=broad-except
                 build.mark_failed(str(ex))  # WIP(joey): Build should do this internally.

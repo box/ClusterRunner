@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 from app.master.build import Build
-from app.master.build_request_handler import BuildRequestHandler
+from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -29,7 +29,7 @@ class TestSlaveAllocator(BaseUnitTestCase):
                           allocate_slave=Mock(side_effect=AbortLoopForTesting))
         mock_slave = Mock(spec=Slave, url='', is_alive=Mock(return_value=True), is_shutdown=Mock(return_value=False))
         slave_allocator = self._create_slave_allocator()
-        slave_allocator._build_request_handler.next_prepared_build_scheduler = Mock(return_value=mock_build)
+        slave_allocator._scheduler_pool.next_prepared_build_scheduler = Mock(return_value=mock_build)
         slave_allocator._idle_slaves.get = Mock(return_value=mock_slave)
 
         self.assertRaises(AbortLoopForTesting, slave_allocator._slave_allocation_loop)
@@ -38,7 +38,7 @@ class TestSlaveAllocator(BaseUnitTestCase):
         mock_build = Mock(spec=Build, needs_more_slaves=Mock(side_effect=[True, False]))
         mock_slave = Mock(spec=Slave, url='', is_alive=Mock(return_value=True), is_shutdown=Mock(return_value=False))
         slave_allocator = self._create_slave_allocator()
-        slave_allocator._build_request_handler.next_prepared_build_scheduler = Mock(return_value=mock_build)
+        slave_allocator._scheduler_pool.next_prepared_build_scheduler = Mock(return_value=mock_build)
         slave_allocator._idle_slaves.get = Mock(return_value=mock_slave)
         slave_allocator.add_idle_slave = Mock(side_effect=AbortLoopForTesting)
 
@@ -71,8 +71,7 @@ class TestSlaveAllocator(BaseUnitTestCase):
         :param kwargs: Any constructor parameters for the slave; if none are specified, test defaults will be used.
         :rtype: SlaveAllocator
         """
-        kwargs.setdefault('build_request_handler', Mock(spec_set=BuildRequestHandler))
-        return SlaveAllocator(**kwargs)
+        return SlaveAllocator(Mock(spec_set=BuildSchedulerPool))
 
 class AbortLoopForTesting(Exception):
     """
