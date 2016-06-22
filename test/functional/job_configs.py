@@ -151,3 +151,34 @@ JobWithSetupAndTeardown:
         File('subjob_file_3.txt', contents='setup.\nsubjob 3.\nteardown.\n'),
     ],
 )
+
+# This is a very basic job where each atom just creates a simple text file.
+JOB_WITH_SLEEPS = FunctionalTestJobConfig(
+    config={
+        'posix': """
+BasicSleepingJob:
+    commands:
+        - sleep 1
+    atomizers:
+        - TOKEN: seq 0 4 | xargs -I {} echo "This is atom {}"
+
+""",
+        'nt': """
+BasicSleepingJob:
+    commands:
+        - timeout 1 > NUL
+    atomizers:
+        - TOKEN: FOR /l %n in (0,1,4) DO @echo This is atom %n
+""",
+    },
+    expected_to_fail=False,
+    expected_num_subjobs=5,
+    expected_num_atoms=5,
+    expected_artifact_contents=[
+        Directory('artifact_0_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 0\n')]),
+        Directory('artifact_1_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 1\n')]),
+        Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
+        Directory('artifact_3_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 3\n')]),
+        Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
+    ],
+)

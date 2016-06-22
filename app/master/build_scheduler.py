@@ -20,14 +20,16 @@ class BuildScheduler(object):
     itself shouldn't know anything about its scheduler or slaves or where subjobs
     are executing. All that goes here.
 
-    Ususally this class is instantiated and managed by a BuildSchedulerPool.
+    This class is instantiated and managed by a BuildSchedulerPool.
     """
-    def __init__(self, build):
+    def __init__(self, build, scheduler_pool):
         """
-        :type build: Build
+        :type build: app.master.build.Build
+        :type scheduler_pool: app.master.build_scheduler_pool.BuildSchedulerPool
         """
         self._logger = get_logger(__name__)
         self._build = build
+        self._scheduler_pool = scheduler_pool
 
         job_config = build.project_type.job_config()
         self._max_executors = job_config.max_executors
@@ -63,10 +65,6 @@ class BuildScheduler(object):
 
         :type slave: Slave
         """
-        if not self._slaves_allocated:
-            # If this is the first slave to be allocated, update the build state.
-            self._build.mark_started()
-
         self._slaves_allocated.append(slave)
         slave.setup(self._build, executor_start_index=self._num_executors_allocated)
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
@@ -101,18 +99,23 @@ class BuildScheduler(object):
             # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
             # build would be stuck.
             with self._subjob_assignment_lock:
+                is_first_subjob = False
+                if self._build._unstarted_subjobs.qsize() == len(self._build.all_subjobs()):
+                    is_first_subjob = True
                 subjob = self._build._unstarted_subjobs.get(block=False)
                 self._logger.debug('Sending subjob {} (build {}) to slave {}.',
                                    subjob.subjob_id(), subjob.build_id(), slave.url)
                 try:
                     slave.start_subjob(subjob)
                     subjob.mark_in_progress(slave)
-
                 except SlaveMarkedForShutdownError:
                     self._build._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
                     # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
                     # Since the slave has been marked for shutdown, we need to free the executor.
                     self._free_slave_executor(slave)
+                else:
+                    if is_first_subjob:
+                        self._build.mark_started()
 
         except Empty:
             self._free_slave_executor(slave)
@@ -126,3 +129,8 @@ class BuildScheduler(object):
                 pass  # We have already deallocated this slave, no need to teardown
             else:
                 slave.teardown()
+                # If all slaves are removed from a build that isn't done, but had already started, then we must
+                # make sure that when slave resources are available again, that this build them allocated.
+                # https://github.com/box/ClusterRunner/issues/313
+                if len(self._slaves_allocated) == 0 and self.needs_more_slaves():
+                    self._scheduler_pool.add_build_waiting_for_slaves(self._build)
