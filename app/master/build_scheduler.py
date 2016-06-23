@@ -36,6 +36,7 @@ class BuildScheduler(object):
         self._max_executors_per_slave = job_config.max_executors_per_slave
 
         self._slaves_allocated = []
+        self._build_started = False
         self._num_executors_allocated = 0
         self._num_executors_in_use = 0
         self._subjob_assignment_lock = Lock()  # prevents subjobs from being skipped
@@ -65,6 +66,9 @@ class BuildScheduler(object):
 
         :type slave: Slave
         """
+        if not self._build_started:
+            self._build_started = True
+            self._build.mark_started()
         self._slaves_allocated.append(slave)
         slave.setup(self._build, executor_start_index=self._num_executors_allocated)
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
@@ -99,7 +103,6 @@ class BuildScheduler(object):
             # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
             # build would be stuck.
             with self._subjob_assignment_lock:
-                is_first_subjob = (self._build._unstarted_subjobs.qsize() == len(self._build.all_subjobs()))
                 subjob = self._build._unstarted_subjobs.get(block=False)
                 self._logger.debug('Sending subjob {} (build {}) to slave {}.',
                                    subjob.subjob_id(), subjob.build_id(), slave.url)
@@ -111,9 +114,6 @@ class BuildScheduler(object):
                     # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
                     # Since the slave has been marked for shutdown, we need to free the executor.
                     self._free_slave_executor(slave)
-                else:
-                    if is_first_subjob:
-                        self._build.mark_started()
 
         except Empty:
             self._free_slave_executor(slave)
