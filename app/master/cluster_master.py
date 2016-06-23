@@ -30,7 +30,7 @@ class ClusterMaster(ClusterService):
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
-        self._slave_allocator = SlaveAllocator(self._build_request_handler)
+        self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
 
         # Asynchronously delete (but immediately rename) all old builds when master starts.

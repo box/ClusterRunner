@@ -114,7 +114,6 @@ class TestBuild(BaseUnitTestCase):
         mock_slave = self._create_mock_slave()
         build = self._create_test_build(BuildStatus.PREPARED)
         scheduler = self.scheduler_pool.get(build)
-
         scheduler.allocate_slave(mock_slave)
 
         self.assertEqual(build._status(), BuildStatus.BUILDING,
@@ -372,7 +371,6 @@ class TestBuild(BaseUnitTestCase):
         building_timestamp1 = self._get_build_state_timestamp(build, BuildState.BUILDING)
         scheduler.allocate_slave(slave=mock_slave2)
         building_timestamp2 = self._get_build_state_timestamp(build, BuildState.BUILDING)
-
         self.assertIsNotNone(building_timestamp1, '"building" timestamp should be set after first slave allocated.')
         self.assertEqual(building_timestamp1, building_timestamp2,
                          '"building" timestamp should not change upon further slave allocation.')

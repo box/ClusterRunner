@@ -1,3 +1,4 @@
+from queue import Queue
 from threading import Lock
 
 from app.master.build_scheduler import BuildScheduler
@@ -12,6 +13,7 @@ class BuildSchedulerPool(object):
     def __init__(self):
         self._schedulers_by_build_id = {}
         self._scheduler_creation_lock = Lock()
+        self._builds_waiting_for_slaves = Queue()
 
     def get(self, build):
         """
@@ -22,7 +24,25 @@ class BuildSchedulerPool(object):
             scheduler = self._schedulers_by_build_id.get(build.build_id())
             if scheduler is None:
                 # WIP(joey): clean up old schedulers (search through list and remove any with finished builds)
-                scheduler = BuildScheduler(build)
+                scheduler = BuildScheduler(build, self)
                 self._schedulers_by_build_id[build.build_id()] = scheduler
 
         return scheduler
+
+    def next_prepared_build_scheduler(self):
+        """
+        Get the scheduler for the next build that has successfully completed build preparation.
+
+        This is a blocking call--if there are no more builds that have completed build preparation and this
+        method gets invoked, the execution will hang until the next build has completed build preparation.
+
+        :rtype: BuildScheduler
+        """
+        build = self._builds_waiting_for_slaves.get()
+        return self.get(build)
+
+    def add_build_waiting_for_slaves(self, build):
+        """
+        :type build: app.master.build.Build
+        """
+        self._builds_waiting_for_slaves.put(build)

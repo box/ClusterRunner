@@ -10,12 +10,12 @@ class SlaveAllocator(object):
     The SlaveAllocator class is responsible for allocating slaves to prepared builds.
     """
 
-    def __init__(self, build_request_handler):
+    def __init__(self, scheduler_pool):
         """
-        :type build_request_handler: BuildRequestHandler
+        :type scheduler_pool: app.master.build_scheduler_pool.BuildSchedulerPool
         """
         self._logger = get_logger(__name__)
-        self._build_request_handler = build_request_handler
+        self._scheduler_pool = scheduler_pool
         self._idle_slaves = OrderedSetQueue()
         self._allocation_thread = SafeThread(
             target=self._slave_allocation_loop, name='SlaveAllocationLoop', daemon=True)
@@ -36,7 +36,7 @@ class SlaveAllocator(object):
         """
         while True:
             # This is a blocking call that will block until there is a prepared build.
-            build_scheduler = self._build_request_handler.next_prepared_build_scheduler()
+            build_scheduler = self._scheduler_pool.next_prepared_build_scheduler()
 
             while build_scheduler.needs_more_slaves():
                 claimed_slave = self._idle_slaves.get()
