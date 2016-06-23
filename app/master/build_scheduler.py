@@ -99,9 +99,7 @@ class BuildScheduler(object):
             # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
             # build would be stuck.
             with self._subjob_assignment_lock:
-                is_first_subjob = False
-                if self._build._unstarted_subjobs.qsize() == len(self._build.all_subjobs()):
-                    is_first_subjob = True
+                is_first_subjob = (self._build._unstarted_subjobs.qsize() == len(self._build.all_subjobs()))
                 subjob = self._build._unstarted_subjobs.get(block=False)
                 self._logger.debug('Sending subjob {} (build {}) to slave {}.',
                                    subjob.subjob_id(), subjob.build_id(), slave.url)

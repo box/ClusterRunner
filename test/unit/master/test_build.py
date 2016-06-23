@@ -366,7 +366,7 @@ class TestBuild(BaseUnitTestCase):
         scheduler.allocate_slave(slave=mock_slave1)
 
         self.assertIsNone(self._get_build_state_timestamp(build, BuildState.BUILDING),
-                          '"building" timestamp should not be set until slave allocated.')
+                          '"building" timestamp should not be set until first subjob is started.')
 
         scheduler.execute_next_subjob_or_free_executor(mock_slave1)
         building_timestamp1 = self._get_build_state_timestamp(build, BuildState.BUILDING)

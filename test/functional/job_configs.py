@@ -152,7 +152,7 @@ JobWithSetupAndTeardown:
     ],
 )
 
-# This is a very basic job where each atom just creates a simple text file.
+# This is a very basic job where each atom just sleeps for 1 second.
 JOB_WITH_SLEEPS = FunctionalTestJobConfig(
     config={
         'posix': """
@@ -174,11 +174,4 @@ BasicSleepingJob:
     expected_to_fail=False,
     expected_num_subjobs=5,
     expected_num_atoms=5,
-    expected_artifact_contents=[
-        Directory('artifact_0_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 0\n')]),
-        Directory('artifact_1_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 1\n')]),
-        Directory('artifact_2_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 2\n')]),
-        Directory('artifact_3_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 3\n')]),
-        Directory('artifact_4_0', DEFAULT_ATOM_FILES + [File('result.txt', contents='This is atom 4\n')]),
-    ],
 )
