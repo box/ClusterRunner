@@ -31,7 +31,7 @@ class BuildEvent(str, Enum):
 
 class BuildFsm(object):
     """
-                      +--------+
+                          +--------+
       (initial state) >>> | QUEUED |-----+
                           +--------+     |
                                |         |
