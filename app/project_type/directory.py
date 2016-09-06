@@ -37,8 +37,9 @@ class Directory(ProjectType):
     def _fetch_project(self):
         dir_exists = os.path.isdir(self.project_directory)
         if not dir_exists:
-            raise RuntimeError('Could not find the directory "{}" on {}. Directory build mode is not supported on '
-                               'clusters with remote slaves.'.format(self.project_directory, node()))
+            raise RuntimeError('Could not find the directory "{}" on {}. Note that if you are running ClusterRunner '
+                               'on multiple hosts, "directory" type builds are not supported.'
+                               .format(self.project_directory, node()))
 
     def execute_command_in_project(self, *args, **kwargs):
         """
