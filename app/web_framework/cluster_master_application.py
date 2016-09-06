@@ -22,7 +22,7 @@ class ClusterMasterApplication(ClusterApplication):
 
     def __init__(self, cluster_master):
         """
-        :type cluster_master: ClusterMaster
+        :type cluster_master: app.master.cluster_master.ClusterMaster
         """
         default_params = {
             'cluster_master': cluster_master,
@@ -66,8 +66,8 @@ class ClusterMasterApplication(ClusterApplication):
 class _ClusterMasterBaseAPIHandler(ClusterBaseAPIHandler):
     def initialize(self, route_node=None, cluster_master=None):
         """
-        :type route_node: RouteNode | None
-        :type cluster_master: ClusterMaster | None
+        :type route_node: RouteNode
+        :type cluster_master: app.master.cluster_master.ClusterMaster
         """
         self._logger = log.get_logger(__name__)
         self._cluster_master = cluster_master

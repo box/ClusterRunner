@@ -76,7 +76,7 @@ class BuildRequestHandler(object):
 
     def _prepare_build_async(self, build, project_lock):
         """
-        :type build: Build
+        :type build: app.master.build.Build
         :type project_lock: Lock
         """
         self._logger.info('Build {} is waiting for the project lock', build.build_id())
