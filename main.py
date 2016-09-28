@@ -64,7 +64,7 @@ def _parse_args(args):
         help='the url of the master service with which the slave should communicate')
     slave_parser.add_argument(
         '-e', '--num-executors',
-        type=int, help='the number of executors to use, defaults to 30')
+        type=int, help='the number of executors to use, defaults to 1')
     slave_parser.set_defaults(subcommand_class=SlaveSubcommand)
 
     # arguments specific to both master and slave
