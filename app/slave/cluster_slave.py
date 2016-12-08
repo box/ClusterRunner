@@ -329,7 +329,7 @@ class ClusterSlave(ClusterService):
         """
         Exits without error.
         """
-        sys.exit(0)
+        sys.exit(0)  # Should trigger graceful shutdown which will send DISCONNECTED status to master.
 
 
 class SlaveState(str, Enum):

@@ -1,7 +1,7 @@
 from queue import Empty
 from threading import Lock
 
-from app.master.slave import SlaveMarkedForShutdownError
+from app.master.slave import SlaveMarkedForShutdownError, DeadSlaveError
 from app.util import analytics
 from app.util.log import get_logger
 
@@ -109,7 +109,7 @@ class BuildScheduler(object):
                 try:
                     slave.start_subjob(subjob)
                     subjob.mark_in_progress(slave)
-                except SlaveMarkedForShutdownError:
+                except (SlaveMarkedForShutdownError, DeadSlaveError):
                     self._build._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
                     # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
                     # Since the slave has been marked for shutdown, we need to free the executor.
