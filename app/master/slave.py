@@ -208,6 +208,7 @@ class Slave(object):
         """
         self.set_is_alive(False)
         self.current_build_id = None
+        self._network.reset_session()  # Close any pooled connections for this slave.
 
     def _expected_session_header(self):
         """

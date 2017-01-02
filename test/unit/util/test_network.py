@@ -2,6 +2,7 @@ import socket
 from unittest.mock import Mock
 
 from genty import genty, genty_dataset
+from requests import Session
 
 from app.util.network import Network
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -16,6 +17,7 @@ class TestNetwork(BaseUnitTestCase):
         super().setUp()
         self._hostname = 'host_name'
         self._ip = '8.8.8.8'
+        self.mock_session_cls = self.patch('app.util.network.requests.Session')
 
     def _patch_socket_gethostbyname(self, side_effect):
         get_host_by_name = self.patch('socket.gethostbyname')
@@ -92,3 +94,14 @@ class TestNetwork(BaseUnitTestCase):
             'Host id of "localhost" is not the same as host id of "{}"'.format(local_host_name),
         )
 
+    def test_reset_session_closes_and_recreates_session(self):
+        first_session = Mock(Session)
+        second_session = Mock(Session)
+        self.mock_session_cls.side_effect = [first_session, second_session]
+
+        network = Network()
+        network.reset_session()
+
+        self.assertEqual(self.mock_session_cls.call_count, 2, 'Two sessions should be created.')
+        self.assertEqual(first_session.close.call_count, 1, 'First session should be closed.')
+        self.assertEqual(second_session.close.call_count, 0, 'Second session should not be closed.')

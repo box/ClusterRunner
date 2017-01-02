@@ -9,7 +9,7 @@ test: test-unit test-functional
 
 init:
 	$(call print_msg, Installing requirements... )
-	pip install -r requirements.txt
+	pip install --upgrade -r requirements.txt
 
 pylint:
 	$(call print_msg, Running pylint... )

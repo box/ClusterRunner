@@ -21,11 +21,22 @@ class Network(object):
         :param min_connection_poolsize: The minimum connection pool size for this instance
         :type min_connection_poolsize: int
         """
-        self._session = requests.Session()
         self._logger = get_logger(__name__)
+        self._session = None
 
-        poolsize = max(min_connection_poolsize, DEFAULT_POOLSIZE)
-        self._session.mount('http://', HTTPAdapter(pool_connections=poolsize, pool_maxsize=poolsize))
+        self._poolsize = max(min_connection_poolsize, DEFAULT_POOLSIZE)
+        self.reset_session()
+
+    def reset_session(self):
+        """
+        Close and recreate the underlying session used to make requests. This allows us to close any
+        connections being held open for connection pooling, which otherwise will stay open for the
+        lifetime of the session object.
+        """
+        if self._session:
+            self._session.close()  # Close any pooled connections held by the previous session.
+        self._session = requests.Session()
+        self._session.mount('http://', HTTPAdapter(pool_connections=self._poolsize, pool_maxsize=self._poolsize))
 
     def get(self, *args, **kwargs):
         """
