@@ -120,6 +120,10 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
             response['child_routes'] = self.get_child_routes()
         super().write(response)
 
+    def write_text(self, response):
+        super().set_header('Content-Type', 'text/plain; charset=utf-8')
+        super().write(response)
+
     def _write_status(self, additional_response=None, success=True, status_code=200):
         status = self.SUCCESS_STATUS if success else self.FAILURE_STATUS
         response = {'status': status}
