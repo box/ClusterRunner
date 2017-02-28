@@ -1,0 +1,11 @@
+version: "2.1"
+services:
+    cluserrunner:
+      build:
+        context: .
+        dockerfile: Dockerfile.bin
+      image: yamaszone/clusterrunner:bin
+      ports:
+        - "43000:43000"
+        - "43001:43001"
+

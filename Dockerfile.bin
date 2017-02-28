@@ -12,4 +12,6 @@ RUN mkdir -p ~/.clusterrunner/dist \
         && chmod 600 clusterrunner.conf \
         && rm -f clusterrunner.tgz
 
+EXPOSE 43000 43001
+
 ENTRYPOINT ["/root/.clusterrunner/dist/clusterrunner"]

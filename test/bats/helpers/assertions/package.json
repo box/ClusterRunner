@@ -1,0 +1,45 @@
+{
+  "name": "bats-assert",
+  "version": "1.1.0",
+  "description": "Assertion library for BATS (Bash Automated Testing System)",
+  "author": "Mislav Marohnić <mislav.marohnic@gmail.com> (http://mislav.net)",
+  "contributors": [
+    "Sam Stephenson <sstephenson@gmail.com> (http://sstephenson.us/)",
+    "Jason Karns <jason@karns.name> (http://jason.karns.name/)"
+  ],
+  "homepage": "https://github.com/jasonkarns/bats-assert#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasonkarns/bats-assert.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jasonkarns/bats-assert/issues"
+  },
+  "scripts": {
+    "test": "bats test"
+  },
+  "main": "all.bash",
+  "files": [
+    "all.bash"
+  ],
+  "directories": {
+    "test": "test"
+  },
+  "peerDependencies": {
+    "bats": "^0.4.2"
+  },
+  "devDependencies": {
+    "bats": "^0.4.2"
+  },
+  "license": "MIT",
+  "keywords": [
+    "bash",
+    "bats",
+    "assert",
+    "assertion",
+    "expectation",
+    "shell",
+    "test",
+    "unit"
+  ]
+}

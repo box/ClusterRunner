@@ -8,4 +8,6 @@ ADD . /src
 
 RUN pip install --upgrade -r /src/requirements.txt
 
+EXPOSE 43000 43001
+
 ENTRYPOINT ["/src/main.py"]
