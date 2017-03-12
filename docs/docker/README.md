@@ -1,5 +1,4 @@
 ## TODO for Dockerization
-* Add more assertions for tests
 * Add maintainer
 * Lean-ify image (consider tiny base e.g. busybox, alpine, etc.)
 * Reorganize directory structure (cleaner project root preferred)
