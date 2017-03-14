@@ -55,7 +55,7 @@ INPUTS=`echo "${@:2}"`
 
 case $1 in
 	bin)
-		docker run --rm -v $PWD:/cr -w /cr $CR_BIN $INPUTS
+		docker run --rm $CR_BIN $INPUTS
 		;;
 	build)
 		build_images
@@ -64,7 +64,7 @@ case $1 in
 		push_images
 		;;
 	src)
-		docker run --rm -v $PWD:/cr -w /cr $CR_SRC $INPUTS
+		docker run --rm $CR_SRC $INPUTS
 		;;
 	# TechDebt: Could be a target in Makefile
 	# CoreOS doesn't come with Make; so staying within it's limits
