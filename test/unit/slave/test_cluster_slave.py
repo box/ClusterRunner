@@ -27,7 +27,7 @@ class TestClusterSlave(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.mock_network = self.patch('app.slave.cluster_slave.Network').return_value
-        self.patch('app.util.fs.compress_directories')
+        self.patch('app.util.fs.tar_directories')
 
     @genty_dataset(
         current_build_id_not_set=(None,),

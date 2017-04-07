@@ -110,7 +110,7 @@ class SubjobExecutor(object):
         subjob_artifact_dir = BuildArtifact.build_artifact_directory(build_id,
                                                                      result_root=Configuration['artifact_directory'])
         tarfile_path = os.path.join(subjob_artifact_dir, 'results_{}.tar.gz'.format(subjob_id))
-        fs_util.compress_directories(targets_to_archive_paths, tarfile_path)
+        fs_util.tar_directories(targets_to_archive_paths, tarfile_path)
 
         # Reset the current task
         self._current_build_id = None

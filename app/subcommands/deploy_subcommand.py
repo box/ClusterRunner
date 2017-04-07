@@ -109,7 +109,7 @@ class DeploySubcommand(Subcommand):
             self._logger.info('Compressed tar file {} already exists, skipping compression.'.format(tar_file_path))
             return tar_file_path
 
-        fs.compress_directory(clusterrunner_bin_dir, tar_file_path)
+        fs.tar_directory(clusterrunner_bin_dir, tar_file_path)
         return tar_file_path
 
     def _deploy_binaries_and_conf(self, host, username, current_executable, binaries_tar_path, in_use_conf_path):
