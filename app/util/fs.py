@@ -90,21 +90,27 @@ def extract_tar(archive_file, target_dir=None, delete=False):
             os.remove(archive_file)
 
 
-# TODO(dtran): Remove this function once its uses are deprecated.
-def compress_directory(target_dir, archive_filename):
+def tar_directory(target_dir: str, archive_filename: str) -> str:
+    """
+    Tar up the specified directory.
+    :param target_dir: directory whose contents to tar up and where the tar file will be created
+    :param archive_filename: name of the tar file
+    :return: path to the created tar file
+    """
     tar_file = os.path.join(
         target_dir,
         archive_filename
     )
-    with tarfile.open(tar_file, 'w:gz') as tar:
-        tar.add(target_dir, arcname=".")
-
+    tar_directories(
+        target_dirs_to_archive_paths={target_dir: '.'},
+        tarfile_path=tar_file,
+    )
     return tar_file
 
 
-def compress_directories(target_dirs_to_archive_paths, tarfile_path):
+def tar_directories(target_dirs_to_archive_paths, tarfile_path):
     """
-    Archive the specified directories
+    Tar up the specified directories.
     :param target_dirs_to_archive_paths: mapping of directories to their intended path in the archive file.
     :type target_dirs_to_archive_paths: dict
     :param tarfile_path: the path of the resulting archive file
@@ -112,7 +118,5 @@ def compress_directories(target_dirs_to_archive_paths, tarfile_path):
     """
     with tarfile.open(tarfile_path, 'w:gz') as tar:
         for dir_path, archive_name in target_dirs_to_archive_paths.items():
-            # Sanitize directory string
             target_dir = os.path.normpath(dir_path)
-
             tar.add(target_dir, arcname=archive_name)

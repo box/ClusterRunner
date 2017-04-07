@@ -14,7 +14,7 @@ class BuildArtifact(object):
     EXIT_CODE_FILE = 'clusterrunner_exit_code'
     OUTPUT_FILE = 'clusterrunner_console_output'
     TIMING_FILE = 'clusterrunner_time'
-    ARTIFACT_FILE_NAME = 'results.tar.gz'
+    ARTIFACT_TARFILE_NAME = 'results.tar.gz'
 
     def __init__(self, build_artifact_dir):
         """

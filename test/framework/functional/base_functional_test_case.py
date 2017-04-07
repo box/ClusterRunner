@@ -183,7 +183,7 @@ class BaseFunctionalTestCase(TestCase):
         :type download_dir: str
         """
         download_artifacts_url = master_api.url('build', build_id, 'result')
-        download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_FILE_NAME)
+        download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_TARFILE_NAME)
         response = self._network.get(download_artifacts_url)
 
         if response.status_code == http.client.OK:

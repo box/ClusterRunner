@@ -14,7 +14,7 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 class TestDeploySubcommand(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
-        self.patch('app.subcommands.deploy_subcommand.fs.compress_directory')
+        self.patch('app.subcommands.deploy_subcommand.fs.tar_directory')
 
     def test_binaries_tar_raises_exception_if_running_from_source(self):
         deploy_subcommand = DeploySubcommand()
