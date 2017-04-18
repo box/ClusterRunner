@@ -6,6 +6,9 @@ import tornado.web
 import prometheus_client
 from prometheus_client import Histogram
 
+import prometheus_client
+from prometheus_client import Histogram
+
 from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -281,6 +284,7 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
 
     From the Tornado docs: "for heavy traffic it will be more efficient to use a dedicated static file server".
     """
+    @request_latency.time()
     def initialize(self, route_node=None, cluster_master=None):
         """
         :param route_node: This is not used, it is only a param so we can pass route_node to all handlers without error.
