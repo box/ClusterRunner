@@ -60,6 +60,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
             for i in range(10)
         ]
         expected_artifact_contents.append(File(BuildArtifact.ARTIFACT_TARFILE_NAME))
+        expected_artifact_contents.append(File(BuildArtifact.ARTIFACT_ZIPFILE_NAME))
 
         self.assert_build_has_successful_status(build_id=build_id)
         self.assert_build_status_contains_expected_data(

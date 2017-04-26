@@ -39,6 +39,8 @@ class TestBuild(BaseUnitTestCase):
         self.mock_util = self.patch('app.master.build.app.util')  # stub out util - it often interacts with the fs
         self.mock_open = self.patch('app.master.build.open', autospec=False, create=True)
         self.mock_listdir = self.patch('os.listdir')
+        self.patch('tempfile.mktemp')
+        self.patch('shutil.move')
         self.scheduler_pool = BuildSchedulerPool()
 
     def test_allocate_slave_calls_slave_setup(self):
@@ -430,7 +432,11 @@ class TestBuild(BaseUnitTestCase):
 
     def test_delete_temporary_build_artifact_files_skips_results_tarball(self):
         build = self._create_test_build(BuildStatus.BUILDING)
-        self.mock_listdir.return_value = ['some_dir1', BuildArtifact.ARTIFACT_TARFILE_NAME]
+        self.mock_listdir.return_value = [
+            'some_dir1',
+            BuildArtifact.ARTIFACT_TARFILE_NAME,
+            BuildArtifact.ARTIFACT_ZIPFILE_NAME,
+        ]
         expected_async_delete_call_path = join(build._build_results_dir(), 'some_dir1')
         self.patch('os.path.isdir').return_value = True
         mock_shutil = self.patch('app.master.build.shutil')

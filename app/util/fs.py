@@ -120,3 +120,34 @@ def tar_directories(target_dirs_to_archive_paths, tarfile_path):
         for dir_path, archive_name in target_dirs_to_archive_paths.items():
             target_dir = os.path.normpath(dir_path)
             tar.add(target_dir, arcname=archive_name)
+
+
+def zip_directory(target_dir: str, archive_filename: str) -> str:
+    """
+    Zip up the specified directory and stick the resulting zip file in that directory.
+    :param target_dir: the directory to zip and the location of the resulting zip file
+    :param archive_filename: filename for the created zip file
+    :return: the full path to the created zip archive file
+    """
+    # Create the archive in a temp location and then move it to the target dir.
+    # (Otherwise the resulting archive will include an extra zero-byte file.)
+    tmp_path = shutil.make_archive(tempfile.mktemp(), 'zip', target_dir)
+    target_path = os.path.join(target_dir, archive_filename)
+    shutil.move(tmp_path, target_path)
+    return target_path
+
+
+def unzip_directory(archive_file: str, target_dir: str=None, delete: bool=False):
+    """
+    Extract the specified zip file.
+    :param archive_file: the zip archive file to extract
+    :param target_dir: the directory in which to extract; defaults to same as archive file
+    :param delete: whether to delete the zip archive file after unpacking
+    """
+    if not target_dir:
+        target_dir, _ = os.path.split(archive_file)  # default to same directory as archive file
+
+    shutil.unpack_archive(archive_file, target_dir, 'zip')
+
+    if delete:
+        os.remove(archive_file)

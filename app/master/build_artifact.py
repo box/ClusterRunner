@@ -15,6 +15,7 @@ class BuildArtifact(object):
     OUTPUT_FILE = 'clusterrunner_console_output'
     TIMING_FILE = 'clusterrunner_time'
     ARTIFACT_TARFILE_NAME = 'results.tar.gz'
+    ARTIFACT_ZIPFILE_NAME = 'results.zip'
 
     def __init__(self, build_artifact_dir):
         """
@@ -76,7 +77,7 @@ class BuildArtifact(object):
     def _get_failed_artifact_directories(self):
         """
         :return: A list of build-artifact relative paths to the failed artifact directories (e.g. artifact_0_0).
-        :rtype list[str]
+        :rtype: list[str]
         """
         if self._failed_artifact_directories is None:
             if not os.path.isdir(self.build_artifact_dir):

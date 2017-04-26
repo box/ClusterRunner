@@ -146,8 +146,8 @@ class BuildRunner(object):
         """
         timeout_time = time.time() + timeout if timeout else sys.maxsize
 
-        download_artifacts_url = self._master_api.url('build', self._build_id, 'result')
-        download_filepath = 'build_results/artifacts.tar.gz'
+        download_artifacts_url = self._master_api.url('build', self._build_id, 'artifacts.zip')
+        download_filepath = 'build_results/artifacts.zip'
         download_dir, _ = os.path.split(download_filepath)
 
         # remove any previous build artifacts
@@ -164,7 +164,7 @@ class BuildRunner(object):
                     for chunk in response.iter_content(chunk_size):
                         file.write(chunk)
 
-                app.util.fs.extract_tar(download_filepath, delete=True)
+                app.util.fs.unzip_directory(download_filepath, delete=True)
                 return
 
             time.sleep(1)
