@@ -1,5 +1,6 @@
 # Install with "pip install -r requirements.txt"
 
+astroid==1.4.0  # for pylint
 configobj==5.0.6
 coverage==3.7.1
 cx_Freeze==4.3.3

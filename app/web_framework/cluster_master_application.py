@@ -42,7 +42,8 @@ class ClusterMasterApplication(ClusterApplication):
                     RouteNode(r'build', _BuildsHandler, 'builds').add_children([
                         RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
                             RouteNode(r'result', _BuildResultRedirectHandler),
-                            RouteNode(r'artifacts.tar.gz', _BuildResultHandler),
+                            RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
+                            RouteNode(r'artifacts.zip', _BuildZipResultHandler),
                             RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
                                 RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                                     RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
@@ -286,17 +287,34 @@ class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):
         :param route_node: This is not used, it is only a param so we can pass route_node to all handlers without error.
         In other routes, route_node is used to find child routes but filehandler routes will never show child routes.
         :type route_node: RouteNode | None
-        :type cluster_master: ClusterMaster | None
+        :type cluster_master: app.master.cluster_master.ClusterMaster | None
         """
         self._cluster_master = cluster_master
         super().initialize(path=None)  # we will not set the root path until the get() method is called
 
     @request_latency.time()
-    def get(self, build_id, path=None):
-        artifact_file_path = self._cluster_master.get_path_for_build_results_archive(int(build_id))
+    def get(self, build_id):
+        artifact_file_path = self.get_result_file_download_path(int(build_id))
         self.root, artifact_filename = os.path.split(artifact_file_path)
         self.set_header('Content-Type', 'application/octet-stream')  # this should be downloaded as a binary file
         return super().get(path=artifact_filename)
+
+    def get_result_file_download_path(self, build_id: int):
+        raise NotImplementedError
+
+
+class _BuildTarResultHandler(_BuildResultHandler):
+    """Handler for the tar archive file"""
+    def get_result_file_download_path(self, build_id: int):
+        """Get the file path to the artifacts.tar.gz for the specified build."""
+        return self._cluster_master.get_path_for_build_results_archive(build_id, is_tar_request=True)
+
+
+class _BuildZipResultHandler(_BuildResultHandler):
+    """Handler for the zip archive file"""
+    def get_result_file_download_path(self, build_id: int):
+        """Get the file path to the artifacts.zip for the specified build."""
+        return self._cluster_master.get_path_for_build_results_archive(build_id)
 
 
 class _SlavesHandler(_ClusterMasterBaseAPIHandler):

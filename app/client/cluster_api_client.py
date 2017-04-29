@@ -61,7 +61,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         :return: tuple of (the artifact tarball, status code)
         :rtype: tuple of (bytes, int)
         """
-        artifacts_url = self._api.url('build', build_id, 'artifacts.tar.gz')
+        artifacts_url = self._api.url('build', build_id, 'artifacts.zip')
         response = self._network.get(artifacts_url)
         return response.content, response.status_code
 

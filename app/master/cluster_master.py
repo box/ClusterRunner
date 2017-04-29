@@ -296,20 +296,19 @@ class ClusterMaster(ClusterService):
 
         return build
 
-    def get_path_for_build_results_archive(self, build_id):
+    def get_path_for_build_results_archive(self, build_id: int, is_tar_request: bool=False) -> str:
         """
         Given a build id, get the absolute file path for the archive file containing the build results.
 
         :param build_id: The build id for which to retrieve the artifacts archive file
-        :type build_id: int
+        :param is_tar_request: If true, download the tar.gz archive instead of a zip.
         :return: The path to the archived results file
-        :rtype: str
         """
-        build = self._all_builds_by_id.get(build_id)
+        build = self._all_builds_by_id.get(build_id)  # type: Build
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
-        archive_file = build.artifacts_archive_file
+        archive_file = build.artifacts_tar_file if is_tar_request else build.artifacts_zip_file
         if archive_file is None:
             raise ItemNotReadyError('Build artifact file is not yet ready. Try again later.')
 

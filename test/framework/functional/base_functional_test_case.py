@@ -6,12 +6,12 @@ import shutil
 import tempfile
 from unittest import TestCase
 
-from app.util import log
-from app.util.fs import create_dir, extract_tar
+from app.util import fs, log
 from app.util.process_utils import is_windows
 from app.util.network import Network
 from app.util.secret import Secret
 from app.master.build_artifact import BuildArtifact
+from app.util.url_builder import UrlBuilder
 from test.framework.functional.fs_item import Directory
 from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
 
@@ -30,28 +30,6 @@ class BaseFunctionalTestCase(TestCase):
 
         self.cluster = FunctionalTestCluster(verbose=self._get_test_verbosity())
         self._network = Network()
-
-    def _create_test_config_file(self, conf_values_to_set=None):
-        """
-        Create a temporary conf file just for this test.
-
-        :return: The path to the conf file
-        :rtype: str
-        """
-        # Copy default conf file to tmp location
-        repo_dir = path.dirname(path.dirname(path.dirname(path.dirname(path.realpath(__file__)))))
-        self._conf_template_path = path.join(repo_dir, 'conf', 'default_clusterrunner.conf')
-        test_conf_file_path = tempfile.NamedTemporaryFile().name
-        shutil.copy(self._conf_template_path, test_conf_file_path)
-        os.chmod(test_conf_file_path, ConfigFile.CONFIG_FILE_MODE)
-        conf_file = ConfigFile(test_conf_file_path)
-
-        # Set custom conf file values for this test
-        conf_values_to_set = conf_values_to_set or {}
-        for conf_key, conf_value in conf_values_to_set.items():
-            conf_file.write_value(conf_key, conf_value, BASE_CONFIG_FILE_SECTION)
-
-        return test_conf_file_path
 
     def tearDown(self):
         # Give the cluster a bit of extra time to finish working (before forcefully killing it and failing the test)
@@ -158,7 +136,12 @@ class BaseFunctionalTestCase(TestCase):
         :type expected_build_artifact_contents: list[FSItem]
         """
         with tempfile.TemporaryDirectory() as build_artifacts_dir_path:
-            self._download_and_extract_results(master_api, build_id, build_artifacts_dir_path)
+            self._download_and_extract_zip_results(master_api, build_id, build_artifacts_dir_path)
+            self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
+
+        # Also check the tar archive even though it is deprecated.
+        with tempfile.TemporaryDirectory() as build_artifacts_dir_path:
+            self._download_and_extract_tar_results(master_api, build_id, build_artifacts_dir_path)
             self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
 
     def assert_directory_contents_match_expected(self, dir_path, expected_dir_contents):
@@ -176,7 +159,7 @@ class BaseFunctionalTestCase(TestCase):
             expected_build_artifacts = Directory(expected_dir_name, expected_dir_contents)
             expected_build_artifacts.assert_matches_path(dir_path, allow_extra_items=False)
 
-    def _download_and_extract_results(self, master_api, build_id, download_dir):
+    def _download_and_extract_tar_results(self, master_api, build_id, download_dir):
         """
         :type master_api: app.util.url_builder.UrlBuilder
         :type build_id: int
@@ -193,4 +176,19 @@ class BaseFunctionalTestCase(TestCase):
                 for chunk in response.iter_content(chunk_size):
                     file.write(chunk)
 
-            extract_tar(download_filepath, delete=True)
+            fs.extract_tar(download_filepath, delete=True)
+
+    def _download_and_extract_zip_results(self, master_api: UrlBuilder, build_id: int, download_dir: str):
+        """Download the artifacts.zip from the master and extract it."""
+        download_artifacts_url = master_api.url('build', build_id, 'artifacts.zip')
+        download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_ZIPFILE_NAME)
+        response = self._network.get(download_artifacts_url)
+
+        if response.status_code == http.client.OK:
+            # save file to disk, decompress, and delete
+            with open(download_filepath, 'wb') as file:
+                chunk_size = 500 * 1024
+                for chunk in response.iter_content(chunk_size):
+                    file.write(chunk)
+
+            fs.unzip_directory(download_filepath, delete=True)

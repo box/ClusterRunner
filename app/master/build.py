@@ -3,8 +3,9 @@ from enum import Enum
 import os
 from queue import Queue, Empty
 import shutil
-import time
+import tempfile
 from threading import Lock
+import time
 import uuid
 
 from app.master.build_artifact import BuildArtifact
@@ -44,7 +45,8 @@ class Build(object):
         self._logger = get_logger(__name__)
         self._build_id = self._build_id_counter.increment()
         self._build_request = build_request
-        self._artifacts_archive_file = None
+        self._artifacts_tar_file = None  # DEPRECATED - Use zip file instead
+        self._artifacts_zip_file = None
         self._build_artifact = None
 
         self._error_message = None
@@ -81,7 +83,6 @@ class Build(object):
         return {
             'id': self._build_id,
             'status': build_state,
-            'artifacts': self._artifacts_archive_file,  # todo: this should probably be a url, not a file path
             'details': self._detail_message,
             'error_message': self._error_message,
             'num_atoms': self._num_atoms,
@@ -351,8 +352,19 @@ class Build(object):
         return self._project_type
 
     @property
-    def artifacts_archive_file(self):
-        return self._artifacts_archive_file
+    def artifacts_zip_file(self):
+        """Return the local path to the artifacts zip archive."""
+        return self._artifacts_zip_file
+
+    @property
+    def artifacts_tar_file(self):
+        """
+        DEPRECATED: We are transitioning to zip files from tar.gz files for artifacts.
+        Return the local path to the artifacts tar.gz archive.
+        """
+        self._logger.warning('The tar format for build artifact files is deprecated. File: {}',
+                             self._artifacts_tar_file)
+        return self._artifacts_tar_file
 
     # WIP(joey): Change some of these private @properties to methods.
     @property
@@ -452,8 +464,13 @@ class Build(object):
         self._build_artifact = BuildArtifact(self._build_results_dir())
         self._build_artifact.generate_failures_file()
         self._build_artifact.write_timing_data(self._timing_file_path, self._read_subjob_timings_from_results())
-        self._artifacts_archive_file = app.util.fs.tar_directory(self._build_results_dir(),
-                                                                 BuildArtifact.ARTIFACT_TARFILE_NAME)
+        self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
+                                                             BuildArtifact.ARTIFACT_ZIPFILE_NAME)
+        # Temporarily move aside zip file so we can create a tar file, then move it back.
+        temp_zip_path = shutil.move(self._artifacts_zip_file, tempfile.mktemp())
+        self._artifacts_tar_file = app.util.fs.tar_directory(self._build_results_dir(),
+                                                             BuildArtifact.ARTIFACT_TARFILE_NAME)
+        shutil.move(temp_zip_path, self._artifacts_zip_file)
 
     def _delete_temporary_build_artifact_files(self):
         """
@@ -465,8 +482,8 @@ class Build(object):
         build_result_dir = self._build_results_dir()
         start_time = time.time()
         for path in os.listdir(build_result_dir):
-            # The build result tar-ball is also stored in this same directory, so we must not delete it.
-            if path == BuildArtifact.ARTIFACT_TARFILE_NAME:
+            # The build result archive is also stored in this same directory, so we must not delete it.
+            if path in (BuildArtifact.ARTIFACT_TARFILE_NAME, BuildArtifact.ARTIFACT_ZIPFILE_NAME):
                 continue
             full_path = os.path.join(build_result_dir, path)
             # Do NOT use app.util.fs.async_delete() here. That call will generate a temp directory for every
