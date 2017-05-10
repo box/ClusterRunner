@@ -256,6 +256,7 @@ class Build(object):
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
             self._logger.info("All results received for build {}!", self._build_id)
+            # todo: This should not be a SafeThread. https://github.com/box/ClusterRunner/issues/323
             SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
 
     def mark_started(self):

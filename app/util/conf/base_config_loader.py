@@ -76,6 +76,8 @@ class BaseConfigLoader(object):
         conf.set('master_port', '43000')
         conf.set('slaves', ['localhost'])
 
+        conf.set('default_http_timeout', 30)
+
         # Strict host key checking on git remote operations, disabled by default
         conf.set('git_strict_host_key_checking', False)
 
@@ -141,6 +143,7 @@ class BaseConfigLoader(object):
             'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
             'get_project_from_master',
+            'default_http_timeout',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):

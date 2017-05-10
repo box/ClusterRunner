@@ -1,5 +1,6 @@
-import requests.exceptions
+import requests
 
+from app.master.build import Build
 from app.util import analytics, log
 from app.util.counter import Counter
 from app.util.network import Network
@@ -62,15 +63,14 @@ class Slave(object):
             self.kill()
             raise SlaveMarkedForShutdownError
 
-    def setup(self, build, executor_start_index):
+    def setup(self, build: Build, executor_start_index: int) -> bool:
         """
         Execute a setup command on the slave for the specified build. The setup process executes asynchronously on the
         slave and the slave will alert the master when setup is complete and it is ready to start working on subjobs.
 
         :param build: The build to set up this slave to work on
-        :type build: Build
         :param executor_start_index: The index the slave should number its executors from for this build
-        :type executor_start_index: int
+        :return: Whether or not the call to start setup on the slave was successful
         """
         slave_project_type_params = build.build_request.build_parameters().copy()
         slave_project_type_params.update(build.project_type.slave_param_overrides())
@@ -82,17 +82,28 @@ class Slave(object):
         }
 
         self.current_build_id = build.build_id()
-        self._network.post_with_digest(setup_url, post_data, Secret.get())
+        try:
+            self._network.post_with_digest(setup_url, post_data, Secret.get())
+        except (requests.ConnectionError, requests.Timeout) as ex:
+            self._logger.warning('Setup call to {} failed with {}: {}.', self, ex.__class__.__name__, str(ex))
+            self.mark_dead()
+            return False
+        return True
 
     def teardown(self):
         """
         Tell the slave to run the build teardown
         """
-        if self.is_alive():
-            teardown_url = self._slave_api.url('build', self.current_build_id, 'teardown')
-            self._network.post(teardown_url)
-        else:
+        if not self.is_alive():
             self._logger.notice('Teardown request to slave {} was not sent since slave is disconnected.', self.url)
+            return
+
+        teardown_url = self._slave_api.url('build', self.current_build_id, 'teardown')
+        try:
+            self._network.post(teardown_url)
+        except (requests.ConnectionError, requests.Timeout):
+            self._logger.warning('Teardown request to slave failed because slave is unresponsive.')
+            self.mark_dead()
 
     def start_subjob(self, subjob):
         """
@@ -105,6 +116,7 @@ class Slave(object):
             raise SlaveMarkedForShutdownError('Tried to start a subjob on a slave in shutdown mode. ({}, id: {})'
                                               .format(self.url, self.id))
 
+        # todo: This should not be a SafeThread. https://github.com/box/ClusterRunner/issues/337
         SafeThread(target=self._async_start_subjob, args=(subjob,)).start()
 
     def _async_start_subjob(self, subjob):
@@ -134,7 +146,7 @@ class Slave(object):
             raise Exception('Cannot free executor on slave {}. All are free.'.format(self.url))
         return new_count
 
-    def is_alive(self, use_cached=True):
+    def is_alive(self, use_cached: bool=True) -> bool:
         """
         Is the slave API responsive?
 
@@ -143,8 +155,7 @@ class Slave(object):
 
         :param use_cached: Should we use the last returned value of the network check to the slave? If True,
             will return cached value. If False, this method will perform an actual network call to the slave.
-        :type use_cached: bool
-        :rtype: bool
+        :return: Whether or not the slave is alive
         """
         if use_cached:
             return self._is_alive
@@ -153,21 +164,20 @@ class Slave(object):
             response = self._network.get(self._slave_api.url(), headers=self._expected_session_header())
 
             if not response.ok:
-                self._is_alive = False
+                self.mark_dead()
             else:
                 response_data = response.json()
 
                 if 'slave' not in response_data or 'is_alive' not in response_data['slave']:
                     self._logger.warning('{}\'s API is missing key slave[\'is_alive\'].', self.url)
-                    self._is_alive = False
+                    self.mark_dead()
                 elif not isinstance(response_data['slave']['is_alive'], bool):
                     self._logger.warning('{}\'s API key \'is_alive\' is not a boolean.', self.url)
-                    self._is_alive = False
+                    self.mark_dead()
                 else:
                     self._is_alive = response_data['slave']['is_alive']
-        except requests.exceptions.ConnectionError:
-            self._logger.warning('Slave with url {} is offline.', self.url)
-            self._is_alive = False
+        except (requests.ConnectionError, requests.Timeout):
+            self.mark_dead()
 
         return self._is_alive
 
@@ -196,17 +206,22 @@ class Slave(object):
 
     def kill(self):
         """
-        Instructs the slave process to kill itself.
+        Instruct the slave process to kill itself.
         """
+        self._logger.notice('Killing {}', self)
         kill_url = self._slave_api.url('kill')
-        self._network.post_with_digest(kill_url, {}, Secret.get())
+        try:
+            self._network.post_with_digest(kill_url, {}, Secret.get())
+        except (requests.ConnectionError, requests.Timeout):
+            pass
         self.mark_dead()
 
     def mark_dead(self):
         """
-        Marks the slave dead.
+        Mark the slave dead.
         """
-        self.set_is_alive(False)
+        self._logger.warning('{} has gone offline. Last build: {}', self, self.current_build_id)
+        self._is_alive = False
         self.current_build_id = None
         self._network.reset_session()  # Close any pooled connections for this slave.
 

@@ -20,6 +20,10 @@ class SlaveConfigLoader(BaseConfigLoader):
         conf.set('master_hostname', 'localhost')
         conf.set('master_port', 43000)
         conf.set('shallow_clones', True)
+        # Use a longer timeout for slaves since we don't yet have request metrics on the slave side and since
+        # slaves are more likely to encounter long response times on the master due to the master being a
+        # centralized hub with a single-threaded server.
+        conf.set('default_http_timeout', 120)
 
     def configure_postload(self, conf):
         """

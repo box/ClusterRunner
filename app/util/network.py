@@ -4,6 +4,7 @@ import socket
 import requests
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE
 
+from app.util.conf.configuration import Configuration
 from app.util.decorators import retry_on_exception_exponential_backoff
 from app.util.log import get_logger
 from app.util.secret import Secret
@@ -100,7 +101,17 @@ class Network(object):
         """
         return json.dumps(body_decoded)
 
-    def _request(self, method, url, data=None, should_encode_body=True, error_on_failure=False, *args, **kwargs):
+    def _request(
+            self,
+            method,
+            url,
+            data=None,
+            should_encode_body=True,
+            error_on_failure=False,
+            timeout=None,
+            *args,
+            **kwargs
+    ):
         """
         A wrapper around requests library network request methods (e.g., GET, POST). We can add functionality for
         unimplemented request methods as needed. We also do some mutation on request bodies to make receiving data (in
@@ -118,8 +129,11 @@ class Network(object):
         :type should_encode_body: bool
         :param error_on_failure: If true, raise an error when the response is not in the 200s
         :type error_on_failure: bool
+        :param timeout: The timeout in seconds for this request; raises requests.Timeout upon timeout.
+        :type timeout: int|None
         :rtype: requests.Response
         """
+        timeout = timeout or Configuration['default_http_timeout']
 
         # If data type is dict, we json-encode it and nest the encoded string inside a new dict. This prevents the
         # requests library from trying to directly urlencode the key value pairs of the original data, which will
@@ -130,7 +144,7 @@ class Network(object):
         if should_encode_body and isinstance(data_to_send, dict):
             data_to_send = {ENCODED_BODY: self.encode_body(data_to_send)}
 
-        resp = self._session.request(method, url, data=data_to_send, *args, **kwargs)
+        resp = self._session.request(method, url, data=data_to_send, timeout=timeout, *args, **kwargs)
         if not resp.ok and error_on_failure:
             raise _RequestFailedError('Request to {} failed with status_code {} and response "{}"'.
                                       format(url, str(resp.status_code), resp.text))
