@@ -171,6 +171,46 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         response = self._network.get(slave_url)
         return response.json()
 
+    def connect_slave(self, slave_url: str, num_executors: int=10) -> int:
+        """
+        Connect a slave to the master. This is mostly useful for testing since real slave services
+        make this call to the master on startup.
+        :param slave_url: The hostname and port of the slave, e.g., 'localhost:43001'
+        :param num_executors: The number of executors for the slave
+        :return: The new slave id
+        """
+        data = {
+            'slave': slave_url,
+            'num_executors': num_executors,
+        }
+        create_slave_url = self._api.url('slave')
+        response_data = self._network.post(create_slave_url, data=data).json()
+        slave_id = int(response_data['slave_id'])
+        return slave_id
+
+    def get_slave_status(self, slave_id: int) -> dict:
+        """
+        Send a get request to the master to get the status of the specified slave.
+        :param slave_id: The id of the slave
+        :return: The API response data
+        """
+        slave_status_url = self._api.url('slave', slave_id)
+        response_data = self._network.get(slave_status_url).json()
+        return response_data['slave']
+
+    def block_until_slave_offline(self, slave_id: int, timeout: int=None) -> bool:
+        """
+        Poll the build status endpoint until the build is no longer queued.
+        :param slave_id: The id of the slave to wait for
+        :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
+        :return: Whether the slave went offline during the timeout
+        """
+        def is_slave_offline():
+            slave_data = self.get_slave_status(slave_id)
+            return not slave_data['is_alive']
+
+        return poll.wait_for(is_slave_offline, timeout_seconds=timeout)
+
     def graceful_shutdown_slaves_by_id(self, slave_ids):
         """
         :type slave_ids: list[int]

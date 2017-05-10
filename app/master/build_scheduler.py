@@ -1,7 +1,7 @@
 from queue import Empty
 from threading import Lock
 
-from app.master.slave import SlaveMarkedForShutdownError
+from app.master.slave import Slave, SlaveMarkedForShutdownError
 from app.util import analytics
 from app.util.log import get_logger
 
@@ -60,19 +60,24 @@ class BuildScheduler(object):
             return False
         return True
 
-    def allocate_slave(self, slave):
+    def allocate_slave(self, slave: Slave) -> bool:
         """
         Allocate a slave to this build. This tells the slave to execute setup commands for this build.
-
-        :type slave: Slave
+        :param slave: The slave to allocate
+        :return: Whether slave allocation was successful; this can fail if the slave is unresponsive
         """
         if not self._build_started:
             self._build_started = True
             self._build.mark_started()
-        self._slaves_allocated.append(slave)
-        slave.setup(self._build, executor_start_index=self._num_executors_allocated)
+
+        # Increment executors before triggering setup. This helps make sure the build won't take down
+        # every slave in the cluster if setup calls fail because of a problem with the build.
+        next_executor_index = self._num_executors_allocated
         self._num_executors_allocated += min(slave.num_executors, self._max_executors_per_slave)
         analytics.record_event(analytics.BUILD_SETUP_START, build_id=self._build.build_id(), slave_id=slave.id)
+        self._slaves_allocated.append(slave)
+
+        return slave.setup(self._build, executor_start_index=next_executor_index)
 
     def begin_subjob_executions_on_slave(self, slave):
         """

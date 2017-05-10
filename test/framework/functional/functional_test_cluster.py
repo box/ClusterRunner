@@ -53,15 +53,13 @@ class FunctionalTestCluster(object):
     def slaves_app_base_dirs(self):
         return self._slaves_app_base_dirs
 
-    def _create_test_config_file(self, base_dir_sys_path):
+    def _create_test_config_file(self, base_dir_sys_path: str, **extra_conf_vals) -> str:
         """
         Create a temporary conf file just for this test.
 
         :param base_dir_sys_path: Sys path of the base app dir
-        :type base_dir_sys_path: unicode
-
+        :param extra_conf_vals: Optional; additional values to set in the conf file
         :return: The path to the conf file
-        :rtype: str
         """
         # Copy default conf file to tmp location
         self._conf_template_path = join(self._clusterrunner_repo_dir, 'conf', 'default_clusterrunner.conf')
@@ -77,19 +75,19 @@ class FunctionalTestCluster(object):
             'base_directory': base_dir_sys_path,
             'max_log_file_size': 1024 * 5,
         }
+        conf_values_to_set.update(extra_conf_vals)
         for conf_key, conf_value in conf_values_to_set.items():
             conf_file.write_value(conf_key, conf_value, BASE_CONFIG_FILE_SECTION)
 
         return test_conf_file_path
 
-    def start_master(self):
+    def start_master(self, **extra_conf_vals) -> ClusterMasterAPIClient:
         """
         Start a master service for this cluster.
-
+        :param extra_conf_vals: Optional; additional values to set in the master service conf file
         :return: An API client object through which API calls to the master can be made
-        :rtype: ClusterMasterAPIClient
         """
-        self._start_master_process()
+        self._start_master_process(**extra_conf_vals)
         return self.master_api_client
 
     def start_slaves(self, num_slaves, num_executors_per_slave=1, start_port=None):
@@ -126,12 +124,11 @@ class FunctionalTestCluster(object):
     def slave_api_clients(self):
         return [ClusterSlaveAPIClient(base_api_url=slave.url) for slave in self.slaves]
 
-    def _start_master_process(self):
+    def _start_master_process(self, **extra_conf_vals) -> 'ClusterController':
         """
         Start the master process on localhost.
-
+        :param extra_conf_vals: Optional; additional values to set in the master service conf file
         :return: A ClusterController object which wraps the master service's Popen instance
-        :rtype: ClusterController
         """
         if self.master:
             raise RuntimeError('Master service was already started for this cluster.')
@@ -142,7 +139,7 @@ class FunctionalTestCluster(object):
 
         self._master_eventlog_name = tempfile.NamedTemporaryFile(delete=False).name
         self._master_app_base_dir = tempfile.TemporaryDirectory()
-        master_config_file_path = self._create_test_config_file(self._master_app_base_dir.name)
+        master_config_file_path = self._create_test_config_file(self._master_app_base_dir.name, **extra_conf_vals)
         master_hostname = 'localhost'
         master_cmd = [
             sys.executable,

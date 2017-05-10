@@ -252,7 +252,7 @@ class ClusterSlave(ClusterService):
         is_responsive = True
         try:
             self._network.get(self._master_api.url())
-        except requests.ConnectionError:
+        except (requests.ConnectionError, requests.Timeout):
             is_responsive = False
 
         return is_responsive

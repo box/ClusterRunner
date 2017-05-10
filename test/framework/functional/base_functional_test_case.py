@@ -1,12 +1,12 @@
 from contextlib import suppress
 import http.client
 import os
-from os import path
-import shutil
 import tempfile
 from unittest import TestCase
 
 from app.util import fs, log
+from app.util.conf.base_config_loader import BaseConfigLoader
+from app.util.conf.configuration import Configuration
 from app.util.process_utils import is_windows
 from app.util.network import Network
 from app.util.secret import Secret
@@ -26,10 +26,18 @@ class BaseFunctionalTestCase(TestCase):
         # Configure logging to go to stdout. This makes debugging easier by allowing us to see logs for failed tests.
         log.configure_logging('DEBUG')
 
+        self._reset_config()
         Secret.set('testsecret')
 
         self.cluster = FunctionalTestCluster(verbose=self._get_test_verbosity())
         self._network = Network()
+
+    def _reset_config(self):
+        Configuration.reset_singleton()
+        config = Configuration.singleton()
+        conf_loader = BaseConfigLoader()
+        conf_loader.configure_defaults(config)
+        conf_loader.configure_postload(config)
 
     def tearDown(self):
         # Give the cluster a bit of extra time to finish working (before forcefully killing it and failing the test)
