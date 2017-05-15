@@ -445,6 +445,13 @@ class TestBuild(BaseUnitTestCase):
 
         mock_shutil.rmtree.assert_called_once_with(expected_async_delete_call_path, ignore_errors=True)
 
+    def test_exception_during_postbuild_tasks_fails_build(self):
+        self.mock_util.fs.zip_directory.side_effect = FileNotFoundError('Where my files at?')
+
+        build = self._create_test_build(BuildStatus.FINISHED)
+
+        self.assertEqual(build._status(), BuildStatus.ERROR)
+
     def _create_test_build(
             self,
             build_status=None,
