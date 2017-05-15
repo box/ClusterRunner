@@ -4,7 +4,7 @@ import os
 from queue import Queue, Empty
 import shutil
 import tempfile
-from threading import Lock
+from threading import Lock, Thread
 import time
 import uuid
 
@@ -19,7 +19,6 @@ from app.util.exceptions import ItemNotFoundError
 import app.util.fs
 from app.util.log import get_logger
 from app.util.single_use_coin import SingleUseCoin
-from app.util.safe_thread import SafeThread
 
 
 class Build(object):
@@ -256,8 +255,7 @@ class Build(object):
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
             self._logger.info("All results received for build {}!", self._build_id)
-            # todo: This should not be a SafeThread. https://github.com/box/ClusterRunner/issues/323
-            SafeThread(target=self._perform_async_postbuild_tasks, name='PostBuild{}'.format(self._build_id)).start()
+            self.finish()
 
     def mark_started(self):
         """
@@ -269,8 +267,10 @@ class Build(object):
         """
         Perform postbuild task and mark this build as finished.
         """
-        # This method also transitions the FSM to finished after the postbuild tasks are complete.
-        self._perform_async_postbuild_tasks()
+        Thread(
+            target=self._perform_async_postbuild_tasks,
+            name='PostBuild{}'.format(self._build_id),
+        ).start()
 
     def mark_failed(self, failure_reason):
         """
@@ -454,12 +454,18 @@ class Build(object):
 
     def _perform_async_postbuild_tasks(self):
         """
-        Once a build is complete, certain tasks can be performed asynchronously.
+        Once a build is complete, execute certain tasks like archiving the artifacts and writing timing
+        data. This method also transitions the FSM to finished after the postbuild tasks are complete.
         """
-        self._create_build_artifact()
-        self._delete_temporary_build_artifact_files()
-        self._postbuild_tasks_are_finished = True
-        self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
+        try:
+            self._create_build_artifact()
+            self._delete_temporary_build_artifact_files()
+            self._postbuild_tasks_are_finished = True
+            self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
+
+        except Exception as ex:  # pylint: disable=broad-except
+            self._logger.exception('Postbuild tasks failed for build {}.'.format(self._build_id))
+            self.mark_failed('Postbuild tasks failed due to an internal error: "{}"'.format(ex))
 
     def _create_build_artifact(self):
         self._build_artifact = BuildArtifact(self._build_results_dir())
