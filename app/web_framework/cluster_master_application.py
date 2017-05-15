@@ -4,8 +4,8 @@ import urllib.parse
 
 import tornado.web
 import prometheus_client
-from prometheus_client import Histogram
 
+from app.common.metrics import request_latency
 from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -19,9 +19,6 @@ from app.web_framework.route_node import RouteNode
 
 # pylint: disable=attribute-defined-outside-init
 #   Handler classes are not designed to have __init__ overridden.
-
-request_latency = Histogram('request_latency_seconds', 'Latency of HTTP requests in seconds')  # pylint: disable=no-value-for-parameter
-
 
 class ClusterMasterApplication(ClusterApplication):
 
