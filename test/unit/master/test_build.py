@@ -447,6 +447,7 @@ class TestBuild(BaseUnitTestCase):
 
     def test_exception_during_postbuild_tasks_fails_build(self):
         self.mock_util.fs.zip_directory.side_effect = FileNotFoundError('Where my files at?')
+        self.mock_util.fs.tar_directory.side_effect = FileNotFoundError('Where my files at?')
 
         build = self._create_test_build(BuildStatus.FINISHED)
 

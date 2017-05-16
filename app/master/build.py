@@ -471,13 +471,21 @@ class Build(object):
         self._build_artifact = BuildArtifact(self._build_results_dir())
         self._build_artifact.generate_failures_file()
         self._build_artifact.write_timing_data(self._timing_file_path, self._read_subjob_timings_from_results())
-        self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
-                                                             BuildArtifact.ARTIFACT_ZIPFILE_NAME)
-        # Temporarily move aside zip file so we can create a tar file, then move it back.
-        temp_zip_path = shutil.move(self._artifacts_zip_file, tempfile.mktemp())
         self._artifacts_tar_file = app.util.fs.tar_directory(self._build_results_dir(),
                                                              BuildArtifact.ARTIFACT_TARFILE_NAME)
-        shutil.move(temp_zip_path, self._artifacts_zip_file)
+        temp_tar_path = None
+        try:
+            # Temporarily move aside tar file so we can create a zip file, then move it back.
+            # This juggling can be removed once we're no longer creating tar artifacts.
+            temp_tar_path = shutil.move(self._artifacts_tar_file, tempfile.mktemp())
+            self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
+                                                                 BuildArtifact.ARTIFACT_ZIPFILE_NAME)
+        except Exception:  # pylint: disable=broad-except
+            # Due to issue #339 we are ignoring exceptions in the zip file creation for now.
+            self._logger.exception('Zipping of artifacts failed. This error will be ignored.')
+        finally:
+            if temp_tar_path:
+                shutil.move(temp_tar_path, self._artifacts_tar_file)
 
     def _delete_temporary_build_artifact_files(self):
         """
