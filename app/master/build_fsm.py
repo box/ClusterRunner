@@ -9,7 +9,7 @@ from app.util import log
 
 
 class BuildState(str, Enum):
-    """Posssible states for the FSM"""
+    """Possible states for the FSM"""
     QUEUED = 'QUEUED'
     PREPARING = 'PREPARING'
     PREPARED = 'PREPARED'
