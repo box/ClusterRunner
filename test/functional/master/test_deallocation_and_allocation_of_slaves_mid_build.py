@@ -1,11 +1,14 @@
 import os
 import tempfile
+from unittest import skipIf
 import yaml
 
+from app.util.process_utils import is_windows
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.functional.job_configs import JOB_WITH_SLEEPS
 
 
+@skipIf(is_windows(), 'Fails on AppVeyor; see issue #345')
 class TestDeallocationAndAllocationOfSlavesMidBuild(BaseFunctionalTestCase):
     def test_build_completes_after_allocating_deallocating_and_reallocating_slaves_to_build(self):
         master = self.cluster.start_master()
