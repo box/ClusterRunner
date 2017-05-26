@@ -12,26 +12,27 @@ class TestBuildArtifact(BaseUnitTestCase):
         Configuration['artifact_directory'] = expanduser('~')
 
     @genty_dataset(
-        happy_path_all_args=(join(expanduser('~'), '1', 'artifact_2_3'), 1, 2, 3),
-        override_result_root=(join('override', '1', 'artifact_2_3'), 1, 2, 3, join('override')),
-        just_build_directory=(join(expanduser('~'), '1'), 1, None, None),
-        build_directory_with_override=(join('override', '1'), 1, None, None, join('override')),
+        default=(join(expanduser('~'), '1', 'artifact_2_3'), 1, 2, 3),
+        with_nondefault_root=(join('override', '1', 'artifact_2_3'), 1, 2, 3, join('override')),
     )
-    def test_artifact_directory_returns_proper_artifact_path(self, expected_path, build_id, subjob_id=None,
-                                                             atom_id=None, result_root=None):
+    def test_atom_artifact_directory_returns_proper_artifact_path(self, expected_path, build_id, subjob_id=None,
+                                                                  atom_id=None, result_root=None):
         self.assertEquals(
             expected_path,
-            BuildArtifact._artifact_directory(build_id, subjob_id, atom_id, result_root=result_root),
-            'The generated artifact directory is incorrect.'
+            BuildArtifact.atom_artifact_directory(build_id, subjob_id, atom_id, result_root=result_root),
+            'The generated atom artifact directory is incorrect.'
         )
 
     @genty_dataset(
-        subjob_no_atom=(1, None),
-        atom_no_subjob=(None, 1),
+        default=(join(expanduser('~'), '1'), 1),
+        with_nondefault_root=(join('override', '1'), 1, join('override')),
     )
-    def test_artifact_directory_raises_value_error_if_subjob_id_or_atom_id_specified(self, subjob_id, atom_id):
-        with self.assertRaises(ValueError):
-            BuildArtifact._artifact_directory(1, subjob_id, atom_id)
+    def test_build_artifact_directory_returns_proper_artifact_path(self, expected_path, build_id, result_root=None):
+        self.assertEquals(
+            expected_path,
+            BuildArtifact.build_artifact_directory(build_id, result_root=result_root),
+            'The generated build artifact directory is incorrect.'
+        )
 
     @genty_dataset(
         relative_path=('artifact_0_1', 0, 1),

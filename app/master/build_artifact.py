@@ -140,8 +140,8 @@ class BuildArtifact(object):
         timing_data.update(new_timing_data)
         self._write_timing_data_to_file(timing_file_path, timing_data)
 
-    @staticmethod
-    def atom_artifact_directory(build_id, subjob_id, atom_id, result_root=None):
+    @classmethod
+    def atom_artifact_directory(cls, build_id, subjob_id, atom_id, result_root=None):
         """
         Get the sys path to the atom artifact directory.
 
@@ -152,11 +152,11 @@ class BuildArtifact(object):
         :type result_root: str | None
         :rtype: str
         """
-        return BuildArtifact._artifact_directory(build_id, subjob_id=subjob_id, atom_id=atom_id,
-                                                 result_root=result_root)
+        result_root = result_root or Configuration['artifact_directory']
+        return os.path.join(result_root, str(build_id), cls.ATOM_DIR_FORMAT.format(subjob_id, atom_id))
 
-    @staticmethod
-    def build_artifact_directory(build_id, result_root=None):
+    @classmethod
+    def build_artifact_directory(cls, build_id, result_root=None):
         """
         Get the sys path to the build artifact directory.
 
@@ -165,32 +165,8 @@ class BuildArtifact(object):
         :type result_root: str | None
         :rtype: str
         """
-        return BuildArtifact._artifact_directory(build_id, result_root=result_root)
-
-    @staticmethod
-    def _artifact_directory(build_id, subjob_id=None, atom_id=None, result_root=None):
-        """
-        To get the full path to an atom artifact id, the caller must specify all id's: build_id, subjob_id, atom_id.
-        To get the path to just the build artifact directory, the caller must only specify the build_id.
-
-        If the caller specifies exactly one of the subjob_id or atom_id, it is a fatal error, and this method
-        will raise a ValueError exception.
-
-        :type build_id: int
-        :type subjob_id: int | None
-        :type atom_id: int | None
-        :param result_root: The sys path to the result directory that isn't the default artifact directory.
-        :type result_root: str | None
-        :rtype: str
-        """
-        result_root = result_root if result_root is not None else Configuration['artifact_directory']
-
-        if subjob_id is None and atom_id is None:
-            return os.path.join(result_root, str(build_id))
-        elif subjob_id is not None and atom_id is not None:
-            return os.path.join(result_root, str(build_id), BuildArtifact.ATOM_DIR_FORMAT.format(subjob_id, atom_id))
-        else:
-            raise ValueError('Specified one of either subjob_id or atom_id. Must either specify both or neither.')
+        result_root = result_root or Configuration['artifact_directory']
+        return os.path.join(result_root, str(build_id))
 
     @staticmethod
     def _subjob_and_atom_ids(directory_name):
