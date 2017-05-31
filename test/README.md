@@ -25,7 +25,7 @@ mkvirtualenv -p /usr/local/bin/python3.4 clusterrunner
 
 # install ClusterRunner dependencies into virtualenv
 workon clusterrunner
-pip install -r requirements.txt
+pip install -r dev-requirements.txt
 ```
 
 Run tests

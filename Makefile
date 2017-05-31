@@ -11,6 +11,10 @@ init:
 	$(call print_msg, Installing requirements... )
 	pip install --upgrade -r requirements.txt
 
+init-dev:
+	$(call print_msg, Installing dev requirements... )
+	pip install --upgrade -r dev-requirements.txt
+
 pylint:
 	$(call print_msg, Running pylint... )
 	PYTHONPATH=.:${PYTHONPATH} pylint --load-plugins=test.framework.pylint app
