@@ -2,7 +2,7 @@ from genty import genty, genty_dataset
 import subprocess
 from unittest.mock import MagicMock, call
 
-from app.util import autoversioning, package_version
+from app.util import autoversioning
 from test.framework.comparators import AnythingOfType
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -18,8 +18,8 @@ class TestAutoversioning(BaseUnitTestCase):
         autoversioning._calculated_version = None  # reset cached version between individual tests
 
     def test_get_version_returns_frozen_version_when_run_from_frozen_package(self):
-        self.patch('app.util.autoversioning.sys').frozen = True
-        package_version.version = '1.2.3'  # package_version is written during freeze, so this is the "frozen" version.
+        # package_version is written during freeze, so this is the "frozen" version.
+        self.patch('app.util.autoversioning._get_frozen_package_version').return_value = '1.2.3'
 
         actual_version = autoversioning.get_version()
 
@@ -86,13 +86,13 @@ class TestAutoversioning(BaseUnitTestCase):
         self.assertEqual(num_check_output_calls, self.check_output_mock.call_count,
                          'No calls to check_output() should occur after the first get_version() call.')
 
-    def test_unexpected_failure_in_git_command_sets_patch_version_to_unknown(self):
+    def test_package_version_file_absent_and_unexpected_failure_in_git_command_sets_patch_version_to_default(self):
         self.check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'fake')]  # make all git commands fail
 
         actual_version = autoversioning.get_version()
 
-        self.assertEqual(actual_version, '1.0.???', 'get_version() should not raise exception if git commands fail, '
-                                                    'and should just set the patch version to "???".')
+        self.assertEqual(actual_version, '0.0.0', 'get_version() should not raise exception if git commands fail, '
+                                                    'and should just set the patch version to default "0.0.0".')
 
     @genty_dataset(
         head_commit_is_on_trunk=(True, False, '1.0.4'),
