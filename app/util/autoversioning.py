@@ -20,18 +20,24 @@ def get_version():
     :return: The version of the application
     :rtype: str
     """
-    if getattr(sys, 'frozen', False):
-        return _get_frozen_package_version()  # frozen/packaged
 
-    return _calculate_source_version()  # unfrozen/running from source
+    return _get_frozen_package_version() or _calculate_source_version() or '0.0.0'
 
 
 def _try_rename(src, dst):
     try:
         os.rename(src, dst)
-    except FileExistsError:
-        # Skip backing up the original package_version.py if a FileExistsError happened.
-        # This might happen on Windows as NTFS doesn't support writing to a file while the file is opened in python.
+    except (FileExistsError, FileNotFoundError):
+        # Skip backing up the original package_version.py if a FileExistsError or FileNotFoundError happened.
+        # FileExistsError might happen on Windows as NTFS doesn't support writing to a file while the file
+        # is opened in python.
+        pass
+
+
+def _try_remove(src):
+    try:
+        os.remove(src)
+    except OSError:
         pass
 
 
@@ -70,8 +76,11 @@ def _get_frozen_package_version():
 
     # only import package_version when needed as on Windows once imported, the actual package_version.py can't be
     # edited anymore
-    from app.util import package_version
-    return package_version.version
+    try:
+        from app.util import package_version
+        return package_version.version
+    except ImportError:
+        return None
 
 
 def _calculate_source_version():
@@ -79,15 +88,12 @@ def _calculate_source_version():
     Calculate the version using a scheme based off of git repo info. Note that since this depends on the git history,
     this will *not* work from a frozen package (which does not include the git repo data). This will only work in the
     context of running the application from the cloned git repo.
-
-    If one of the git commands used to calculate the version fails unexpectedly, the patch in the version string will
-    be set to "???".
+    If this is running outside of a git repo, it will handle the CalledProcessError exception and return None.
 
     :return: The version of the (source) application
     :rtype: str
     """
     global _calculated_version
-
     if _calculated_version is None:
         try:
             head_commit_hash = _get_commit_hash_from_revision_param('HEAD')
@@ -97,9 +103,8 @@ def _calculate_source_version():
             hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
             mod_extension = '' if not _repo_has_uncommited_changes() else '-mod'
             _calculated_version = '{}.{}{}{}'.format(_MAJOR_MINOR_VERSION, commit_count, hash_extension, mod_extension)
-
         except subprocess.CalledProcessError:
-            _calculated_version = '{}.???'.format(_MAJOR_MINOR_VERSION)
+            _calculated_version = None
 
     return _calculated_version
 
@@ -170,3 +175,14 @@ def _execute_local_git_command(*args):
         cwd=os.path.dirname(__file__),
     )
     return command_output.decode()
+
+
+if __name__ == '__main__':
+    """
+    Print version string.
+    """
+    # Remove the "package_version.py" file so that autoversioning always calculates version.
+    _try_remove(_VERSION_FILE_PATH)
+    version = get_version()
+    write_package_version_file(version)
+    print(version)
