@@ -8,7 +8,7 @@ from threading import Lock, Thread
 import time
 import uuid
 
-from app.master.build_artifact import BuildArtifact
+from app.common.build_artifact import BuildArtifact
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
 from app.project_type.project_type import ProjectType

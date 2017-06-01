@@ -1,7 +1,7 @@
 import os
 
+from app.common.build_artifact import BuildArtifact
 from app.common.console_output import ConsoleOutput
-from app.master.build_artifact import BuildArtifact
 from app.util.exceptions import BadRequestError, ItemNotFoundError
 
 

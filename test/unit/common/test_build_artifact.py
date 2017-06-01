@@ -1,7 +1,7 @@
 from genty import genty, genty_dataset
 from os.path import expanduser, join
 
-from app.master.build_artifact import BuildArtifact
+from app.common.build_artifact import BuildArtifact
 from app.util.conf.configuration import Configuration
 from test.framework.base_unit_test_case import BaseUnitTestCase
 

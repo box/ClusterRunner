@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, Mock, mock_open, call
 
 from genty import genty, genty_dataset
 
+from app.common.build_artifact import BuildArtifact
 from app.master.atom import Atom, AtomState
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus, BuildProjectError
-from app.master.build_artifact import BuildArtifact
 from app.master.build_fsm import BuildState
 from app.master.build_request import BuildRequest
 from app.master.build_scheduler_pool import BuildSchedulerPool
