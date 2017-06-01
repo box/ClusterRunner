@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 
 from app.util import fs
 
@@ -177,12 +176,17 @@ def _execute_local_git_command(*args):
     return command_output.decode()
 
 
-if __name__ == '__main__':
+def _print_and_hardcode_version():
     """
-    Print version string.
+    Print the version number and write the package version file. This is useful when packaging
+    ClusterRunner (e.g., building an RPM).
     """
     # Remove the "package_version.py" file so that autoversioning always calculates version.
     _try_remove(_VERSION_FILE_PATH)
     version = get_version()
     write_package_version_file(version)
     print(version)
+
+
+if __name__ == '__main__':
+    _print_and_hardcode_version()
