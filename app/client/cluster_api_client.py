@@ -1,3 +1,7 @@
+from urllib import parse
+
+from typing import Dict, Any
+
 from app.master.build import BuildStatus
 from app.util import log, poll
 from app.util.network import Network
@@ -237,6 +241,19 @@ class ClusterMasterAPIClient(ClusterAPIClient):
             error_on_failure=True
         )
         return response
+
+    def get_console_output(
+            self,
+            build_id: int,
+            subjob_id: int,
+            atom_id: int,
+            max_lines: int=50,
+            offset: int=0,
+    ) -> Dict[str, Any]:
+        """Return the json-decoded response from the console output endpoint for the specified atom."""
+        console_url = self._api.url('build', build_id, 'subjob', subjob_id, 'atom', atom_id, 'console')
+        console_url += '?' + parse.urlencode({'max_lines': max_lines, 'offset_line': offset})
+        return self._network.get(console_url).json()
 
 
 class ClusterSlaveAPIClient(ClusterAPIClient):

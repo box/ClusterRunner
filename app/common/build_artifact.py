@@ -2,6 +2,10 @@ import json
 import os
 import re
 
+from typing import Optional
+
+from app.common.console_output import ConsoleOutput
+from app.common.console_output_segment import ConsoleOutputSegment
 from app.util.conf.configuration import Configuration
 import app.util.fs
 from app.util.log import get_logger
@@ -139,6 +143,47 @@ class BuildArtifact(object):
 
         timing_data.update(new_timing_data)
         self._write_timing_data_to_file(timing_file_path, timing_data)
+
+    @classmethod
+    def get_console_output(
+            cls,
+            build_id: int,
+            subjob_id: int,
+            atom_id: int,
+            result_root: str,
+            max_lines: int=50,
+            offset_line: Optional[int]=None,
+    ) -> Optional[ConsoleOutputSegment]:
+        """
+        Return the console output if it exists in the specified result_root. Return None if it does not exist.
+        :param build_id: build id
+        :param subjob_id: subjob id
+        :param atom_id: atom id
+        :param result_root: the sys path to either the results or artifacts directory where results are stored.
+        :param max_lines: The maximum total number of lines to return. If this max_lines + offset_line lines do not
+            exist in the output file, just return what there is.
+        :param offset_line: The line number (0-indexed) to start reading content for. If none is specified, we will
+            return the console output starting from the end of the file.
+        :return: The console output if it exists in the specified result_root, None if it does not exist
+        """
+        console_output = None
+
+        artifact_dir = cls.atom_artifact_directory(build_id, subjob_id, atom_id, result_root=result_root)
+        output_file_path = os.path.join(artifact_dir, cls.OUTPUT_FILE)
+        if os.path.isfile(output_file_path):
+            # Read directly from output file if it exists (while build is in progress).
+            console_output = ConsoleOutput.from_plaintext(output_file_path)
+        else:
+            # Read from build artifact archive if it exists (after build is finished).
+            build_dir = cls.build_artifact_directory(build_id, result_root=result_root)
+            archive_file_path = os.path.join(build_dir, cls.ARTIFACT_ZIPFILE_NAME)
+            if os.path.isfile(archive_file_path):
+                path_in_archive = os.path.join(os.path.relpath(artifact_dir, build_dir), cls.OUTPUT_FILE)
+                console_output = ConsoleOutput.from_zipfile(archive_file_path, path_in_archive)
+
+        if console_output:
+            return console_output.segment(max_lines, offset_line)
+        return None
 
     @classmethod
     def atom_artifact_directory(cls, build_id, subjob_id, atom_id, result_root=None):
