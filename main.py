@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
-import hashlib
+import random
+import string
+
 import os
 import sys
 import threading
@@ -244,7 +246,9 @@ def _set_secret(config_filename):
     if 'secret' in Configuration and Configuration['secret'] is not None:
         secret = Configuration['secret']
     else:  # No secret found, generate one and persist it
-        secret = hashlib.sha512().hexdigest()
+        secret_length = 128
+        chars = string.ascii_lowercase + string.digits
+        secret = ''.join(random.SystemRandom().choice(chars) for _ in range(secret_length))
         conf_file = ConfigFile(config_filename)
         conf_file.write_value('secret', secret, BASE_CONFIG_FILE_SECTION)
     Secret.set(secret)
