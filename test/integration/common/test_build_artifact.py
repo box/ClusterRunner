@@ -1,11 +1,11 @@
-from genty import genty, genty_dataset
 import json
 import os
-import shutil
 from tempfile import mkstemp, TemporaryDirectory
 
+from genty import genty, genty_dataset
+
+from app.common.build_artifact import BuildArtifact
 from app.util import fs
-from app.master.build_artifact import BuildArtifact
 from test.framework.base_integration_test_case import BaseIntegrationTestCase
 
 

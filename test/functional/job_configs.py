@@ -122,14 +122,14 @@ JobWithSetupAndTeardown:
 JobWithSetupAndTeardown:
     setup_build:
         - echo Doing build setup.
-        - ping 127.0.0.1 -n 2
+        - ping 127.0.0.1 -n 2 >nul
         - echo setup.> !PROJECT_DIR!\\build_setup.txt
 
     commands:
         - echo Doing subjob !SUBJOB_NUMBER!.
-        - ping 127.0.0.1 -n 2
+        - ping 127.0.0.1 -n 2 >nul
         - set MY_SUBJOB_FILE=!PROJECT_DIR!\\subjob_file_!SUBJOB_NUMBER!.txt
-        - COPY build_setup.txt !MY_SUBJOB_FILE!
+        - COPY build_setup.txt !MY_SUBJOB_FILE! >nul
         - echo subjob !SUBJOB_NUMBER!.>> !MY_SUBJOB_FILE!
 
     atomizers:
@@ -137,7 +137,7 @@ JobWithSetupAndTeardown:
 
     teardown_build:
         - echo Doing build teardown.
-        - ping 127.0.0.1 -n 2
+        - ping 127.0.0.1 -n 2 >nul
         - FOR /l %n in (1,1,3) DO @echo teardown.>> !PROJECT_DIR!\\subjob_file_%n.txt
 """,
     },

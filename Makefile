@@ -5,7 +5,7 @@ print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
 
 all: lint test
 lint: pylint pep8
-test: test-unit test-functional
+test: test-unit test-integration test-functional
 
 init:
 	$(call print_msg, Installing requirements... )
@@ -30,6 +30,10 @@ test-unit:
 test-unit-with-coverage:
 	$(call print_msg, Running unit tests with coverage... )
 	nosetests -v --with-xcoverage --cover-package=app test/unit
+
+test-integration:
+	$(call print_msg, Running unit tests... )
+	nosetests -v test/integration
 
 test-integration-with-coverage:
 	$(call print_msg, Running unit tests with coverage... )

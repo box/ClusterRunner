@@ -4,13 +4,13 @@ import os
 import tempfile
 from unittest import TestCase
 
+from app.common.build_artifact import BuildArtifact
 from app.util import fs, log
 from app.util.conf.base_config_loader import BaseConfigLoader
 from app.util.conf.configuration import Configuration
 from app.util.process_utils import is_windows
 from app.util.network import Network
 from app.util.secret import Secret
-from app.master.build_artifact import BuildArtifact
 from app.util.url_builder import UrlBuilder
 from test.framework.functional.fs_item import Directory
 from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError

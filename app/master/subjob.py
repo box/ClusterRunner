@@ -1,7 +1,7 @@
 import os
 
+from app.common.build_artifact import BuildArtifact
 from app.master.atom import AtomState
-from app.master.build_artifact import BuildArtifact
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
 

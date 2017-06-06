@@ -5,7 +5,7 @@ import yaml
 
 from genty import genty, genty_dataset
 
-from app.master.build_artifact import BuildArtifact
+from app.common.build_artifact import BuildArtifact
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.framework.functional.fs_item import Directory, File
 from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, JOB_WITH_SETUP_AND_TEARDOWN

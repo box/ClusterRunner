@@ -9,15 +9,9 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 @genty
 class TestClusterService(BaseUnitTestCase):
-    def setUp(self):
-        super().setUp()
-
     def test_get_console_output_happy_path_returns_return_values(self):
-        self.os_path_isfile_mock = self.patch('app.common.cluster_service.os.path.isfile')
-        self.os_path_isfile_mock.return_value = True
-        console_output_patch = self.patch('app.common.cluster_service.ConsoleOutput').return_value
-        console_output_patch.segment.return_value = ConsoleOutputSegment(
-            offset_line=0, num_lines=1, total_num_lines=2, content='The content\n')
+        segment = ConsoleOutputSegment(offset_line=0, num_lines=1, total_num_lines=2, content='The content\n')
+        self.patch('app.common.cluster_service.BuildArtifact').get_console_output.return_value = segment
         service = ClusterService()
 
         response = service.get_console_output(1, 2, 3, os.path.abspath('~'))
@@ -45,8 +39,7 @@ class TestClusterService(BaseUnitTestCase):
             service.get_console_output(1, 2, 3, os.path.abspath('~'), max_lines=max_lines, offset_line=offset_line)
 
     def test_get_console_output_raises_item_not_found_error_if_console_output_file_doesnt_exist(self):
-        self.os_path_isfile_mock = self.patch('app.common.cluster_service.os.path.isfile')
-        self.os_path_isfile_mock.return_value = False
+        self.patch('app.common.cluster_service.BuildArtifact').get_console_output.return_value = None
         service = ClusterService()
 
         with self.assertRaises(ItemNotFoundError):
