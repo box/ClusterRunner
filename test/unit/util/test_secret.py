@@ -13,7 +13,13 @@ class TestSecret(BaseUnitTestCase):
         Secret.set(secret)
         self.assertEqual(secret, Secret.get())
 
-    @genty_dataset(None, '', 'short')
+    @genty_dataset(
+        no_secret=(None,),
+        empty_secret=('',),
+        short_secret=('short',),
+        null_hash_secret=('cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce'
+                          '47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e',),
+    )
     def test_set_insecure_secrets_fails(self, insecure_secret):
         self.assertRaises(RuntimeError, Secret.set, insecure_secret)
 
