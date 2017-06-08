@@ -47,3 +47,4 @@ repos/
 results/
 slave_results/
 .hypothesis/
+.python-version
