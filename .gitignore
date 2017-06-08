@@ -47,4 +47,6 @@ repos/
 results/
 slave_results/
 .hypothesis/
+
+# virtualenv
 .python-version
