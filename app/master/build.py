@@ -19,6 +19,7 @@ from app.util.exceptions import ItemNotFoundError
 import app.util.fs
 from app.util.log import get_logger
 from app.util.single_use_coin import SingleUseCoin
+from app.common.metrics import build_state_duration_seconds
 
 
 class Build(object):
@@ -61,12 +62,15 @@ class Build(object):
         self._postbuild_tasks_are_finished = False  # WIP(joey): Remove and use build state.
         self._timing_file_path = None
 
+        leave_state_callbacks = {build_state: self._on_leave_state
+                                 for build_state in BuildState}
         self._state_machine = BuildFsm(
             build_id=self._build_id,
             enter_state_callbacks={
                 BuildState.ERROR: self._on_enter_error_state,
                 BuildState.CANCELED: self._on_enter_canceled_state,
-            }
+            },
+            leave_state_callbacks=leave_state_callbacks
         )
 
     def api_representation(self):
@@ -290,6 +294,15 @@ class Build(object):
         default_error_msg = 'An unspecified error occurred.'
         self._error_message = getattr(event, 'error_msg', default_error_msg)
         self._logger.warning('Build {} failed: {}', self.build_id(), self._error_message)
+
+    def _on_leave_state(self, event):
+        start_time = self._state_machine.transition_timestamps.get(event.src)
+        if start_time is not None:
+            elapsed = time.time() - start_time
+            build_state_duration_seconds.labels(event.src.value).observe(elapsed)  # pylint: disable=no-member
+        else:
+            self._logger.warn('Build {} transitioned from state {} to state {} but never marked started timestamp for {}',
+                              self._build_id, event.src, event.dst, event.src)
 
     def cancel(self):
         """
