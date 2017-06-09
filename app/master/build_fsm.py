@@ -62,10 +62,11 @@ class BuildFsm(object):
                      +---------+
                         CANCEL
     """
-    def __init__(self, build_id, enter_state_callbacks):
+    def __init__(self, build_id, enter_state_callbacks, leave_state_callbacks):
         """
         :type build_id: int
         :type enter_state_callbacks: dict[BuildState, callable]
+        :type leave_state_callbacks: dict[BuildState, callable]
         """
         self._logger = log.get_logger(__name__)
         self._build_id = build_id
@@ -74,6 +75,8 @@ class BuildFsm(object):
 
         for build_state, callback in enter_state_callbacks.items():
             self._register_enter_state_callback(build_state, callback)
+        for build_state, callback in leave_state_callbacks.items():
+            self._register_leave_state_callback(build_state, callback)
 
     def _create_state_machine(self):
         """
@@ -189,6 +192,16 @@ class BuildFsm(object):
         :type callback: callable
         """
         setattr(self._fsm, 'onenter' + build_state, callback)
+
+    def _register_leave_state_callback(self, build_state, callback):
+        """
+        Register a callback that will be executed by Fysom when the specified state is entered. This
+        leverages Fysom magic which calls methods by name using a convention ("onleave<state_name>").
+
+        :type build_state: BuildState
+        :type callback: callable
+        """
+        setattr(self._fsm, 'onleave' + build_state, callback)
 
     def _record_state_timestamp(self, event):
         """
