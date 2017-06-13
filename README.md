@@ -1,6 +1,6 @@
 [![Project Status](http://opensource.box.com/badges/active.svg)](http://opensource.box.com/badges)
 [![Build Status](https://travis-ci.org/box/ClusterRunner.svg?branch=master)](https://travis-ci.org/box/ClusterRunner)
-[![Build Status](https://ci.appveyor.com/api/projects/status/j7liyv4uuq5m936q/branch/master?svg=true)](https://ci.appveyor.com/project/aptxkid/clusterrunner)
+[![Build status](https://ci.appveyor.com/api/projects/status/gwei54m8anlbxwhn?svg=true)](https://ci.appveyor.com/project/josephharrington/clusterrunner)
 [![Coverage Status](https://coveralls.io/repos/box/ClusterRunner/badge.svg?branch=master)](https://coveralls.io/r/box/ClusterRunner?branch=master)
 
 # ClusterRunner
@@ -18,18 +18,20 @@ The entire process of installing, initializing, and executing tests through Clus
 
 Give it a shot by starting at our [documentation](http://www.clusterrunner.com) site.
 
-
 ## Read the Documentation
 
 Check out our [documentation](http://www.clusterrunner.com) site for everything you need to know.
 
 - [Getting Started](http://www.clusterrunner.com/docs/home/)
 - [Tutorials](http://www.clusterrunner.com/docs/configuring-your-project/)
-- [Contributing](http://www.clusterrunner.com/docs/development-guide/)
 
 ## Support
 
 Need to contact us directly? Email oss@box.com and be sure to include the name of this project in the subject.
+
+## Contributing
+- [Developer Setup](/test/README.md)
+- [Development Guide](http://www.clusterrunner.com/docs/development-guide/)
 
 ## Copyright and License
 
