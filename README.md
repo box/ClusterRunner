@@ -1,6 +1,6 @@
 [![Project Status](http://opensource.box.com/badges/active.svg)](http://opensource.box.com/badges)
 [![Build Status](https://travis-ci.org/box/ClusterRunner.svg?branch=master)](https://travis-ci.org/box/ClusterRunner)
-[![Build Status](https://ci.appveyor.com/api/projects/status/j7liyv4uuq5m936q/branch/master?svg=true)](https://ci.appveyor.com/project/aptxkid/clusterrunner)
+[![Build status](https://ci.appveyor.com/api/projects/status/gwei54m8anlbxwhn?svg=true)](https://ci.appveyor.com/project/josephharrington/clusterrunner)
 [![Coverage Status](https://coveralls.io/repos/box/ClusterRunner/badge.svg?branch=master)](https://coveralls.io/r/box/ClusterRunner?branch=master)
 
 # ClusterRunner
