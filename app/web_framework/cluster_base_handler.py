@@ -39,7 +39,7 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         :type ex: Exception
         """
         # Requests to access an item that isn't ready shouldn't log anything
-        if type(ex) is not ItemNotReadyError:
+        if not isinstance(ex, ItemNotReadyError):
             # _handle_request_exception() is called in the exception handler, so we can still use logger.exception.
             self._logger.exception('Exception occurred during request to {}.', self.request.uri)
         status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
