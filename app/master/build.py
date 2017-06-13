@@ -8,6 +8,8 @@ from threading import Lock, Thread
 import time
 import uuid
 
+from typing import Dict
+
 from app.common.build_artifact import BuildArtifact
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
@@ -19,7 +21,7 @@ from app.util.exceptions import ItemNotFoundError
 import app.util.fs
 from app.util.log import get_logger
 from app.util.single_use_coin import SingleUseCoin
-from app.common.metrics import build_state_duration_seconds
+from app.common.metrics import build_state_duration_seconds, serialized_build_time_seconds
 
 
 class Build(object):
@@ -471,7 +473,9 @@ class Build(object):
         data. This method also transitions the FSM to finished after the postbuild tasks are complete.
         """
         try:
-            self._create_build_artifact()
+            timing_data = self._read_subjob_timings_from_results()
+            self._create_build_artifact(timing_data)
+            serialized_build_time_seconds.observe(sum(timing_data.values()))
             self._delete_temporary_build_artifact_files()
             self._postbuild_tasks_are_finished = True
             self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
@@ -480,10 +484,10 @@ class Build(object):
             self._logger.exception('Postbuild tasks failed for build {}.'.format(self._build_id))
             self.mark_failed('Postbuild tasks failed due to an internal error: "{}"'.format(ex))
 
-    def _create_build_artifact(self):
+    def _create_build_artifact(self, timing_data: Dict[str, float]):  # pylint: disable=unsubscriptable-object
         self._build_artifact = BuildArtifact(self._build_results_dir())
         self._build_artifact.generate_failures_file()
-        self._build_artifact.write_timing_data(self._timing_file_path, self._read_subjob_timings_from_results())
+        self._build_artifact.write_timing_data(self._timing_file_path, timing_data)
         self._artifacts_tar_file = app.util.fs.tar_directory(self._build_results_dir(),
                                                              BuildArtifact.ARTIFACT_TARFILE_NAME)
         temp_tar_path = None

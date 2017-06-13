@@ -134,7 +134,7 @@ class TestBuild(BaseUnitTestCase):
         self._finish_test_build(build)
 
         # Verify build artifacts was called after subjobs completed
-        build._create_build_artifact.assert_called_once_with()
+        self.assertTrue(build._create_build_artifact.called)
         self.assertTrue(build._all_subjobs_are_finished())
         self.assertEqual(build._status(), BuildStatus.FINISHED)
 
