@@ -41,7 +41,9 @@ class Git(ProjectType):
         url_folder_path_parts = url_full_path_parts[:-1]
         repo_directory = os.path.join(
             base_sys_path,
-            url_components.netloc.replace(':', ''),  # remove colons from netloc (e.g. turn example:8000 to example8000)
+            # Remove colons from netloc/scheme (e.g. turn example:8000 to example8000).
+            # If netloc is empty the url is malformed -- use scheme instead.
+            (url_components.netloc or url_components.scheme).replace(':', ''),
             *url_folder_path_parts
         )
         # remove '-'s as PHP Intl extension doesn't appear to work if the repo is in a directory with a dash in the path

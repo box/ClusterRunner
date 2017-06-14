@@ -286,6 +286,31 @@ class TestGit(BaseUnitTestCase):
         project_type_popen_patch.side_effect = fake_popen_constructor
         return project_type_popen_patch
 
+    def test_get_repo_directory_with_no_netloc(self):
+        Configuration['repo_directory'] = join(expanduser('~'), '.clusterrunner', 'repos')
+        url = 'git.dev.box.net:Productivity/ClusterRunnerHealthCheck'
+
+        actual_repo_directory = Git.get_full_repo_directory(url)
+        expected_repo_directory = join(
+            Configuration['repo_directory'],
+            'git.dev.box.net',
+            'Productivity',
+            'ClusterRunnerHealthCheck',
+        )
+        self.assertEqual(expected_repo_directory, actual_repo_directory)
+
+    def test_get_repo_directory_with_netloc(self):
+        Configuration['repo_directory'] = join(expanduser('~'), '.clusterrunner', 'repos')
+        url = 'ssh://scm.dev.box.net:12345/awesome-project'
+
+        actual_repo_directory = Git.get_full_repo_directory(url)
+        expected_repo_directory = join(
+            Configuration['repo_directory'],
+            'scm.dev.box.net12345',
+            'awesomeproject',
+        )
+        self.assertEqual(expected_repo_directory, actual_repo_directory)
+
 
 class _FakePopenResult:
     def __init__(self, return_code=0, stdout='', stderr=''):
