@@ -172,6 +172,7 @@ def _execute_local_git_command(*args):
     command_output = subprocess.check_output(
         ['git'] + list(args),
         cwd=os.path.dirname(__file__),
+        stderr=subprocess.DEVNULL,
     )
     return command_output.decode()
 
