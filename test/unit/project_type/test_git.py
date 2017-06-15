@@ -82,34 +82,22 @@ class TestGit(BaseUnitTestCase):
     @genty_dataset(
         regular_path=(
             'http://scm.example.com/path/to/project', 
-             join(
-                'scm.example.com',
-                'path',
-                'to',
-                'project',
-            )
+             join('scm.example.com', 'path', 'to', 'project')
         ),
         with_netloc=(
             'ssh://scm.dev.box.net:12345/awesome-project',
-            join(
-                'scm.dev.box.net12345',
-                'awesomeproject',
-            )
+            join('scm.dev.box.net12345', 'awesomeproject')
         ),
         no_netloc=(
             'git.dev.box.net:Productivity/ClusterRunnerHealthCheck',
-            join(
-                'git.dev.box.net',
-                'Productivity',
-                'ClusterRunnerHealthCheck',
-            )
+            join('git.dev.box.net', 'Productivity', 'ClusterRunnerHealthCheck')
         ),
     )
     def test_get_full_repo_directory(self, url, expected_repo_path_without_base):
         Configuration['repo_directory'] = join(expanduser('~'), '.clusterrunner', 'repos')
         expected_repo_path = join(
             Configuration['repo_directory'], 
-            expected_repo_path_without_base
+            expected_repo_path_without_base,
         )
 
         actual_repo_path = Git.get_full_repo_directory(url)
