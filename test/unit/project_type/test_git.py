@@ -79,20 +79,29 @@ class TestGit(BaseUnitTestCase):
             start_new_session=ANY,
         )
 
-    def test_get_full_repo_directory(self):
+    @genty_dataset(
+        regular_path=(
+            'http://scm.example.com/path/to/project', 
+             join('scm.example.com', 'path', 'to', 'project')
+        ),
+        with_netloc=(
+            'ssh://scm.dev.box.net:12345/awesome-project',
+            join('scm.dev.box.net12345', 'awesomeproject')
+        ),
+        no_netloc=(
+            'git.dev.box.net:Productivity/ClusterRunnerHealthCheck',
+            join('git.dev.box.net', 'Productivity', 'ClusterRunnerHealthCheck')
+        ),
+    )
+    def test_get_full_repo_directory(self, url, expected_repo_path_without_base):
         Configuration['repo_directory'] = join(expanduser('~'), '.clusterrunner', 'repos')
-        url = 'http://scm.example.com/path/to/project'
-
-        actual_repo_sys_path = Git.get_full_repo_directory(url)
-
-        expected_repo_sys_path = join(
-            Configuration['repo_directory'],
-            'scm.example.com',
-            'path',
-            'to',
-            'project',
+        expected_repo_path = join(
+            Configuration['repo_directory'], 
+            expected_repo_path_without_base,
         )
-        self.assertEqual(expected_repo_sys_path, actual_repo_sys_path)
+
+        actual_repo_path = Git.get_full_repo_directory(url)
+        self.assertEqual(expected_repo_path, actual_repo_path)
 
     def test_get_timing_file_directory(self):
         Configuration['timings_directory'] = join(expanduser('~'), '.clusterrunner', 'timing')
