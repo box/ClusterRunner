@@ -1,13 +1,14 @@
-import requests
-
 from contextlib import suppress
 import functools
 import os
 from os.path import dirname, join, realpath
+from pprint import pformat
 from subprocess import DEVNULL, Popen
 import sys
 import shutil
 import tempfile
+
+import requests
 
 from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAPIClient
 from app.util import log, poll, process_utils
@@ -274,6 +275,7 @@ class FunctionalTestCluster(object):
             return
 
         def is_queue_empty():
+            nonlocal queue_data
             queue_resp = requests.get('{}/v1/queue'.format(self.master.url))
             if queue_resp and queue_resp.ok:
                 queue_data = queue_resp.json()
@@ -282,10 +284,12 @@ class FunctionalTestCluster(object):
             self._logger.info('Waiting on build queue to become empty.')
             return False
 
+        queue_data = None
         queue_is_empty = poll.wait_for(is_queue_empty, timeout_seconds=timeout, poll_period=1,
                                        exceptions_to_swallow=(requests.ConnectionError, ValueError))
         if not queue_is_empty:
-            self._logger.error('Master queue did not become empty before timeout.')
+            self._logger.error('Master queue did not become empty before timeout. '
+                               'Last queue response: {}'.format(pformat(queue_data)))
             raise TestClusterTimeoutError('Master queue did not become empty before timeout.')
 
     def kill_master(self):

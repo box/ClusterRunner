@@ -22,7 +22,8 @@ class TestConsoleOutput(BaseFunctionalTestCase):
             'project_directory': self.project_dir.name,
         })
         build_id = build_resp['build_id']
-        master.block_until_build_finished(build_id, timeout=30)
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
         self.assert_build_has_successful_status(build_id)
 
         # Bring down the single slave and assert that console output for the build is still available.

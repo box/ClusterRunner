@@ -1,6 +1,6 @@
 from urllib import parse
 
-from typing import Dict, Any
+from typing import Any, Callable, Dict, List, Optional
 
 from app.master.build import BuildStatus
 from app.util import log, poll
@@ -103,59 +103,68 @@ class ClusterMasterAPIClient(ClusterAPIClient):
                                             'URL: {}, Content:{}'.format(build_status_url, response_data))
         return response_data
 
-    def block_until_build_started(self, build_id, timeout=None, build_in_progress_callback=None):
+    def block_until_build_started(
+            self,
+            build_id: int,
+            timeout: int=30,
+            build_in_progress_callback: Optional[Callable]=None,
+    ) -> bool:
         """
         Poll the build status endpoint until the build is no longer queued.
 
         :param build_id: The id of the build to wait for
-        :type build_id: int
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
-        :type timeout: int | None
         :param build_in_progress_callback: A callback that will be called with the response data if the build has not
             yet finished. This would be useful, for example, for logging build progress.
-        :type build_in_progress_callback: callable
+        :return: Whether the build was started within the timeout
         """
-        self.block_until_build_status(
+        return self.block_until_build_has_status(
             build_id,
             [BuildStatus.BUILDING, BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED],
             timeout,
             build_in_progress_callback
         )
 
-    def block_until_build_finished(self, build_id, timeout=None, build_in_progress_callback=None):
+    def block_until_build_finished(
+            self,
+            build_id: int,
+            timeout: int=30,
+            build_in_progress_callback: Optional[Callable]=None,
+    ) -> bool:
         """
         Poll the build status endpoint until the build has finished.
 
         :param build_id: The id of the build to wait for
-        :type build_id: int
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
-        :type timeout: int | None
         :param build_in_progress_callback: A callback that will be called with the response data if the build has not
             yet finished. This would be useful, for example, for logging build progress.
-        :type build_in_progress_callback: callable
+        :return: Whether the build was finished within the timeout
         """
-        self.block_until_build_status(
+        return self.block_until_build_has_status(
             build_id,
             [BuildStatus.FINISHED, BuildStatus.ERROR, BuildStatus.CANCELED],
             timeout,
             build_in_progress_callback
         )
 
-    def block_until_build_status(self, build_id, build_statuses, timeout=None, build_in_progress_callback=None):
+    def block_until_build_has_status(
+            self,
+            build_id: int,
+            build_statuses: List[str],
+            timeout: int=30,
+            build_in_progress_callback: Optional[Callable]=None,
+    ) -> bool:
         """
-        Poll the build status endpoint until the build status matches a set of allowed statuses
+        Poll the build status endpoint until the build status matches one of the specified statuses.
 
         :param build_id: The id of the build to wait for
-        :type build_id: int
         :param build_statuses: A list of build statuses which we are waiting for.
-        :type build_statuses: list[str]
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
-        :type timeout: int | None
         :param build_in_progress_callback: A callback that will be called with the response data if the build has not
             yet finished. This would be useful, for example, for logging build progress.
-        :type build_in_progress_callback: callable
+        :return: Whether the build had one of the specified statuses within the timeout
         """
-        def is_build_finished():
+        def build_has_specified_status():
             response_data = self.get_build_status(build_id)
             build_data = response_data['build']
             if build_data['status'] in build_statuses:
@@ -164,7 +173,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
                 build_in_progress_callback(build_data)
             return False
 
-        poll.wait_for(is_build_finished, timeout_seconds=timeout)
+        return poll.wait_for(build_has_specified_status, timeout_seconds=timeout)
 
     def get_slaves(self):
         """

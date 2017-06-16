@@ -27,7 +27,8 @@ class TestMasterEndpoints(BaseFunctionalTestCase):
         master, build_id = self._start_master_only_and_post_a_new_job()
 
         master.cancel_build(build_id)
-        master.block_until_build_finished(build_id)
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
 
         self.assert_build_has_canceled_status(build_id=build_id)
 

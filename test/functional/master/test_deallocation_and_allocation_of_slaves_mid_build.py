@@ -23,11 +23,13 @@ class TestDeallocationAndAllocationOfSlavesMidBuild(BaseFunctionalTestCase):
             'project_directory': project_dir.name,
         })
         build_id = build_resp['build_id']
-        master.block_until_build_started(build_id, timeout=10)
+        self.assertTrue(master.block_until_build_started(build_id, timeout=30),
+                        'The build should start building within the timeout.')
         master.graceful_shutdown_slaves_by_id([1])
         self.cluster.block_until_n_slaves_dead(num_slaves=1, timeout=10)
         self.cluster.kill_slaves(kill_gracefully=False)
         self.assert_build_status_contains_expected_data(build_id, {'status': 'BUILDING'})
         self.cluster.start_slaves(1, num_executors_per_slave=1, start_port=43001)
-        master.block_until_build_finished(build_id, timeout=10)
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
         self.assert_build_has_successful_status(build_id)
