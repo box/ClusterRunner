@@ -30,7 +30,8 @@ class TestClusterBasic(BaseFunctionalTestCase):
             'project_directory': project_dir.name,
         })
         build_id = build_resp['build_id']
-        master.block_until_build_finished(build_id, timeout=30)
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
         slave.block_until_idle(timeout=20)  # ensure slave teardown has finished before making assertions
 
         self._assert_build_completed_as_expected(build_id, test_job_config, project_dir)
@@ -47,7 +48,8 @@ class TestClusterBasic(BaseFunctionalTestCase):
             'job_name': 'Simple',
         })
         build_id = build_resp['build_id']
-        master.block_until_build_finished(build_id, timeout=20)  # extra time here to allow for cloning the repo
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
 
         # Each atom of the demo project just echoes one of the numbers 1 through 10.
         expected_artifact_contents = [
@@ -93,8 +95,10 @@ class TestClusterBasic(BaseFunctionalTestCase):
             'project_directory': project_dir.name,
         })
 
-        master.block_until_build_finished(build_1['build_id'], timeout=30)
-        master.block_until_build_finished(build_2['build_id'], timeout=30)
+        self.assertTrue(master.block_until_build_finished(build_1['build_id'], timeout=45),
+                        'Build 1 should finish building within the timeout.')
+        self.assertTrue(master.block_until_build_finished(build_2['build_id'], timeout=45),
+                        'Build 2 should finish building within the timeout.')
         slave.block_until_idle(timeout=20)  # ensure slave teardown has finished before making assertions
 
         self._assert_build_completed_as_expected(build_1['build_id'], test_config, project_dir)

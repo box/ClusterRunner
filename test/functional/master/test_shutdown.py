@@ -51,14 +51,14 @@ class TestShutdown(BaseFunctionalTestCase):
             'project_directory': project_dir.name,
             })
         build_id = build_resp['build_id']
-
-        master.block_until_build_started(build_id, timeout=10)
+        self.assertTrue(master.block_until_build_started(build_id, timeout=30),
+                        'The build should start building within the timeout.')
 
         # Shutdown one on the slaves and test if the build can still complete
         master.graceful_shutdown_slaves_by_id([1])
 
-        master.block_until_build_finished(build_id, timeout=30)
-
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
         self.assert_build_has_successful_status(build_id=build_id)
 
         slaves_response = master.get_slaves()
