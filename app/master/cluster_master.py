@@ -2,6 +2,7 @@ from collections import OrderedDict
 import os
 
 from app.common.cluster_service import ClusterService
+from app.common.metrics import SlavesCollector
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
@@ -37,8 +38,9 @@ class ClusterMaster(ClusterService):
         # Remove this if/when build numbers are unique across master starts/stops
         if os.path.exists(self._master_results_path):
             fs.async_delete(self._master_results_path)
-
         fs.create_dir(self._master_results_path)
+
+        SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
 
     def _get_status(self):
         """
