@@ -4,6 +4,7 @@ import socket
 import requests
 from requests.adapters import HTTPAdapter, DEFAULT_POOLSIZE
 
+from app.common.metrics import ErrorType, internal_errors
 from app.util.conf.configuration import Configuration
 from app.util.decorators import retry_on_exception_exponential_backoff
 from app.util.log import get_logger
@@ -146,6 +147,7 @@ class Network(object):
 
         resp = self._session.request(method, url, data=data_to_send, timeout=timeout, *args, **kwargs)
         if not resp.ok and error_on_failure:
+            internal_errors.labels(ErrorType.NetworkRequestFailure).inc()  # pylint: disable=no-member
             raise _RequestFailedError('Request to {} failed with status_code {} and response "{}"'.
                                       format(url, str(resp.status_code), resp.text))
         return resp

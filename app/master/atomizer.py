@@ -1,3 +1,4 @@
+from app.common.metrics import ErrorType, internal_errors
 from app.master.atom import Atom
 from app.util import log
 from app.util.process_utils import get_environment_variable_setter_command
@@ -34,6 +35,7 @@ class Atomizer(object):
                 if exit_code != 0:
                     self._logger.error('Atomizer command "{}" for variable "{}" failed with exit code: {} and output:'
                                        '\n{}', atomizer_command, atomizer_var_name, exit_code, atomizer_output)
+                    internal_errors.labels(ErrorType.AtomizerFailure).inc()  # pylint: disable=no-member
                     raise AtomizerError('Atomizer command failed!')
 
                 new_atoms = []

@@ -1,4 +1,3 @@
-from app.common.metrics import request_latency
 from app.util import analytics
 from app.util.conf.configuration import Configuration
 from app.util.decorators import authenticated
@@ -64,7 +63,6 @@ class _RootHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _APIVersionOneHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self):
         response = {
             'slave': self._cluster_slave.api_representation(),
@@ -73,7 +71,6 @@ class _APIVersionOneHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _VersionHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self):
         response = {
             'version': Configuration['version'],
@@ -91,7 +88,6 @@ class _BuildHandler(_ClusterSlaveBaseAPIHandler):
 
 class _BuildSetupHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
-    @request_latency.time()
     def post(self, build_id):
         project_type_params = self.decoded_body.get('project_type_params')
         build_executor_start_index = self.decoded_body.get('build_executor_start_index')
@@ -100,7 +96,6 @@ class _BuildSetupHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _TeardownHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def post(self, build_id):
         self._cluster_slave.teardown_build(int(build_id))
         self._write_status()
@@ -112,7 +107,6 @@ class _SubjobsHandler(_ClusterSlaveBaseAPIHandler):
 
 class _SubjobHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
-    @request_latency.time()
     def post(self, build_id, subjob_id):
         atomic_commands = self.decoded_body.get('atomic_commands')
 
@@ -121,7 +115,6 @@ class _SubjobHandler(_ClusterSlaveBaseAPIHandler):
         )
         self._write_status(response, status_code=201)
 
-    @request_latency.time()
     def get(self, build_id, subjob_id):
         response = {
             'comment': 'not implemented',
@@ -138,7 +131,6 @@ class _AtomHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _AtomConsoleHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self, build_id, subjob_id, atom_id):
         """
         :type build_id: int
@@ -167,7 +159,6 @@ class _AtomConsoleHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _ExecutorsHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self):
         response = {
             'executors': [executor.api_representation() for executor in self._cluster_slave.executors_by_id.values()]
@@ -176,7 +167,6 @@ class _ExecutorsHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _ExecutorHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self, executor_id):
         executor = self._cluster_slave.executors_by_id[int(executor_id)]
         response = {
@@ -186,7 +176,6 @@ class _ExecutorHandler(_ClusterSlaveBaseAPIHandler):
 
 
 class _EventlogHandler(_ClusterSlaveBaseAPIHandler):
-    @request_latency.time()
     def get(self):
         # all arguments are optional, so default to None
         since_timestamp = self.get_query_argument('since_timestamp', None)
@@ -198,7 +187,6 @@ class _EventlogHandler(_ClusterSlaveBaseAPIHandler):
 
 class _KillHandler(_ClusterSlaveBaseAPIHandler):
     @authenticated
-    @request_latency.time()
     def post(self):
         self._write_status()
         kill_thread = SafeThread(

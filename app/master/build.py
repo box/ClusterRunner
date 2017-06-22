@@ -11,6 +11,7 @@ import uuid
 from typing import Dict
 
 from app.common.build_artifact import BuildArtifact
+from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
 from app.project_type.project_type import ProjectType
@@ -21,7 +22,6 @@ from app.util.exceptions import ItemNotFoundError
 import app.util.fs
 from app.util.log import get_logger
 from app.util.single_use_coin import SingleUseCoin
-from app.common.metrics import build_state_duration_seconds, serialized_build_time_seconds
 
 
 class Build(object):
@@ -234,6 +234,7 @@ class Build(object):
             app.util.fs.extract_tar(result_file_path, delete=True)
             self._parse_payload_for_atom_exit_code(subjob_id)
         except:
+            internal_errors.labels(ErrorType.SubjobWriteFailure).inc()  # pylint: disable=no-member
             self._logger.warning('Writing payload for subjob {} of build {} FAILED.', subjob_id, self._build_id)
             raise
 
@@ -481,6 +482,7 @@ class Build(object):
             self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
 
         except Exception as ex:  # pylint: disable=broad-except
+            internal_errors.labels(ErrorType.PostBuildFailure).inc()  # pylint: disable=no-member
             self._logger.exception('Postbuild tasks failed for build {}.'.format(self._build_id))
             self.mark_failed('Postbuild tasks failed due to an internal error: "{}"'.format(ex))
 
@@ -498,6 +500,8 @@ class Build(object):
             self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
                                                                  BuildArtifact.ARTIFACT_ZIPFILE_NAME)
         except Exception:  # pylint: disable=broad-except
+            internal_errors.labels(ErrorType.ZipFileCreationFailure).inc()  # pylint: disable=no-member
+
             # Due to issue #339 we are ignoring exceptions in the zip file creation for now.
             self._logger.exception('Zipping of artifacts failed. This error will be ignored.')
         finally:

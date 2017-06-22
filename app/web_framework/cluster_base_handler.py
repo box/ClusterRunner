@@ -4,6 +4,7 @@ import tornado.escape
 import tornado.web
 
 from app.util import log
+from app.common.metrics import http_request_duration_seconds
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError, PreconditionFailedError
 from app.util.network import ENCODED_BODY
@@ -30,6 +31,14 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         PreconditionFailedError: http.client.PRECONDITION_FAILED,
     }
 
+    def initialize(self, route_node=None, **kwargs):
+        """
+        :param route_node: Each handler is associated with a RouteNode
+        :type route_node: RouteNode
+        """
+        self._route_node = route_node
+        super().initialize(**kwargs)
+
     def _handle_request_exception(self, ex):
         """
         This is the "catch-all" exception handler that Tornado uses to map some exception types to appropriate HTTP
@@ -46,6 +55,12 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         self.set_status(status_code)
         self.finish()
 
+    def on_finish(self):
+        if self._route_node is not None:
+            http_request_duration_seconds.labels(self.request.method,  # pylint: disable=no-member
+                                                 self._route_node.regex(),
+                                                 self.get_status()).observe(self.request.request_time())
+
 
 class ClusterBaseAPIHandler(ClusterBaseHandler):
     """
@@ -54,13 +69,6 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
 
     SUCCESS_STATUS = 'SUCCESS'
     FAILURE_STATUS = 'FAILURE'
-
-    def initialize(self, route_node=None):
-        """
-        :param route_node: Each handler is associated with a RouteNode
-        :type route_node: RouteNode
-        """
-        self._route_node = route_node
 
     def _handle_request_exception(self, ex):
         """

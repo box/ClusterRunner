@@ -1,12 +1,15 @@
+from enum import Enum
+
 from typing import Callable, Iterator, List
 
-from prometheus_client import Histogram, REGISTRY
+from prometheus_client import Counter, Histogram, REGISTRY
 from prometheus_client.core import GaugeMetricFamily
 
 
-request_latency = Histogram(  # pylint: disable=no-value-for-parameter
-    'request_latency_seconds',
-    'Latency of HTTP requests in seconds')
+http_request_duration_seconds = Histogram(  # pylint: disable=no-value-for-parameter
+    'http_request_duration_seconds',
+    'Latency of HTTP requests in seconds',
+    ['method', 'endpoint', 'status'])
 
 build_state_duration_seconds = Histogram(  # pylint: disable=no-value-for-parameter
     'build_state_duration_seconds',
@@ -16,6 +19,30 @@ build_state_duration_seconds = Histogram(  # pylint: disable=no-value-for-parame
 serialized_build_time_seconds = Histogram(  # pylint: disable=no-value-for-parameter
     'serialized_build_time_seconds',
     'Total amount of time that would have been consumed by builds if all work was done serially')
+
+internal_errors = Counter(
+    'internal_errors',
+    'Total number of internal errors',
+    ['type'])
+
+
+class ErrorType(str, Enum):
+    AtomizerFailure = 'AtomizerFailure'
+    NetworkRequestFailure = 'NetworkRequestFailure'
+    PostBuildFailure = 'PostBuildFailure'
+    SetupBuildFailure = 'SetupBuildFailure'
+    SubjobWriteFailure = 'SubjobWriteFailure'
+    ZipFileCreationFailure = 'ZipFileCreationFailure'
+
+    def __str__(self):
+        """
+        Even though this class inherits from str, still include a __str__ method so that
+        metrics in the /metrics endpoint appear as
+        internal_errors{type="PostBuildFailure"} 1.0
+        instead of
+        internal_errors{type="ErrorType.PostBuildFailure"} 1.0
+        """
+        return self.value
 
 
 class SlavesCollector:

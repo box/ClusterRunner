@@ -2,7 +2,7 @@ from collections import OrderedDict
 import os
 
 from app.common.cluster_service import ClusterService
-from app.common.metrics import SlavesCollector
+from app.common.metrics import ErrorType, SlavesCollector, internal_errors
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
@@ -218,6 +218,7 @@ class ClusterMaster(ClusterService):
 
         :type slave: Slave
         """
+        internal_errors.labels(ErrorType.SetupBuildFailure).inc()  # pylint: disable=no-member
         raise BadRequestError('Setup failure handling on the master is not yet implemented.')
 
     def handle_request_for_new_build(self, build_params):
