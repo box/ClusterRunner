@@ -24,6 +24,9 @@ from app.util.log import get_logger
 from app.util.single_use_coin import SingleUseCoin
 
 
+MAX_SETUP_FAILURES = 5
+
+
 class Build(object):
     """
     A build is a single execution of any configured job. This class:
@@ -74,6 +77,11 @@ class Build(object):
             },
             leave_state_callbacks=leave_state_callbacks
         )
+
+        # Number of times build_setup has failed on this build. If
+        # setup_failures increases beyond MAX_SETUP_FAILURES, the build is
+        # cancelled
+        self.setup_failures = 0
 
     def api_representation(self):
         failed_atoms_api_representation = None

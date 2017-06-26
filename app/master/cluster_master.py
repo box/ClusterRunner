@@ -3,7 +3,7 @@ import os
 
 from app.common.cluster_service import ClusterService
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
-from app.master.build import Build
+from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
 from app.master.build_scheduler_pool import BuildSchedulerPool
@@ -219,7 +219,13 @@ class ClusterMaster(ClusterService):
         :type slave: Slave
         """
         internal_errors.labels(ErrorType.SetupBuildFailure).inc()  # pylint: disable=no-member
-        raise BadRequestError('Setup failure handling on the master is not yet implemented.')
+        build = self.get_build(slave.current_build_id)
+        build.setup_failures += 1
+        if build.setup_failures >= MAX_SETUP_FAILURES:
+            build.cancel()
+            build.mark_failed('Setup failed on this build more than {} times. Failing the build.'
+                              .format(MAX_SETUP_FAILURES))
+        slave.teardown()
 
     def handle_request_for_new_build(self, build_params):
         """
@@ -279,7 +285,7 @@ class ClusterMaster(ClusterService):
         build = self._all_builds_by_id[int(build_id)]
         slave = self._all_slaves_by_url[slave_url]
         # If the build has been canceled, don't work on the next subjob.
-        if not build.is_finished:  # WIP(joey): This check should be internal to the Build object.
+        if not build.is_finished or build.has_error:  # WIP(joey): This check should be internal to the Build object.
             try:
                 build.complete_subjob(subjob_id, payload)
             finally:
