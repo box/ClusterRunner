@@ -228,7 +228,6 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
         response = {
             'builds': [build.api_representation() for build in self._cluster_master.builds()]
         }
-        self._logger.warning(self.api_version)
         self.write(response)
 
 
