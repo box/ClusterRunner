@@ -2,11 +2,13 @@ import functools
 import os
 import sys
 import tornado.ioloop
+from tornado.httpserver import HTTPServer
 
 from app.subcommands.subcommand import Subcommand
 from app.util import fs
 from app.util.safe_thread import SafeThread
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
+from app.util.conf.configuration import Configuration
 
 
 class ServiceSubcommand(Subcommand):
@@ -33,7 +35,10 @@ class ServiceSubcommand(Subcommand):
         # will raise an exception if another process is using the same port. We rely on this exception to force us to
         # exit if there are any port conflicts.
         try:
-            application.listen(port, '0.0.0.0')
+            # If SSL cert and key files are provided in configuration, ClusterRunner wil start with HTTPS protocol.
+            # Otherwise ClusterRunner will start with HTTP protocol.
+            server = HTTPServer(application, ssl_options=self._get_https_options())
+            server.listen(port, '0.0.0.0')
         except OSError:
             self._logger.error('Could not start application on port {}. Is port already in use?'.format(port))
             sys.exit(1)
@@ -54,3 +59,14 @@ class ServiceSubcommand(Subcommand):
             except OSError:
                 pass
         UnhandledExceptionHandler.singleton().add_teardown_callback(remove_pid_file)
+
+    def _get_https_options(self):
+        https_cert_file = Configuration['https_cert_file'] if 'https_cert_file' in Configuration else None
+        https_key_file = Configuration['https_key_file'] if 'https_key_file' in Configuration else None
+
+        if https_cert_file and https_key_file:
+            return {
+                'certfile': https_cert_file,
+                'keyfile': https_key_file,
+            }
+        return None

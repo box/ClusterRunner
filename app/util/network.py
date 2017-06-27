@@ -38,7 +38,8 @@ class Network(object):
         if self._session:
             self._session.close()  # Close any pooled connections held by the previous session.
         self._session = requests.Session()
-        self._session.mount('http://', HTTPAdapter(pool_connections=self._poolsize, pool_maxsize=self._poolsize))
+        self._session.mount('{}://'.format(Configuration['protocol_scheme']),
+                            HTTPAdapter(pool_connections=self._poolsize, pool_maxsize=self._poolsize))
 
     def get(self, *args, **kwargs):
         """
@@ -66,6 +67,7 @@ class Network(object):
         :type url: str
         :type request_params: dict [str, any]
         :param secret: the secret used to produce the message auth digest
+        :param error_on_failure: Boolean to ignore failure
         :rtype: requests.Response
         """
         encoded_body = self.encode_body(request_params)

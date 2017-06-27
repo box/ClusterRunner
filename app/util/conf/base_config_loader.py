@@ -98,6 +98,12 @@ class BaseConfigLoader(object):
         # The master must have full clones, as slaves fetch from the master, and one cannot fetch from a shallow clone.
         conf.set('shallow_clones', False)
 
+        # Set the default protocol scheme to 'http'
+        conf.set('protocol_scheme', 'http')
+        # Initialize the SSL cert and key file paths to None
+        conf.set('https_cert_file', None)
+        conf.set('https_key_file', None)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory
@@ -144,6 +150,8 @@ class BaseConfigLoader(object):
             'cors_allowed_origins_regex',
             'get_project_from_master',
             'default_http_timeout',
+            'https_cert_file',
+            'https_key_file',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):
