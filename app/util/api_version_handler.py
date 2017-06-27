@@ -19,11 +19,11 @@ class APIVersionHandler(object):
         :type uri: str
         :rtype: int
         """
-        matches = re.match('.*(?:application/vnd.clusterrunner.v(\d+)\+json).*', header, re.I)
+        matches = re.match(r'.*(?:application/vnd.clusterrunner.v(\d+)\+json).*', header, re.I)
         try:
             matched_version = int(matches.group(1))
             version = cls._get(matched_version, uri)
-        except:
+        except (IndexError, AttributeError, ValueError):
             # No version was found or specified in the request header.
             version = cls._get_default(uri)
         return version
@@ -31,7 +31,7 @@ class APIVersionHandler(object):
     @classmethod
     def _get(cls, version, uri):
         """
-        Returns the version being requested if it exists, if not it returns the default 
+        Returns the version being requested if it exists, if not it returns the default
         version of the API.
         """
         if version in cls._versions:
@@ -69,4 +69,4 @@ class APIVersionHandler(object):
         version with the highest value. To ensure we get this value, the list is sorted beforehand.
         """
         cls._versions.sort()
-        cls._versions[-1]
+        return cls._versions[-1]
