@@ -1,9 +1,7 @@
 import re
 
 class APIVersionHandler(object):
-    """
-    List of all versions of the API.
-    """
+    # List of all versions of the API.
     _versions = [
         1,
         2
@@ -33,6 +31,7 @@ class APIVersionHandler(object):
         """
         Returns the version being requested if it exists, if not it returns the default
         version of the API.
+        :rtype int:
         """
         if version in cls._versions:
             return version
@@ -49,24 +48,26 @@ class APIVersionHandler(object):
         :rtype int:
         """
         if 'v1' in uri.split('/'):
-            return cls._get_first()
+            return cls.get_first()
         else:
-            return cls._get_latest()
+            return cls.get_latest()
 
     @classmethod
-    def _get_first(cls):
+    def get_first(cls):
         """
         Returns the first version of the API. This assumes that the first version is the
         version with the lowest value. To ensure we get this value, the list is sorted beforehand.
+        :rtype int:
         """
         cls._versions.sort()
         return cls._versions[0]
 
     @classmethod
-    def _get_latest(cls):
+    def get_latest(cls):
         """
         Returns the latest version of the API. This assumes that the latest version is the
         version with the highest value. To ensure we get this value, the list is sorted beforehand.
+        :rtype int:
         """
         cls._versions.sort()
         return cls._versions[-1]

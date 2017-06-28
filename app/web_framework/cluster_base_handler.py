@@ -38,6 +38,8 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         :type route_node: RouteNode
         """
         self._route_node = route_node
+        # Default to the latest API version.
+        self.api_version = APIVersionHandler.get_latest()
         super().initialize(**kwargs)
 
     def _handle_request_exception(self, ex):
