@@ -8,7 +8,7 @@ class APIVersionHandler(object):
     ]
 
     @classmethod
-    def resolve_version(cls, header, uri):
+    def resolve_version(cls, header: str, uri: str):
         """
         Gets the respective version of the API relative to the request header and URI.
         :param header: The value of the header which to search for version type (Content-Type/Accept).
@@ -27,7 +27,7 @@ class APIVersionHandler(object):
         return version
 
     @classmethod
-    def _get(cls, version, uri):
+    def _get(cls, version: int, uri: str):
         """
         Returns the version being requested if it exists, if not it returns the default
         version of the API.
@@ -39,7 +39,7 @@ class APIVersionHandler(object):
             return cls._get_default(uri)
 
     @classmethod
-    def _get_default(cls, uri):
+    def _get_default(cls, uri: str):
         """
         Get's the default version of the API if none was specified. This takes into account
         the URI of the request.
