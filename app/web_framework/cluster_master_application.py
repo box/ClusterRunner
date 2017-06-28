@@ -93,7 +93,7 @@ class _VersionHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
         response = {
             'version': Configuration['version'],
-            'api_version': self.api_version
+            'api_version': self.api_version,
         }
         self.write(response)
 
