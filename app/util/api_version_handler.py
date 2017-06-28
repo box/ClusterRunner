@@ -31,6 +31,10 @@ class APIVersionHandler(object):
         """
         Returns the version being requested if it exists, if not it returns the default
         version of the API.
+        :param version: The version being requested.
+        :type version: int
+        :param uri: The URI from the request being checked.
+        :type uri: str
         :rtype int:
         """
         if version in cls._versions:
@@ -43,7 +47,7 @@ class APIVersionHandler(object):
         """
         Get's the default version of the API if none was specified. This takes into account
         the URI of the request.
-        :param uri: The URI form the request being checked.
+        :param uri: The URI from the request being checked.
         :type uri: str
         :rtype int:
         """

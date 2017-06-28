@@ -3,7 +3,7 @@ from genty import genty, genty_dataset
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 
 @genty
-class TestMasterEndpoints(BaseFunctionalTestCase):
+class TestMasterAPIVersionRequests(BaseFunctionalTestCase):
 
     def _build_accept_header_with_api_version(self, version: int):
         header = 'Accept'
