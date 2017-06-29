@@ -5,7 +5,7 @@ class RouteNode(object):
     """
     A tree data structure for representing the parts of a url path, for routing.
     """
-    def __init__(self, regex_part, handler, label=None):
+    def __init__(self, regex_part, handler, label=None, optional=False):
         """
         :param regex_part: To generate the regex the web framework will use to match this route, we combine a set of
         regex_parts: The regex_part in this node and the regex_parts in all its ancestor nodes.
@@ -17,6 +17,7 @@ class RouteNode(object):
         """
         self.label = label or regex_part
         self.regex_part = regex_part
+        self.optional = optional
         self.handler = handler
         self.children = list()
         self.parent = None
@@ -26,8 +27,19 @@ class RouteNode(object):
         The route's regex, used to register this route with the web framework
         :rtype: str
         """
-        ancestor_regex_parts = [ancestor.regex_part.rstrip('/') for ancestor in list(reversed(self.ancestors()))]
-        return r'/'.join(ancestor_regex_parts + [self.regex_part]).rstrip('/') + '/?'
+        ancestor_regex_parts = []
+        for ancestor in list(reversed(self.ancestors())):
+            ancestor_regex = ancestor.regex_part.rstrip('/') + '/'
+            if ancestor.optional:
+                # Non capturing so we don't accidentally pass this as a parameter to the handlers.
+                ancestor_regex = '(?:' + ancestor.regex_part.rstrip('/') + '/)?'
+            ancestor_regex_parts.append(ancestor_regex)
+
+        regex_part = self.regex_part
+        if self.optional:
+            regex_part = '(?:' + self.regex_part.rstrip('/') + ')?'
+
+        return r''.join(ancestor_regex_parts + [regex_part]).rstrip('/') + '/?'
 
     def route_template(self):
         """

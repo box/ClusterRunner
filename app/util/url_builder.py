@@ -18,7 +18,7 @@ class UrlBuilder(object):
         self._api_version = api_version
         self._scheme = 'http://'
 
-    def url(self, *args):
+    def url(self, *args, use_versioned_url=True):
         """
         Produces a url given a set of paths
         :param args: A list of args to string together into a url path
@@ -26,5 +26,8 @@ class UrlBuilder(object):
         :rtype: str
         """
         schemed_address = self._scheme + re.sub(r'^[a-z]+://', '', self._service_address)
-        versioned_url = urljoin(schemed_address, self._api_version)
-        return '/'.join([versioned_url] + [str(arg).strip('/') for arg in args])
+        if use_versioned_url:
+            starting_url = urljoin(schemed_address, self._api_version)
+        else:
+            starting_url = schemed_address
+        return '/'.join([starting_url] + [str(arg).strip('/') for arg in args])
