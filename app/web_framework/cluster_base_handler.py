@@ -9,7 +9,7 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import AuthenticationError, BadRequestError, ItemNotFoundError, ItemNotReadyError, PreconditionFailedError
 from app.util.network import ENCODED_BODY
 from app.util.session_id import SessionId
-from app.util.api_version_handler import APIVersionHandler
+from app.web_framework.api_version_handler import APIVersionHandler
 
 
 # pylint: disable=attribute-defined-outside-init
@@ -92,6 +92,7 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
         accept_header = self.request.headers.get('Accept')
         uri = self.request.uri
         self.api_version = APIVersionHandler.resolve_version(accept_header, uri)
+        super().set_header(APIVersionHandler.API_VERSION_HEADER_KEY, self.api_version)
 
         # Decode an encoded body, if present. Otherwise fall back to decoding the raw request body. See the comments in
         # the util.network.Network class for more information about why we're doing this.
