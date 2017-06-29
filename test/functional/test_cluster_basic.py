@@ -6,9 +6,10 @@ import yaml
 from genty import genty, genty_dataset
 
 from app.common.build_artifact import BuildArtifact
+from app.master.build import BuildStatus
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.framework.functional.fs_item import Directory, File
-from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, JOB_WITH_SETUP_AND_TEARDOWN
+from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, FAILING_SETUP_JOB, JOB_WITH_SETUP_AND_TEARDOWN
 
 
 @genty
@@ -103,6 +104,28 @@ class TestClusterBasic(BaseFunctionalTestCase):
 
         self._assert_build_completed_as_expected(build_1['build_id'], test_config, project_dir)
         self._assert_build_completed_as_expected(build_2['build_id'], test_config, project_dir)
+
+    def test_failed_setup_does_not_kill_slave(self):
+        master = self.cluster.start_master()
+        slave = self.cluster.start_slave()
+
+        project_dir = tempfile.TemporaryDirectory()
+        build_resp = master.post_new_build({
+            'type': 'directory',
+            'config': yaml.safe_load(FAILING_SETUP_JOB.config[os.name])['FailingSetupJob'],
+            'project_directory': project_dir.name,
+        })
+
+        build_id = build_resp['build_id']
+        self.assertTrue(master.block_until_build_finished(build_id, timeout=30),
+                        'The build should finish building within the timeout.')
+
+        slaves = master.get_slaves()['slaves']
+        build = master.get_build_status(build_id)['build']
+        self.assertGreater(build['num_subjobs'], 0)
+        self.assertTrue(all(slave['is_alive'] for slave in slaves),
+                        'Slave should not die even though setup failed.')
+        self.assertEqual(build['status'], BuildStatus.ERROR)
 
     def _assert_build_completed_as_expected(self, build_id, test_job_config, project_dir):
         if test_job_config.expected_to_fail:

@@ -175,3 +175,29 @@ BasicSleepingJob:
     expected_num_subjobs=5,
     expected_num_atoms=5,
 )
+
+FAILING_SETUP_JOB = FunctionalTestJobConfig(
+    config={
+        'posix': """
+FailingSetupJob:
+    setup_build:
+        - exit 1
+    commands:
+        - echo $TOKEN
+    atomizers:
+        - TOKEN: seq 0 4
+""",
+        'nt': """
+FailingSetupJob:
+    setup_build:
+        - exit /b 1
+    commands:
+        - echo !TOKEN!
+    atomizers:
+        - TOKEN: seq 0 4
+"""
+    },
+    expected_to_fail=True,
+    expected_num_subjobs=5,
+    expected_num_atoms=5
+)
