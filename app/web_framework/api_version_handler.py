@@ -17,6 +17,9 @@ class APIVersionHandler():
         :param accept_header_value: The value of the header which to search for version type (Content-Type/Accept).
         :param uri: The URI from the request being checked.
         """
+        if accept_header_value is None:
+            return cls._get_default(uri)
+
         version = cls._get_default(uri)
         try:
             matches = re.match(r'.*(?:application/vnd.clusterrunner.v(\d+)\+json).*',
