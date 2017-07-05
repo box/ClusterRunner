@@ -5,6 +5,7 @@ import sys
 import shutil
 
 from app.util import autoversioning, fs
+from app.util.conf.configuration import Configuration
 from app.util.conf.config_file import ConfigFile
 
 
@@ -115,6 +116,10 @@ class BaseConfigLoader(object):
 
         conf.set('log_file', join(log_dir, conf.get('log_filename')))
         conf.set('eventlog_file', join(log_dir, conf.get('eventlog_filename')))
+
+        # Set protocol scheme (by default it is set to 'http')
+        if Configuration['https_cert_file'] and Configuration['https_key_file']:
+            conf.set('protocol_scheme', 'https')
 
     def load_from_config_file(self, config, config_filename):
         """

@@ -4,11 +4,11 @@ import sys
 import tornado.ioloop
 from tornado.httpserver import HTTPServer
 
+from app.util.conf.configuration import Configuration
 from app.subcommands.subcommand import Subcommand
 from app.util import fs
 from app.util.safe_thread import SafeThread
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
-from app.util.conf.configuration import Configuration
 
 
 class ServiceSubcommand(Subcommand):
@@ -61,8 +61,8 @@ class ServiceSubcommand(Subcommand):
         UnhandledExceptionHandler.singleton().add_teardown_callback(remove_pid_file)
 
     def _get_https_options(self):
-        https_cert_file = Configuration['https_cert_file'] if 'https_cert_file' in Configuration else None
-        https_key_file = Configuration['https_key_file'] if 'https_key_file' in Configuration else None
+        https_cert_file = Configuration['https_cert_file']
+        https_key_file = Configuration['https_key_file']
 
         if https_cert_file and https_key_file:
             return {

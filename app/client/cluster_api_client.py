@@ -3,11 +3,11 @@ from urllib import parse
 from typing import Any, Callable, Dict, List, Optional
 
 from app.master.build import BuildStatus
+from app.util.conf.configuration import Configuration
 from app.util import log, poll
 from app.util.network import Network
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
-from app.util.conf.configuration import Configuration
 
 
 class ClusterAPIClient(object):
@@ -31,7 +31,7 @@ class ClusterAPIClient(object):
         """
         url = url.strip()
         if not url.startswith('http'):
-            url = '{}://'.format(Configuration['protocol_scheme']) + url
+            url = '{}://{}'.format(Configuration['protocol_scheme'], url)
         return url
 
 

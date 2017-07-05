@@ -1,7 +1,6 @@
 from os.path import join
 
 from app.util.conf.base_config_loader import BaseConfigLoader
-from app.util.conf.configuration import Configuration
 
 
 class MasterConfigLoader(BaseConfigLoader):
@@ -39,9 +38,3 @@ class MasterConfigLoader(BaseConfigLoader):
         # where to store results on the master
         conf.set('results_directory', join(base_directory, 'results', 'master'))
         conf.set('timings_directory', join(base_directory, 'timings', 'master'))  # timing data
-
-        # Set protocol scheme (by default its set to 'http')
-        https_cert_file = Configuration['https_cert_file']
-        https_key_file = Configuration['https_key_file']
-        if https_cert_file and https_key_file:
-            conf.set('protocol_scheme', 'https')
