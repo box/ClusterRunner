@@ -43,7 +43,7 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         uri = self.request.uri
         self.api_version = APIVersionHandler.resolve_version(accept_header, uri)
 
-        super().set_header(APIVersionHandler.API_VERSION_HEADER_KEY, self.api_version)
+        self.set_header(APIVersionHandler.API_VERSION_HEADER_KEY, self.api_version)
         super().initialize(**kwargs)
 
     def _handle_request_exception(self, ex):

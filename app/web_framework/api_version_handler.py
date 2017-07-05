@@ -1,7 +1,8 @@
 import re
+from typing import Optional
 
 
-class APIVersionHandler():
+class APIVersionHandler:
     OLD_VERSIONED_URI_COMPONENT = 'v1'
     API_VERSION_HEADER_KEY = 'Api-Version'
 
@@ -11,7 +12,7 @@ class APIVersionHandler():
     ]
 
     @classmethod
-    def resolve_version(cls, accept_header_value: str, uri: str) -> int:
+    def resolve_version(cls, accept_header_value: Optional[str], uri: str) -> int:
         """
         Get the respective version of the API relative to the request header and URI.
         :param accept_header_value: The value of the header which to search for version type (Content-Type/Accept).
@@ -22,8 +23,8 @@ class APIVersionHandler():
 
         version = cls._get_default(uri)
         try:
-            matches = re.match(r'.*(?:application/vnd.clusterrunner.v(\d+)\+json).*',
-                               accept_header_value, re.I)
+            matches = re.search(r'(?:application/vnd.clusterrunner.v(\d+)\+json)',
+                                accept_header_value, re.IGNORECASE)
             matched_version = int(matches.group(1))
             version = matched_version if matched_version in cls._versions else cls._get_default(uri)
         except (IndexError, AttributeError, ValueError):

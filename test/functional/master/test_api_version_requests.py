@@ -17,7 +17,6 @@ class TestMasterAPIVersionRequests(BaseFunctionalTestCase):
         invalid_version_accept_header=(999, 1),
     )
     def test_api_version_with_accept_header(self, version: int, exp_version: int):
-        # TODO: Add tests for no `v1` in URI when it gets deprecated.
         master = self.cluster.start_master()
         version_url = master._api.url('version')
         header = self._build_accept_header_with_api_version(version) if version else None
