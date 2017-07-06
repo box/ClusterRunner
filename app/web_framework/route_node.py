@@ -41,13 +41,22 @@ class RouteNode(object):
 
         return r''.join(ancestor_regex_parts + [regex_part]).rstrip('/') + '/?'
 
-    def route_template(self):
+    def route_template(self, uri=None):
         """
         The generic form of this route, for display in the API 'child routes'
         :rtype: str
         """
-        ancestor_names = [ancestor.name().rstrip('/') for ancestor in list(reversed(self.ancestors()))]
+        uri_parts = uri.split('/') if uri else []
+        ancestor_names = []
+        for ancestor in list(reversed(self.ancestors())):
+            # If a route is marked optional, only include it in route template if its already in URI
+            if ancestor.optional and ancestor.name() not in uri_parts:
+                continue
+            ancestor_names.append(ancestor.name().rstrip('/'))
+
         return '/'.join(ancestor_names + [self.name()])
+        # ancestor_names = [ancestor.name().rstrip('/') for ancestor in list(reversed(self.ancestors()))]
+        # return '/'.join(ancestor_names + [self.name()])
 
     def name(self):
         """
@@ -73,6 +82,24 @@ class RouteNode(object):
         for node in child_nodes:
             node.parent = self
         return self
+
+    def get_child_routes(self, uri=None):
+        """
+        Get a list of all children routes for this route. If one of the child routes is marked optional
+        and it doesn't appear within the requested URI, we return its children instead of it.
+        :param uri: The URI of the request.
+        """
+        if uri is None:
+            return self.children
+
+        uri_parts = uri.split('/')
+        child_routes = list()
+        for child in self.children:
+            if child.optional and child.name() not in uri_parts:
+                child_routes += child.get_child_routes(uri)
+            else:
+                child_routes.append(child)
+        return child_routes
 
     def ancestors(self):
         """

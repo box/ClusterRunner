@@ -1,5 +1,5 @@
 from genty import genty, genty_dataset
-from app.util.api_version_handler import APIVersionHandler
+from app.web_framework.api_version_handler import APIVersionHandler
 
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 
