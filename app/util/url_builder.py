@@ -1,5 +1,6 @@
 import re
 from urllib.parse import urljoin
+from app.util.conf.configuration import Configuration
 
 
 class UrlBuilder(object):
@@ -10,13 +11,13 @@ class UrlBuilder(object):
 
     def __init__(self, service_address, api_version=API_VERSION_1):
         """
-        :param service_address: A host and port and optional scheme, like "http://hostname.example.com:43000"
+        :param service_address: A host and port and optional scheme, like "http(s)://hostname.example.com:43000"
         :type service_address: str
         :type api_version: str
         """
         self._service_address = service_address
         self._api_version = api_version
-        self._scheme = 'http://'
+        self._scheme = '{}://'.format(Configuration['protocol_scheme'])
 
     def url(self, *args):
         """

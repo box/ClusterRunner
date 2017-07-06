@@ -252,7 +252,7 @@ class DeploySubcommand(Subcommand):
 
             # In order to urlparse's 'hostname' attribute to get properly set, the url must start with the scheme
             if not slave_url.startswith('http'):
-                slave_url = 'http://{}'.format(slave_url)
+                slave_url = '{}://{}'.format(Configuration['protocol_scheme'], slave_url)
 
             # Must strip out the port and scheme
             registered_slave_hosts.append(urlparse(slave_url).hostname)

@@ -119,7 +119,7 @@ class ServiceRunner(object):
         timeout_time = time.time() + timeout
         while True:
             try:
-                resp = network.get('http://{}'.format(service_url), timeout=timeout)
+                resp = network.get('{}://{}'.format(Configuration['protocol_scheme'], service_url), timeout=timeout)
                 if resp and resp.ok:
                     return True
             except (requests.RequestException, ConnectionError):

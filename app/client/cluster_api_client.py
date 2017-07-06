@@ -3,6 +3,7 @@ from urllib import parse
 from typing import Any, Callable, Dict, List, Optional
 
 from app.master.build import BuildStatus
+from app.util.conf.configuration import Configuration
 from app.util import log, poll
 from app.util.network import Network
 from app.util.secret import Secret
@@ -15,7 +16,7 @@ class ClusterAPIClient(object):
     """
     def __init__(self, base_api_url):
         """
-        :param base_api_url: The base API url of the service (e.g., 'http://localhost:43000')
+        :param base_api_url: The base API url of the service (e.g., 'http(s)://localhost:43000')
         :type base_api_url: str
         """
         self._api = UrlBuilder(self._ensure_url_has_scheme(base_api_url))
@@ -24,13 +25,13 @@ class ClusterAPIClient(object):
 
     def _ensure_url_has_scheme(self, url):
         """
-        If url does not start with 'http' or 'https', add 'http://' to the beginning.
+        If url does not start with 'http' or 'https', add 'http://' or 'https://' at the beginning.
         :type url: str
         :rtype: str
         """
         url = url.strip()
         if not url.startswith('http'):
-            url = 'http://' + url
+            url = '{}://{}'.format(Configuration['protocol_scheme'], url)
         return url
 
 

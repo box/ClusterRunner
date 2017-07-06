@@ -14,6 +14,7 @@ from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAP
 from app.util import log, poll, process_utils
 from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
+from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
 
 
@@ -391,7 +392,7 @@ class ClusterController(object):
 
     @property
     def url(self):
-        return 'http://{}:{}'.format(self.host, self.port)
+        return '{}://{}:{}'.format(Configuration['protocol_scheme'], self.host, self.port)
 
     def is_alive(self):
         return self.process.poll() is None

@@ -20,7 +20,7 @@ class BuildRunner(object):
     build results.
 
     Example usage pattern:
-    >>> runner = BuildRunner('http://mymaster.net:123', {'type':'git', 'url':'https://github.com/box/StatusWolf.git'})
+    >>> runner = BuildRunner('https://mymaster.net:123', {'type':'git', 'url':'https://github.com/box/StatusWolf.git'})
     >>> runner.run()
     """
 
