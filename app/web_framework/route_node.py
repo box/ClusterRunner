@@ -55,8 +55,6 @@ class RouteNode(object):
             ancestor_names.append(ancestor.name().rstrip('/'))
 
         return '/'.join(ancestor_names + [self.name()])
-        # ancestor_names = [ancestor.name().rstrip('/') for ancestor in list(reversed(self.ancestors()))]
-        # return '/'.join(ancestor_names + [self.name()])
 
     def name(self):
         """
