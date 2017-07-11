@@ -2,11 +2,13 @@ from unittest.mock import Mock, MagicMock, ANY
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave
+from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave, SlaveError
+from app.master.subjob import Subjob
+from app.util import network
 from app.util.secret import Secret
 from app.util.session_id import SessionId
 from test.framework.base_unit_test_case import BaseUnitTestCase
-from test.framework.comparators import AnyStringMatching
+from test.framework.comparators import AnyStringMatching, AnythingOfType
 
 
 class TestSlave(BaseUnitTestCase):
@@ -188,12 +190,43 @@ class TestSlave(BaseUnitTestCase):
 
         self.assertEqual(self.mock_network.reset_session.call_count, 1)
 
-    def _create_slave(self, **kwargs):
+    def test_start_subjob_raises_slave_error_on_request_failure(self):
+        self.mock_network.post_with_digest.side_effect = network.RequestFailedError
+        slave = self._create_slave()
+
+        with self.assertRaises(SlaveError):
+            slave.start_subjob(self._create_test_subjob())
+
+    def test_start_subjob_makes_correct_call_to_slave(self):
+        slave = self._create_slave(slave_url='splinter.sensei.net:43001')
+        subjob = self._create_test_subjob(build_id=911, subjob_id=187)
+
+        slave.start_subjob(subjob)
+
+        expected_start_subjob_url = 'http://splinter.sensei.net:43001/v1/build/911/subjob/187'
+        (url, post_body, _), _ = self.mock_network.post_with_digest.call_args
+        self.assertEqual(url, expected_start_subjob_url,
+                         'A correct POST call should be sent to slave to start a subjob.')
+        self.assertEqual(post_body, {'atomic_commands': AnythingOfType(list)},
+                         'Call to start subjob should contain list of atomic_commands for this subjob.')
+
+    def _create_slave(self, **kwargs) -> Slave:
         """
         Create a slave for testing.
         :param kwargs: Any constructor parameters for the slave; if none are specified, test defaults will be used.
-        :rtype: Slave
         """
         kwargs.setdefault('slave_url', self._FAKE_SLAVE_URL)
         kwargs.setdefault('num_executors', self._FAKE_NUM_EXECUTORS)
         return Slave(**kwargs)
+
+    def _create_test_subjob(
+            self, build_id=1234, subjob_id=456, project_type=None, job_config=None, atoms=None,
+    ) -> Subjob:
+        """Create a subjob for testing."""
+        return Subjob(
+            build_id=build_id,
+            subjob_id=subjob_id,
+            project_type=project_type or Mock(),
+            job_config=job_config or Mock(),
+            atoms=atoms or [Mock()],
+        )

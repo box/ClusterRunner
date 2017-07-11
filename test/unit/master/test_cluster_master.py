@@ -1,3 +1,5 @@
+from threading import Event
+
 from genty import genty, genty_dataset
 from hypothesis import given
 from hypothesis.strategies import text, dictionaries, integers
@@ -24,6 +26,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
+
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),
@@ -158,10 +161,16 @@ class TestClusterMaster(BaseUnitTestCase):
         master.connect_slave(slave_url, 10)
         slave = master.get_slave(slave_url=slave_url)
         mock_scheduler = self.mock_scheduler_pool.get(fake_build)
+        scheduler_begin_event = Event()
+        mock_scheduler.begin_subjob_executions_on_slave.side_effect = lambda **_: scheduler_begin_event.set()
 
         master.handle_slave_state_update(slave, SlaveState.SETUP_COMPLETED)
 
-        mock_scheduler.begin_subjob_executions_on_slave.assert_called_once_with(slave)
+        was_called = scheduler_begin_event.wait(timeout=5)
+        self.assertTrue(was_called, 'scheduler.begin_subjob_executions_on_slave should be called in response '
+                                    'to slave setup completing.')
+        _, call_kwargs = mock_scheduler.begin_subjob_executions_on_slave.call_args
+        self.assertEqual(call_kwargs.get('slave'), slave)
 
     def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
         master = ClusterMaster()

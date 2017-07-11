@@ -24,13 +24,16 @@ class Subjob(object):
         self._logger = get_logger(__name__)
         self._build_id = build_id
         self._subjob_id = subjob_id
-        self.project_type = project_type
+        self._project_type = project_type  # todo: Unused; remove.
         self.job_config = job_config
         self._atoms = atoms
         self._set_atoms_subjob_id(atoms, subjob_id)
         self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
         self.slave = None  # The slave that had been assigned this subjob. Is None if not started.
+
+    def __str__(self):
+        return '<subjob {} of build {}>'.format(self._subjob_id, self._build_id)
 
     def _set_atoms_subjob_id(self, atoms, subjob_id):
         """
