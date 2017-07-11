@@ -32,7 +32,7 @@ class ClusterMasterApplication(ClusterApplication):
         #  of strings and allows us to inspect children/parents of a node to generate 'child routes'
         root_route = \
             RouteNode(r'/', _RootHandler).add_children([
-                RouteNode(r'v1', _APIVersionOneHandler).add_children([
+                RouteNode(r'v1', _APIVersionOneHandler, optional=True).add_children([
                     RouteNode(r'metrics', _MetricsHandler),
                     RouteNode(r'version', _VersionHandler),
                     RouteNode(r'build', _BuildsHandler, 'builds').add_children([
