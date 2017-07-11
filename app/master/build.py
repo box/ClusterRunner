@@ -3,7 +3,7 @@ from enum import Enum
 import os
 from queue import Queue, Empty
 import shutil
-import tempfile
+# import tempfile
 from threading import Lock, Thread
 import time
 import uuid
@@ -500,21 +500,21 @@ class Build(object):
         self._build_artifact.write_timing_data(self._timing_file_path, timing_data)
         self._artifacts_tar_file = app.util.fs.tar_directory(self._build_results_dir(),
                                                              BuildArtifact.ARTIFACT_TARFILE_NAME)
-        temp_tar_path = None
-        try:
-            # Temporarily move aside tar file so we can create a zip file, then move it back.
-            # This juggling can be removed once we're no longer creating tar artifacts.
-            temp_tar_path = shutil.move(self._artifacts_tar_file, tempfile.mktemp())
-            self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
-                                                                 BuildArtifact.ARTIFACT_ZIPFILE_NAME)
-        except Exception:  # pylint: disable=broad-except
-            internal_errors.labels(ErrorType.ZipFileCreationFailure).inc()  # pylint: disable=no-member
-
-            # Due to issue #339 we are ignoring exceptions in the zip file creation for now.
-            self._logger.exception('Zipping of artifacts failed. This error will be ignored.')
-        finally:
-            if temp_tar_path:
-                shutil.move(temp_tar_path, self._artifacts_tar_file)
+        # temp_tar_path = None
+        # try:
+        #     # Temporarily move aside tar file so we can create a zip file, then move it back.
+        #     # This juggling can be removed once we're no longer creating tar artifacts.
+        #     temp_tar_path = shutil.move(self._artifacts_tar_file, tempfile.mktemp())
+        #     self._artifacts_zip_file = app.util.fs.zip_directory(self._build_results_dir(),
+        #                                                          BuildArtifact.ARTIFACT_ZIPFILE_NAME)
+        # except Exception:  # pylint: disable=broad-except
+        #     internal_errors.labels(ErrorType.ZipFileCreationFailure).inc()  # pylint: disable=no-member
+        #
+        #     # Due to issue #339 we are ignoring exceptions in the zip file creation for now.
+        #     self._logger.exception('Zipping of artifacts failed. This error will be ignored.')
+        # finally:
+        #     if temp_tar_path:
+        #         shutil.move(temp_tar_path, self._artifacts_tar_file)
 
     def _delete_temporary_build_artifact_files(self):
         """
