@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import os
+from threading import Thread
 
 from app.common.cluster_service import ClusterService
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
@@ -201,16 +202,18 @@ class ClusterMaster(ClusterService):
         # todo: Fail/resend any currently executing subjobs still executing on this slave.
         self._logger.info('Slave on {} was disconnected. (id: {})', slave.url, slave.id)
 
-    def _handle_setup_success_on_slave(self, slave):
+    def _handle_setup_success_on_slave(self, slave: Slave):
         """
         Respond to successful build setup on a slave. This starts subjob executions on the slave. This should be called
         once after the specified slave has already run build_setup commands for the specified build.
-
-        :type slave: Slave
         """
         build = self.get_build(slave.current_build_id)
         scheduler = self._scheduler_pool.get(build)
-        scheduler.begin_subjob_executions_on_slave(slave)
+        Thread(
+            target=scheduler.begin_subjob_executions_on_slave,
+            kwargs={'slave': slave},
+            name='Sched{}'.format(build.build_id()),
+        ).start()
 
     def _handle_setup_failure_on_slave(self, slave):
         """
@@ -290,7 +293,11 @@ class ClusterMaster(ClusterService):
                 build.complete_subjob(subjob_id, payload)
             finally:
                 scheduler = self._scheduler_pool.get(build)
-                scheduler.execute_next_subjob_or_free_executor(slave)
+                Thread(
+                    target=scheduler.execute_next_subjob_or_free_executor,
+                    kwargs={'slave': slave},
+                    name='Post{}:{}'.format(build_id, subjob_id),
+                ).start()
 
     def get_build(self, build_id):
         """

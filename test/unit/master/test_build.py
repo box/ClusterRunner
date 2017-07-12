@@ -14,7 +14,7 @@ from app.master.build_fsm import BuildState
 from app.master.build_request import BuildRequest
 from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.job_config import JobConfig
-from app.master.slave import Slave, SlaveMarkedForShutdownError
+from app.master.slave import Slave, DeadSlaveError, SlaveCommunicationError, SlaveMarkedForShutdownError
 from app.master.subjob import Subjob
 from app.master.subjob_calculator import SubjobCalculator
 from app.project_type.project_type import ProjectType
@@ -231,7 +231,16 @@ class TestBuild(BaseUnitTestCase):
         for mock_slave in mock_slaves:
             mock_slave.teardown.assert_called_with()
 
-    def test_teardown_called_on_slave_when_slave_in_shutdown_mode(self):
+    @genty_dataset(DeadSlaveError, SlaveCommunicationError, SlaveMarkedForShutdownError)
+    def test_teardown_called_on_slave_when_start_subjob_raises(self, exception_cls):
+        mock_slave = self._create_mock_slave(num_executors=5)
+        mock_slave.start_subjob.side_effect = exception_cls
+
+        self._create_test_build(BuildStatus.BUILDING, num_subjobs=30, slaves=[mock_slave])
+
+        mock_slave.teardown.assert_called_with()
+
+    def test_teardown_called_on_slave_when_slave_is_not_alive(self):
         mock_slave = self._create_mock_slave(num_executors=5)
         mock_slave.start_subjob.side_effect = SlaveMarkedForShutdownError
 
