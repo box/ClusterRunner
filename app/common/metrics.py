@@ -31,6 +31,7 @@ class ErrorType(str, Enum):
     NetworkRequestFailure = 'NetworkRequestFailure'
     PostBuildFailure = 'PostBuildFailure'
     SetupBuildFailure = 'SetupBuildFailure'
+    SubjobStartFailure = 'SubjobStartFailure'
     SubjobWriteFailure = 'SubjobWriteFailure'
     ZipFileCreationFailure = 'ZipFileCreationFailure'
 

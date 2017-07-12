@@ -1,18 +1,16 @@
-from threading import Thread
-
 import requests
 
 from app.master.build import Build
+from app.master.subjob import Subjob
 from app.util import analytics, log
 from app.util.counter import Counter
-from app.util.network import Network
+from app.util.network import Network, RequestFailedError
 from app.util.secret import Secret
 from app.util.session_id import SessionId
 from app.util.url_builder import UrlBuilder
 
 
-class Slave(object):
-
+class Slave:
     API_VERSION = 'v1'
     _slave_id_counter = Counter()
 
@@ -106,36 +104,26 @@ class Slave(object):
             self._logger.warning('Teardown request to slave failed because slave is unresponsive.')
             self.mark_dead()
 
-    def start_subjob(self, subjob):
+    def start_subjob(self, subjob: Subjob):
         """
-        :type subjob: Subjob
+        Send a subjob of a build to this slave. The slave must have already run setup for the corresponding build.
+        :param subjob: The subjob to send to this slave
         """
         if not self.is_alive():
-            raise DeadSlaveError('Tried to start a subjob on a dead slave! ({}, id: {})'.format(self.url, self.id))
-
+            raise DeadSlaveError('Tried to start a subjob on a dead slave.')
         if self._is_in_shutdown_mode:
-            raise SlaveMarkedForShutdownError('Tried to start a subjob on a slave in shutdown mode. ({}, id: {})'
-                                              .format(self.url, self.id))
+            raise SlaveMarkedForShutdownError('Tried to start a subjob on a slave in shutdown mode.')
 
-        # todo: This class should not be responsible for starting threads. That should be done at a higher level.
-        Thread(target=self._async_start_subjob, args=(subjob,)).start()
-
-    def _async_start_subjob(self, subjob):
-        """
-        :type subjob: Subjob
-        """
+        execution_url = self._slave_api.url('build', subjob.build_id(), 'subjob', subjob.subjob_id())
+        post_data = {'atomic_commands': subjob.atomic_commands()}
         try:
-            execution_url = self._slave_api.url('build', subjob.build_id(), 'subjob', subjob.subjob_id())
-            post_data = {'atomic_commands': subjob.atomic_commands()}
             response = self._network.post_with_digest(execution_url, post_data, Secret.get(), error_on_failure=True)
+        except (requests.ConnectionError, requests.Timeout, RequestFailedError) as ex:
+            raise SlaveCommunicationError('Call to slave service failed: {}.'.format(repr(ex))) from ex
 
-            subjob_executor_id = response.json().get('executor_id')
-            analytics.record_event(analytics.MASTER_TRIGGERED_SUBJOB, executor_id=subjob_executor_id,
-                                   build_id=subjob.build_id(), subjob_id=subjob.subjob_id(), slave_id=self.id)
-
-        except Exception:  # pylint: disable=broad-except
-            # todo: This could result in subjobs being lost if the call to send the subjob fails.
-            self._logger.exception('Error occurred trying to start subjob on {}', self)
+        subjob_executor_id = response.json().get('executor_id')
+        analytics.record_event(analytics.MASTER_TRIGGERED_SUBJOB, executor_id=subjob_executor_id,
+                               build_id=subjob.build_id(), subjob_id=subjob.subjob_id(), slave_id=self.id)
 
     def num_executors_in_use(self):
         return self._num_executors_in_use.value()
@@ -249,13 +237,17 @@ class Slave(object):
         return headers
 
 
-class DeadSlaveError(Exception):
-    """
-    Tried an operation on a slave which is disconnected.
-    """
+class SlaveError(Exception):
+    """A generic slave error occurred."""
 
 
-class SlaveMarkedForShutdownError(Exception):
-    """
-    Tried an operation which could have added additional work to a slave which is in shutdown mode.
-    """
+class DeadSlaveError(SlaveError):
+    """An operation was attempted on a slave which is disconnected."""
+
+
+class SlaveMarkedForShutdownError(SlaveError):
+    """An operation was attempted on a slave which is in shutdown mode."""
+
+
+class SlaveCommunicationError(SlaveError):
+    """An error occurred while communicating with the slave."""

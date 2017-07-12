@@ -150,8 +150,8 @@ class Network(object):
         resp = self._session.request(method, url, data=data_to_send, timeout=timeout, *args, **kwargs)
         if not resp.ok and error_on_failure:
             internal_errors.labels(ErrorType.NetworkRequestFailure).inc()  # pylint: disable=no-member
-            raise _RequestFailedError('Request to {} failed with status_code {} and response "{}"'.
-                                      format(url, str(resp.status_code), resp.text))
+            raise RequestFailedError('Request to {} failed with status_code {} and response "{}"'.
+                                     format(url, str(resp.status_code), resp.text))
         return resp
 
     @staticmethod
@@ -201,5 +201,5 @@ class Network(object):
             return None
 
 
-class _RequestFailedError(Exception):
+class RequestFailedError(Exception):
     pass

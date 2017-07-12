@@ -1,7 +1,8 @@
 from queue import Empty
 from threading import Lock
 
-from app.master.slave import Slave, SlaveMarkedForShutdownError
+from app.common.metrics import ErrorType, internal_errors
+from app.master.slave import Slave, SlaveError
 from app.util import analytics
 from app.util.log import get_logger
 
@@ -109,12 +110,15 @@ class BuildScheduler(object):
             # build would be stuck.
             with self._subjob_assignment_lock:
                 subjob = self._build._unstarted_subjobs.get(block=False)
-                self._logger.debug('Sending subjob {} (build {}) to slave {}.',
-                                   subjob.subjob_id(), subjob.build_id(), slave.url)
+                self._logger.debug('Sending {} to {}.', subjob, slave)
                 try:
                     slave.start_subjob(subjob)
                     subjob.mark_in_progress(slave)
-                except SlaveMarkedForShutdownError:
+
+                except SlaveError as ex:
+                    internal_errors.labels(ErrorType.SubjobWriteFailure).inc()  # pylint: disable=no-member
+                    self._logger.warning('Failed to start {} on {}: {}. Requeuing subjob and freeing slave executor...',
+                                         subjob, slave, repr(ex))
                     self._build._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
                     # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
                     # Since the slave has been marked for shutdown, we need to free the executor.

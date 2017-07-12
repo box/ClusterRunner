@@ -14,6 +14,7 @@ from app.common.build_artifact import BuildArtifact
 from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
+from app.master.subjob import Subjob
 from app.project_type.project_type import ProjectType
 from app.util import util
 from app.util.conf.configuration import Configuration
@@ -190,12 +191,8 @@ class Build(object):
         """
         return [subjob for subjob in self._all_subjobs_by_id.values()]
 
-    def subjob(self, subjob_id):
-        """
-        Returns a single subjob
-        :type subjob_id: int
-        :rtype: Subjob
-        """
+    def subjob(self, subjob_id: int) -> Subjob:
+        """Return the subjob for this build with the specified id."""
         subjob = self._all_subjobs_by_id.get(subjob_id)
         if subjob is None:
             raise ItemNotFoundError('Invalid subjob id.')
