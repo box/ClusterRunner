@@ -2,6 +2,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import zipfile
 
 from app.util.process_utils import Popen_with_delayed_expansion
 
@@ -131,9 +132,17 @@ def zip_directory(target_dir: str, archive_filename: str) -> str:
     """
     # Create the archive in a temp location and then move it to the target dir.
     # (Otherwise the resulting archive will include an extra zero-byte file.)
-    tmp_path = shutil.make_archive(tempfile.mktemp(), 'zip', target_dir)
     target_path = os.path.join(target_dir, archive_filename)
-    shutil.move(tmp_path, target_path)
+    with tempfile.TemporaryDirectory() as temp_dirpath:
+        tmp_zip_filename = os.path.join(temp_dirpath, 'clusterrunner_tmp__' + archive_filename)
+        with zipfile.ZipFile(tmp_zip_filename, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, dirnames, filenames in os.walk(target_dir):
+                for filename in filenames:
+                    path = os.path.normpath(os.path.join(dirpath, filename))
+                    if os.path.isfile(path):
+                        relpath = os.path.relpath(path, target_dir)
+                        zf.write(path, relpath)
+        shutil.move(tmp_zip_filename, target_path)
     return target_path
 
 
