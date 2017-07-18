@@ -30,39 +30,70 @@ class ClusterMasterApplication(ClusterApplication):
         }
         # The routes are described using a tree structure.  This is a better representation of a path than a flat list
         #  of strings and allows us to inspect children/parents of a node to generate 'child routes'
-        root_route = \
-            RouteNode(r'/', _RootHandler).add_children([
-                RouteNode(r'v1', _APIVersionOneHandler).add_children([
-                    RouteNode(r'metrics', _MetricsHandler),
-                    RouteNode(r'version', _VersionHandler),
-                    RouteNode(r'build', _BuildsHandler, 'builds').add_children([
-                        RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
-                            RouteNode(r'result', _BuildResultRedirectHandler),
-                            RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
-                            RouteNode(r'artifacts.zip', _BuildZipResultHandler),
-                            RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
-                                RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
-                                    RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
-                                        RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
-                                            RouteNode(r'console', _AtomConsoleHandler)
-                                        ])
-                                    ]),
-                                    RouteNode(r'result', _SubjobResultHandler)
-                                ])
+        api_v1 = [
+            RouteNode(r'v1', _APIVersionOneHandler).add_children([
+                RouteNode(r'metrics', _MetricsHandler),
+                RouteNode(r'version', _VersionHandler),
+                RouteNode(r'build', _BuildsHandler, 'builds').add_children([
+                    RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                        RouteNode(r'result', _BuildResultRedirectHandler),
+                        RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
+                        RouteNode(r'artifacts.zip', _BuildZipResultHandler),
+                        RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
+                            RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
+                                RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
+                                    RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
+                                        RouteNode(r'console', _AtomConsoleHandler)
+                                    ])
+                                ]),
+                                RouteNode(r'result', _SubjobResultHandler)
                             ])
                         ])
+                    ])
+                ]),
+                RouteNode(r'queue', _QueueHandler),
+                RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
+                    RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
+                        RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown')
                     ]),
-                    RouteNode(r'queue', _QueueHandler),
-                    RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
-                        RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
-                            RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown')
-                        ]),
-                        RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown')
-                    ]),
-                    RouteNode(r'eventlog', _EventlogHandler)
+                    RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown')
+                ]),
+                RouteNode(r'eventlog', _EventlogHandler)])]
+
+        api_v2 = [
+            RouteNode(r'metrics', _MetricsHandler),
+            RouteNode(r'version', _VersionHandler),
+            RouteNode(r'builds', _BuildsHandler).add_children([
+                RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                    RouteNode(r'result', _BuildResultRedirectHandler),
+                    RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
+                    RouteNode(r'artifacts.zip', _BuildZipResultHandler),
+                    RouteNode(r'subjobs', _SubjobsHandler,).add_children([
+                        RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
+                            RouteNode(r'atoms', _AtomsHandler).add_children([
+                                RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
+                                    RouteNode(r'console', _AtomConsoleHandler)
+                                ])
+                            ]),
+                            RouteNode(r'result', _SubjobResultHandler)
+                        ])
+                    ])
                 ])
-            ])
-        handlers = self.get_all_handlers(root_route, default_params)
+            ]),
+            RouteNode(r'queue', _QueueHandler),
+            RouteNode(r'slaves', _SlavesHandler).add_children([
+                RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
+                    RouteNode(r'shutdown', _SlaveShutdownHandler)
+                ]),
+                RouteNode(r'shutdown', _SlavesShutdownHandler)
+            ]),
+            RouteNode(r'eventlog', _EventlogHandler)]
+
+        root = RouteNode(r'/', _RootHandler)
+        root.add_children(api_v1, version=1)
+        root.add_children(api_v2, version=2)
+
+        handlers = self.get_all_handlers(root, default_params)
         super().__init__(handlers)
 
 
