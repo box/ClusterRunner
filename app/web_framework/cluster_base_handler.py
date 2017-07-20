@@ -157,7 +157,7 @@ class ClusterBaseAPIHandler(ClusterBaseHandler):
         """
         if self._route_node is None:
             raise RuntimeError('This handler ({}) is not associated with a RouteNode'.format(type(self).__name__))
-        return {child.label: child.route_template() for child in self._route_node.children}
+        return {child.label: child.route_template() for child in self._route_node.get_children(self.api_version)}
 
     def set_default_headers(self):
         self.set_header('Content-Type', 'application/json')

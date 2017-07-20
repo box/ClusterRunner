@@ -18,33 +18,59 @@ class ClusterSlaveApplication(ClusterApplication):
         }
         # The routes are described using a tree structure.  This is a better representation of a path than a flat list
         #  of strings and allows us to inspect children/parents of a node to generate 'child routes'
-        root_route = \
-            RouteNode(r'/', _RootHandler).add_children([
-                RouteNode(r'v1', _APIVersionOneHandler).add_children([
-                    RouteNode(r'version', _VersionHandler),
-                    RouteNode(r'build', _BuildsHandler, 'builds').add_children([
-                        RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
-                            RouteNode(r'setup', _BuildSetupHandler),
-                            RouteNode(r'teardown', _TeardownHandler),
-                            RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
-                                RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
-                                    RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
-                                        RouteNode(r'(\d+)', _AtomHandler).add_children([
-                                            RouteNode(r'console', _AtomConsoleHandler)
-                                        ])
+        api_v1 = [
+            RouteNode(r'v1', _APIVersionOneHandler).add_children([
+                RouteNode(r'version', _VersionHandler),
+                RouteNode(r'build', _BuildsHandler, 'builds').add_children([
+                    RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                        RouteNode(r'setup', _BuildSetupHandler),
+                        RouteNode(r'teardown', _TeardownHandler),
+                        RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
+                            RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
+                                RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
+                                    RouteNode(r'(\d+)', _AtomHandler).add_children([
+                                        RouteNode(r'console', _AtomConsoleHandler)
                                     ])
                                 ])
                             ])
                         ])
-                    ]),
-                    RouteNode(r'executor', _ExecutorsHandler, 'executors').add_children([
-                        RouteNode(r'(\d+)', _ExecutorHandler, 'executor')
-                    ]),
-                    RouteNode(r'eventlog', _EventlogHandler),
-                    RouteNode(r'kill', _KillHandler)
+                    ])
+                ]),
+                RouteNode(r'executor', _ExecutorsHandler, 'executors').add_children([
+                    RouteNode(r'(\d+)', _ExecutorHandler, 'executor')
+                ]),
+                RouteNode(r'eventlog', _EventlogHandler),
+                RouteNode(r'kill', _KillHandler)
+            ])]
+
+        api_v2 = [
+            RouteNode(r'version', _VersionHandler),
+            RouteNode(r'builds', _BuildsHandler, 'builds').add_children([
+                RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                    RouteNode(r'setup', _BuildSetupHandler),
+                    RouteNode(r'teardown', _TeardownHandler),
+                    RouteNode(r'subjobs', _SubjobsHandler, 'subjobs').add_children([
+                        RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
+                            RouteNode(r'atoms', _AtomsHandler, 'atoms').add_children([
+                                RouteNode(r'(\d+)', _AtomHandler).add_children([
+                                    RouteNode(r'console', _AtomConsoleHandler)
+                                ])
+                            ])
+                        ])
+                    ])
                 ])
-            ])
-        handlers = self.get_all_handlers(root_route, default_params)
+            ]),
+            RouteNode(r'executor', _ExecutorsHandler, 'executors').add_children([
+                RouteNode(r'(\d+)', _ExecutorHandler, 'executor')
+            ]),
+            RouteNode(r'eventlog', _EventlogHandler),
+            RouteNode(r'kill', _KillHandler)]
+
+        root = RouteNode(r'/', _RootHandler)
+        root.add_children(api_v1, version=1)
+        root.add_children(api_v2, version=2)
+
+        handlers = self.get_all_handlers(root, default_params)
         super().__init__(handlers)
 
 
