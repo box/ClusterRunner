@@ -84,16 +84,17 @@ class TestClusterBasic(BaseFunctionalTestCase):
         slave = self.cluster.start_slave(num_executors_per_slave=5, start_port=43001)
 
         # Start two builds.
-        project_dir = tempfile.TemporaryDirectory()
+        project_dir_1 = tempfile.TemporaryDirectory()
         build_1 = master.post_new_build({
             'type': 'directory',
             'config': job_config,
-            'project_directory': project_dir.name,
+            'project_directory': project_dir_1.name,
         })
+        project_dir_2 = tempfile.TemporaryDirectory()
         build_2 = master.post_new_build({
             'type': 'directory',
             'config': job_config,
-            'project_directory': project_dir.name,
+            'project_directory': project_dir_2.name,
         })
 
         self.assertTrue(master.block_until_build_finished(build_1['build_id'], timeout=45),
@@ -102,8 +103,8 @@ class TestClusterBasic(BaseFunctionalTestCase):
                         'Build 2 should finish building within the timeout.')
         slave.block_until_idle(timeout=20)  # ensure slave teardown has finished before making assertions
 
-        self._assert_build_completed_as_expected(build_1['build_id'], test_config, project_dir)
-        self._assert_build_completed_as_expected(build_2['build_id'], test_config, project_dir)
+        self._assert_build_completed_as_expected(build_1['build_id'], test_config, project_dir_1)
+        self._assert_build_completed_as_expected(build_2['build_id'], test_config, project_dir_2)
 
     def test_failed_setup_does_not_kill_slave(self):
         master = self.cluster.start_master()
