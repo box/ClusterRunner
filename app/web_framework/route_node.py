@@ -1,5 +1,5 @@
 import inspect
-from typing import Optional
+from typing import Optional, List
 
 
 class RouteNode(object):
@@ -51,12 +51,10 @@ class RouteNode(object):
                     return '[{}]'.format(get_params[-1])
         return self.regex_part
 
-    def add_children(self, child_nodes: list, version: Optional[int]=None):
+    def add_children(self, child_nodes: List['RouteNode'], version: Optional[int]=None) -> 'RouteNode':
         """
         Build the tree structure by adding child RouteNodes to this RouteNode.  Can be chained.
-        :type child_nodes: list[RouteNode]
         :param version: The API version assigned to all children routes
-        :rtype: RouteNode
         """
         self.children += child_nodes
         for node in child_nodes:
@@ -65,7 +63,7 @@ class RouteNode(object):
                 node.assign_version_to_all_children(version)
         return self
 
-    def get_children(self, version: int):
+    def get_children(self, version: int) -> List['RouteNode']:
         """
         Get all children routes that have the same version as requested.
         :param version: The requested version.
