@@ -45,13 +45,13 @@ class ClusterSlaveApplication(ClusterApplication):
 
         api_v2 = [
             RouteNode(r'version', _VersionHandler),
-            RouteNode(r'build', _BuildsHandler, 'builds').add_children([
+            RouteNode(r'builds', _BuildsHandler, 'builds').add_children([
                 RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
                     RouteNode(r'setup', _BuildSetupHandler),
                     RouteNode(r'teardown', _TeardownHandler),
-                    RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
+                    RouteNode(r'subjobs', _SubjobsHandler, 'subjobs').add_children([
                         RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
-                            RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
+                            RouteNode(r'atoms', _AtomsHandler, 'atoms').add_children([
                                 RouteNode(r'(\d+)', _AtomHandler).add_children([
                                     RouteNode(r'console', _AtomConsoleHandler)
                                 ])

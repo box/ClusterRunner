@@ -1,20 +1,18 @@
 import inspect
+from typing import Optional
 
 
 class RouteNode(object):
     """
     A tree data structure for representing the parts of a url path, for routing.
     """
-    def __init__(self, regex_part, handler, label=None, version=None):
+    def __init__(self, regex_part: str, handler: type, label: Optional[str]=None, version: Optional[int]=None):
         """
-        :param regex_part: To generate the regex the web framework will use to match this route, we combine a set of
-        regex_parts: The regex_part in this node and the regex_parts in all its ancestor nodes.
-        :type regex_part: str
+        :param regex_part: To generate the regex the web framework will use to match this route, we combine
+        a set of regex_parts: The regex_part in this node and the regex_parts in all its ancestor nodes.
         :param handler: The handler class that will be instantiated by the web framework when this route is hit.
-        :type handler: type
         :param label: A human-friendly label for the objects returned by this route, ie "builds"
         :param version: The API version assigned to this route
-        :type label: str | None
         """
         self.label = label or regex_part
         self.regex_part = regex_part
@@ -53,7 +51,7 @@ class RouteNode(object):
                     return '[{}]'.format(get_params[-1])
         return self.regex_part
 
-    def add_children(self, child_nodes, version=None):
+    def add_children(self, child_nodes: list, version: Optional[int]=None):
         """
         Build the tree structure by adding child RouteNodes to this RouteNode.  Can be chained.
         :type child_nodes: list[RouteNode]
