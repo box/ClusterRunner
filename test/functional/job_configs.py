@@ -96,13 +96,12 @@ JobWithSetupAndTeardown:
     setup_build:
         - echo "Doing build setup."
         - sleep 1
-        - echo "setup." > $PROJECT_DIR/build_setup.txt
+        - echo "setup." >> $PROJECT_DIR/build_setup.txt
 
     commands:
         - echo "Doing subjob $SUBJOB_NUMBER."
         - sleep 1
         - MY_SUBJOB_FILE=$PROJECT_DIR/subjob_file_${SUBJOB_NUMBER}.txt
-        - cp build_setup.txt $MY_SUBJOB_FILE
         - echo "subjob $SUBJOB_NUMBER." >> $MY_SUBJOB_FILE
 
     atomizers:
@@ -111,8 +110,7 @@ JobWithSetupAndTeardown:
     teardown_build:
         - echo "Doing build teardown."
         - sleep 1
-        - ALL_SUBJOB_FILES=$(ls $PROJECT_DIR/subjob_file_*.txt || mktemp -t clusterrunnerXXXX)
-        - echo "teardown." | tee -a $ALL_SUBJOB_FILES
+        - echo "teardown." >> $PROJECT_DIR/build_teardown.txt
 
 """,
         'nt': """
@@ -123,13 +121,12 @@ JobWithSetupAndTeardown:
     setup_build:
         - echo Doing build setup.
         - ping 127.0.0.1 -n 2 >nul
-        - echo setup.> !PROJECT_DIR!\\build_setup.txt
+        - echo setup.>> !PROJECT_DIR!\\build_setup.txt
 
     commands:
         - echo Doing subjob !SUBJOB_NUMBER!.
         - ping 127.0.0.1 -n 2 >nul
         - set MY_SUBJOB_FILE=!PROJECT_DIR!\\subjob_file_!SUBJOB_NUMBER!.txt
-        - COPY build_setup.txt !MY_SUBJOB_FILE! >nul
         - echo subjob !SUBJOB_NUMBER!.>> !MY_SUBJOB_FILE!
 
     atomizers:
@@ -138,7 +135,7 @@ JobWithSetupAndTeardown:
     teardown_build:
         - echo Doing build teardown.
         - ping 127.0.0.1 -n 2 >nul
-        - FOR /l %n in (1,1,3) DO @echo teardown.>> !PROJECT_DIR!\\subjob_file_%n.txt
+        - echo teardown.>> !PROJECT_DIR!\\build_teardown.txt
 """,
     },
     expected_to_fail=False,
@@ -146,9 +143,10 @@ JobWithSetupAndTeardown:
     expected_num_atoms=3,
     expected_project_dir_contents=[
         File('build_setup.txt', contents='setup.\n'),
-        File('subjob_file_1.txt', contents='setup.\nsubjob 1.\nteardown.\n'),
-        File('subjob_file_2.txt', contents='setup.\nsubjob 2.\nteardown.\n'),
-        File('subjob_file_3.txt', contents='setup.\nsubjob 3.\nteardown.\n'),
+        File('subjob_file_1.txt', contents='subjob 1.\n'),
+        File('subjob_file_2.txt', contents='subjob 2.\n'),
+        File('subjob_file_3.txt', contents='subjob 3.\n'),
+        File('build_teardown.txt', contents='teardown.\n'),
     ],
 )
 
