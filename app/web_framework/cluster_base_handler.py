@@ -20,6 +20,9 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
     ClusterBaseHandler is the base handler for all request handlers of ClusterRunner services.
     """
 
+    DEFAULT_PAGINATION_START = 0
+    DEFAULT_PAGINATION_AMOUNT = 50
+
     def __init__(self, *args, **kwargs):
         self._logger = log.get_logger(__name__)
         super().__init__(*args, **kwargs)
@@ -61,6 +64,11 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
         self.set_status(status_code)
         self.finish()
+
+    def _get_pagination_params(self):
+        start = int(self.get_query_argument('start', self.DEFAULT_PAGINATION_START, True))
+        amount = int(self.get_query_argument('amount', self.DEFAULT_PAGINATION_AMOUNT, True))
+        return start, amount
 
     def on_finish(self):
         if self._route_node is not None:

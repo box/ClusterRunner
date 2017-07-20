@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from itertools import islice
 import os
 from threading import Thread
 
@@ -62,12 +63,15 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def builds(self):
+    def builds(self, start=None, amount=None):
         """
         Returns a list of all builds
         :rtype: list[Build]
         """
-        return self._all_builds_by_id.values()
+        num_builds = len(self._all_builds_by_id)
+        start = start or 0
+        amount = amount or num_builds
+        return [self._all_builds_by_id[key] for key in islice(self._all_builds_by_id, start, min((start + amount), num_builds))]
 
     def active_builds(self):
         """
