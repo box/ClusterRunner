@@ -63,7 +63,7 @@ class ClusterMasterApplication(ClusterApplication):
         api_v2 = [
             RouteNode(r'metrics', _MetricsHandler),
             RouteNode(r'version', _VersionHandler),
-            RouteNode(r'builds', _BuildsPaginatedHandler).add_children([
+            RouteNode(r'builds', _V2BuildsHandler).add_children([
                 RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
                     RouteNode(r'result', _BuildResultRedirectHandler),
                     RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
@@ -263,11 +263,11 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
         self.write(response)
 
 
-class _BuildsPaginatedHandler(_BuildsHandler):
+class _V2BuildsHandler(_BuildsHandler):
     def get(self):
-        start, amount = self._get_pagination_params()
+        offset, limit = self._get_pagination_params()
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.builds(start, amount)]
+            'builds': [build.api_representation() for build in self._cluster_master.builds(offset, limit)]
         }
         self.write(response)
 

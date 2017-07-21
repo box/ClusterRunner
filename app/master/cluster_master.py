@@ -1,3 +1,4 @@
+from typing import List
 from collections import OrderedDict
 from itertools import islice
 import os
@@ -16,6 +17,7 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
+from app.web_framework.cluster_base_handler import ClusterBaseHandler
 
 
 class ClusterMaster(ClusterService):
@@ -63,15 +65,24 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def builds(self, start=None, amount=None):
+    def builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
-        Returns a list of all builds
-        :rtype: list[Build]
+        Returns a list of all builds. Both offset and limit are assumed to be nonnegative at this point
+        since the corrections or negative offsets and limits are done when the query parameters are first initialized.
+        :param offset: The starting index of the requested build
+        :param limit: The number of builds requested
         """
         num_builds = len(self._all_builds_by_id)
-        start = start or 0
-        amount = amount or num_builds
-        return [self._all_builds_by_id[key] for key in islice(self._all_builds_by_id, start, min((start + amount), num_builds))]
+        offset = offset or 0
+        # Don't return more than the MAX_LIMIT even if we have more builds than that
+        limit = limit or min(num_builds, ClusterBaseHandler.MAX_LIMIT)
+
+        # Reset the offset to 0 if it is out of range
+        starting_index = offset if offset < num_builds else 0
+        ending_index = min((starting_index + limit), num_builds)
+
+        requested_builds = islice(self._all_builds_by_id, starting_index, ending_index)
+        return [self._all_builds_by_id[key] for key in requested_builds]
 
     def active_builds(self):
         """

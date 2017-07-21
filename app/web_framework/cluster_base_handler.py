@@ -20,9 +20,9 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
     ClusterBaseHandler is the base handler for all request handlers of ClusterRunner services.
     """
 
-    DEFAULT_PAGINATION_START = 0
-    DEFAULT_PAGINATION_AMOUNT = 20
-    MAX_PAGINATION_AMOUNT = 200
+    DEFAULT_OFFSET = 0
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 200
 
     def __init__(self, *args, **kwargs):
         self._logger = log.get_logger(__name__)
@@ -67,9 +67,12 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         self.finish()
 
     def _get_pagination_params(self):
-        start = int(self.get_query_argument('start', self.DEFAULT_PAGINATION_START, True))
-        amount = int(self.get_query_argument('amount', self.DEFAULT_PAGINATION_AMOUNT, True))
-        return start, min(amount, self.MAX_PAGINATION_AMOUNT)
+        offset = self.get_query_argument('offset', self.DEFAULT_OFFSET, True)
+        limit = self.get_query_argument('limit', self.DEFAULT_LIMIT, True)
+        # No negative offsets or limits are accepted
+        non_negative_offset = max(int(offset), self.DEFAULT_OFFSET)
+        non_negative_limit = max(int(limit), self.DEFAULT_LIMIT)
+        return non_negative_limit, min(limit, self.MAX_LIMIT)
 
     def on_finish(self):
         if self._route_node is not None:
