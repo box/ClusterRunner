@@ -21,7 +21,8 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
     """
 
     DEFAULT_PAGINATION_START = 0
-    DEFAULT_PAGINATION_AMOUNT = 50
+    DEFAULT_PAGINATION_AMOUNT = 20
+    MAX_PAGINATION_AMOUNT = 200
 
     def __init__(self, *args, **kwargs):
         self._logger = log.get_logger(__name__)
@@ -68,7 +69,7 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
     def _get_pagination_params(self):
         start = int(self.get_query_argument('start', self.DEFAULT_PAGINATION_START, True))
         amount = int(self.get_query_argument('amount', self.DEFAULT_PAGINATION_AMOUNT, True))
-        return start, amount
+        return start, min(amount, self.MAX_PAGINATION_AMOUNT)
 
     def on_finish(self):
         if self._route_node is not None:
