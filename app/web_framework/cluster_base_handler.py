@@ -70,9 +70,9 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         offset = self.get_query_argument('offset', self.DEFAULT_OFFSET, True)
         limit = self.get_query_argument('limit', self.DEFAULT_LIMIT, True)
         # No negative offsets or limits are accepted
-        non_negative_offset = max(int(offset), self.DEFAULT_OFFSET)
-        non_negative_limit = max(int(limit), self.DEFAULT_LIMIT)
-        return non_negative_limit, min(limit, self.MAX_LIMIT)
+        non_negative_offset = max(int(offset), 0)
+        non_negative_limit = max(int(limit), 0)
+        return non_negative_limit, min(non_negative_limit, self.MAX_LIMIT)
 
     def on_finish(self):
         if self._route_node is not None:
