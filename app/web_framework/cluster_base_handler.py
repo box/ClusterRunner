@@ -1,3 +1,4 @@
+from typing import Tuple
 import http.client
 import re
 import tornado.escape
@@ -11,6 +12,12 @@ from app.util.network import ENCODED_BODY
 from app.util.session_id import SessionId
 from app.web_framework.api_version_handler import APIVersionHandler
 
+pagination_constants = {
+    'DEFAULT_OFFSET': 0,
+    'DEFAULT_LIMIT': 20,
+    'MAX_LIMIT': 200,
+}
+
 
 # pylint: disable=attribute-defined-outside-init
 #   Handler classes are not designed to have __init__ overridden.
@@ -19,10 +26,6 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
     """
     ClusterBaseHandler is the base handler for all request handlers of ClusterRunner services.
     """
-
-    DEFAULT_OFFSET = 0
-    DEFAULT_LIMIT = 20
-    MAX_LIMIT = 200
 
     def __init__(self, *args, **kwargs):
         self._logger = log.get_logger(__name__)
@@ -66,13 +69,23 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         self.set_status(status_code)
         self.finish()
 
-    def _get_pagination_params(self):
-        offset = self.get_query_argument('offset', self.DEFAULT_OFFSET, True)
-        limit = self.get_query_argument('limit', self.DEFAULT_LIMIT, True)
-        # No negative offsets or limits are accepted
-        non_negative_offset = max(int(offset), 0)
-        non_negative_limit = max(int(limit), 0)
-        return non_negative_limit, min(non_negative_limit, self.MAX_LIMIT)
+    # For methods that annotate with `Tuple`, use `disable=invalid-sequence-index`
+    # This bug is fixed in https://github.com/PyCQA/astroid/commit/563031aaf13a44adc8db4f8d0ab8020d550aae00
+    # More information on the issue in https://github.com/PyCQA/pylint/issues/1212
+
+    def get_pagination_params(self) -> Tuple[int, int]:  # pylint: disable=invalid-sequence-index
+        offset = self.get_query_argument('offset', pagination_constants['DEFAULT_OFFSET'], True)
+        limit = self.get_query_argument('limit', pagination_constants['DEFAULT_LIMIT'], True)
+        return self._validate_arguments(int(offset), int(limit))
+
+    @staticmethod
+    def _validate_arguments(offset: int, limit: int) -> Tuple[int, int]:  # pylint: disable=invalid-sequence-index
+        offset = offset or pagination_constants['DEFAULT_OFFSET']
+        limit = limit or pagination_constants['DEFAULT_LIMIT']
+        # Negative offsets or limits are not allowed
+        non_negative_offset = max(offset, 0)
+        non_negative_limit = max(limit, 0)  # A negative limit will give no results
+        return non_negative_offset, min(non_negative_limit, pagination_constants['MAX_LIMIT'])
 
     def on_finish(self):
         if self._route_node is not None:

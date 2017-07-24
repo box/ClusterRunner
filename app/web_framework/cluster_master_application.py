@@ -265,7 +265,7 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
 
 class _V2BuildsHandler(_BuildsHandler):
     def get(self):
-        offset, limit = self._get_pagination_params()
+        offset, limit = self.get_pagination_params()
         response = {
             'builds': [build.api_representation() for build in self._cluster_master.builds(offset, limit)]
         }

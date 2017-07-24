@@ -17,7 +17,7 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
-from app.web_framework.cluster_base_handler import ClusterBaseHandler
+from app.web_framework.cluster_base_handler import pagination_constants
 
 
 class ClusterMaster(ClusterService):
@@ -75,7 +75,7 @@ class ClusterMaster(ClusterService):
         num_builds = len(self._all_builds_by_id)
         offset = offset or 0
         # Don't return more than the MAX_LIMIT even if we have more builds than that
-        limit = limit or min(num_builds, ClusterBaseHandler.MAX_LIMIT)
+        limit = limit if limit is not None else min(num_builds, pagination_constants['MAX_LIMIT'])
 
         # Reset the offset to 0 if it is out of range
         starting_index = offset if offset < num_builds else 0
