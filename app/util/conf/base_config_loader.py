@@ -105,6 +105,11 @@ class BaseConfigLoader(object):
         conf.set('https_cert_file', None)
         conf.set('https_key_file', None)
 
+        # Default values for pagination requests
+        conf.set('pagination_offset', 0)
+        conf.set('pagination_limit', 20)
+        conf.set('pagination_max_limit', 200)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory

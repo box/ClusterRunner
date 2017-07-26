@@ -1,8 +1,6 @@
-from typing import List
-from collections import OrderedDict
-from itertools import islice
 import os
 from threading import Thread
+from typing import List
 
 from app.common.cluster_service import ClusterService
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
@@ -17,7 +15,6 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
-from app.web_framework.cluster_base_handler import pagination_constants
 
 
 class ClusterMaster(ClusterService):
@@ -31,7 +28,7 @@ class ClusterMaster(ClusterService):
         self._logger = get_logger(__name__)
         self._master_results_path = Configuration['results_directory']
         self._all_slaves_by_url = {}
-        self._all_builds_by_id = OrderedDict()
+        self._all_builds_by_id = dict()
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
@@ -67,22 +64,32 @@ class ClusterMaster(ClusterService):
 
     def builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
-        Returns a list of all builds. Both offset and limit are assumed to be nonnegative at this point
-        since the corrections or negative offsets and limits are done when the query parameters are first initialized.
+        Returns a list of all builds.
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
         num_builds = len(self._all_builds_by_id)
-        offset = offset or 0
-        # Don't return more than the MAX_LIMIT even if we have more builds than that
-        limit = limit if limit is not None else min(num_builds, pagination_constants['MAX_LIMIT'])
+        highest_amount = min(num_builds, Configuration['pagination_max_limit'])
 
-        # Reset the offset to 0 if it is out of range
-        starting_index = offset if offset < num_builds else 0
-        ending_index = min((starting_index + limit), num_builds)
+        offset = offset if offset is not None else Configuration['pagination_offset']
+        limit = limit if limit is not None else Configuration['pagination_limit']
 
-        requested_builds = islice(self._all_builds_by_id, starting_index, ending_index)
-        return [self._all_builds_by_id[key] for key in requested_builds]
+        # Remove any negative values
+        offset = max(offset, 0)
+        limit = max(limit, 0)
+
+        # If limit is set higher than the number of builds/max limit, reduce limit
+        limit = highest_amount if limit > highest_amount else limit
+
+        # Requested offset too high should yield no results
+        if offset > num_builds:
+            return []
+
+        first_build_id = offset + 1
+        last_build_id = min((offset + limit), num_builds)
+
+        # Add +1 to last_build_id because range is exclusive
+        return [self.get_build(uid) for uid in range(first_build_id, last_build_id + 1)]
 
     def active_builds(self):
         """
