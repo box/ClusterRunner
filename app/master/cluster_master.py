@@ -1,3 +1,5 @@
+from collections import OrderedDict
+from itertools import islice
 import os
 from threading import Thread
 from typing import List
@@ -28,7 +30,7 @@ class ClusterMaster(ClusterService):
         self._logger = get_logger(__name__)
         self._master_results_path = Configuration['results_directory']
         self._all_slaves_by_url = {}
-        self._all_builds_by_id = dict()
+        self._all_builds_by_id = OrderedDict()
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
@@ -69,27 +71,27 @@ class ClusterMaster(ClusterService):
         :param limit: The number of builds requested
         """
         num_builds = len(self._all_builds_by_id)
-        highest_amount = min(num_builds, Configuration['pagination_max_limit'])
 
-        offset = offset if offset is not None else Configuration['pagination_offset']
-        limit = limit if limit is not None else Configuration['pagination_limit']
+        # If offset & limit are not set, return all builds (don't break `/v1/build/`)
+        offset = offset if offset is not None else 0
+        limit = limit if limit is not None else num_builds
 
         # Remove any negative values
         offset = max(offset, 0)
         limit = max(limit, 0)
 
-        # If limit is set higher than the number of builds/max limit, reduce limit
-        limit = highest_amount if limit > highest_amount else limit
+        # If limit is set higher than the number of builds, reduce limit
+        limit = min(num_builds, limit)
 
         # Requested offset too high should yield no results
         if offset > num_builds:
             return []
 
-        first_build_id = offset + 1
-        last_build_id = min((offset + limit), num_builds)
+        starting_index = offset
+        ending_index = min((starting_index + limit), num_builds)
 
-        # Add +1 to last_build_id because range is exclusive
-        return [self.get_build(uid) for uid in range(first_build_id, last_build_id + 1)]
+        requested_builds = islice(self._all_builds_by_id, starting_index, ending_index)
+        return [self._all_builds_by_id[key] for key in requested_builds]
 
     def active_builds(self):
         """

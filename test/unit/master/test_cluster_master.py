@@ -24,6 +24,7 @@ class TestClusterMaster(BaseUnitTestCase):
     _PAGINATION_OFFSET = 0
     _PAGINATION_LIMIT = 5
     _PAGINATION_MAX_LIMIT = 10
+    _NUM_BUILDS = 20
 
     def setUp(self):
         super().setUp()
@@ -248,18 +249,20 @@ class TestClusterMaster(BaseUnitTestCase):
         master.handle_request_to_update_build(build_id, update_params)
 
     @genty_dataset(
+        # No params simulates a v1 request
         no_params=(
             None, None,
-            _PAGINATION_OFFSET + 1,
-            _PAGINATION_OFFSET + _PAGINATION_LIMIT
+            1,
+            0 + _NUM_BUILDS
         ),
+        # Params simulate a v2 request
         offset_param=(
-            3, None,
+            3, _PAGINATION_LIMIT,
             3 + 1,
             3 + _PAGINATION_LIMIT
         ),
         limit_param=(
-            None, 5,
+            _PAGINATION_OFFSET, 5,
             _PAGINATION_OFFSET + 1,
             _PAGINATION_OFFSET + 5
         ),
@@ -268,20 +271,20 @@ class TestClusterMaster(BaseUnitTestCase):
             3 + 1,
             3 + 5
         ),
-        low_offset=(
-            None, 2,
+        low_limit=(
+            _PAGINATION_OFFSET, 2,
             _PAGINATION_OFFSET + 1,
             _PAGINATION_OFFSET + 2
         ),
-        too_high_offset=(
-            1000, None,
-            None,
-            None
-        ),
-        too_high_limit=(
-            None, 1000,
+        max_limit=(
+            _PAGINATION_OFFSET, _PAGINATION_MAX_LIMIT,
             _PAGINATION_OFFSET + 1,
             _PAGINATION_OFFSET + _PAGINATION_MAX_LIMIT
+        ),
+        too_high_offset=(
+            1000, _PAGINATION_LIMIT,
+            None,
+            None
         ),
     )
     def test_builds_with_pagination_request(
@@ -292,8 +295,8 @@ class TestClusterMaster(BaseUnitTestCase):
             expected_last_build_id: int,
             ):
         master = ClusterMaster()
-        # Create 10 mock builds with ids 1 to 10
-        for build_id in range(1, 11):
+        # Create 20 mock builds with ids 1 to 20
+        for build_id in range(1, self._NUM_BUILDS + 1):
             build_mock = Mock(spec=Build)
             build_mock.build_id = build_id
             master._all_builds_by_id[build_id] = build_mock
@@ -306,4 +309,5 @@ class TestClusterMaster(BaseUnitTestCase):
 
         self.assertEqual(id_of_first_build, expected_first_build_id, 'Received the wrong first build from request')
         self.assertEqual(id_of_last_build, expected_last_build_id, 'Received the wrong last build from request')
-        self.assertLessEqual(num_builds, self._PAGINATION_MAX_LIMIT, 'Received too many builds from request')
+        if offset is not None and limit is not None:
+            self.assertLessEqual(num_builds, self._PAGINATION_MAX_LIMIT, 'Received too many builds from request')
