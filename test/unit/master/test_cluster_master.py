@@ -1,4 +1,5 @@
 from threading import Event
+from typing import Optional
 
 from genty import genty, genty_dataset
 from hypothesis import given
@@ -9,6 +10,7 @@ from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
 from app.slave.cluster_slave import SlaveState
+from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -19,6 +21,11 @@ class TestClusterMaster(BaseUnitTestCase):
     # todo: that will live for the rest of the nosetests run. We should 1) enable ClusterMaster to shut down the
     # todo: threads that it starts and 2) make tests fail that leak threads.
 
+    _PAGINATION_OFFSET = 0
+    _PAGINATION_LIMIT = 5
+    _PAGINATION_MAX_LIMIT = 10
+    _NUM_BUILDS = 20
+
     def setUp(self):
         super().setUp()
         self.patch('app.util.fs.create_dir')
@@ -26,6 +33,9 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
+        Configuration['pagination_offset'] = self._PAGINATION_OFFSET
+        Configuration['pagination_limit'] = self._PAGINATION_LIMIT
+        Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
 
 
     @genty_dataset(
@@ -237,3 +247,67 @@ class TestClusterMaster(BaseUnitTestCase):
         master = ClusterMaster()
         master._all_builds_by_id = {build_id: Build({})}
         master.handle_request_to_update_build(build_id, update_params)
+
+    @genty_dataset(
+        # No params simulates a v1 request
+        no_params=(
+            None, None,
+            1,
+            0 + _NUM_BUILDS
+        ),
+        # Params simulate a v2 request
+        offset_param=(
+            3, _PAGINATION_LIMIT,
+            3 + 1,
+            3 + _PAGINATION_LIMIT
+        ),
+        limit_param=(
+            _PAGINATION_OFFSET, 5,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 5
+        ),
+        offset_and_limit_params=(
+            3, 5,
+            3 + 1,
+            3 + 5
+        ),
+        low_limit=(
+            _PAGINATION_OFFSET, 2,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 2
+        ),
+        max_limit=(
+            _PAGINATION_OFFSET, _PAGINATION_MAX_LIMIT,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + _PAGINATION_MAX_LIMIT
+        ),
+        too_high_offset=(
+            1000, _PAGINATION_LIMIT,
+            None,
+            None
+        ),
+    )
+    def test_builds_with_pagination_request(
+            self,
+            offset: Optional[int],
+            limit: Optional[int],
+            expected_first_build_id: int,
+            expected_last_build_id: int,
+            ):
+        master = ClusterMaster()
+        # Create 20 mock builds with ids 1 to 20
+        for build_id in range(1, self._NUM_BUILDS + 1):
+            build_mock = Mock(spec=Build)
+            build_mock.build_id = build_id
+            master._all_builds_by_id[build_id] = build_mock
+
+        requested_builds = master.builds(offset, limit)
+
+        id_of_first_build = requested_builds[0].build_id if len(requested_builds) else None
+        id_of_last_build = requested_builds[-1].build_id if len(requested_builds) else None
+        num_builds = len(requested_builds)
+
+        self.assertEqual(id_of_first_build, expected_first_build_id, 'Received the wrong first build from request')
+        self.assertEqual(id_of_last_build, expected_last_build_id, 'Received the wrong last build from request')
+        if offset is not None and limit is not None:
+            self.assertLessEqual(num_builds, self._PAGINATION_MAX_LIMIT, 'Received too many builds from request')

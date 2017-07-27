@@ -1,6 +1,8 @@
 from collections import OrderedDict
+from itertools import islice
 import os
 from threading import Thread
+from typing import List
 
 from app.common.cluster_service import ClusterService
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
@@ -62,12 +64,34 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def builds(self):
+    def builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
-        Returns a list of all builds
-        :rtype: list[Build]
+        Returns a list of all builds.
+        :param offset: The starting index of the requested build
+        :param limit: The number of builds requested
         """
-        return self._all_builds_by_id.values()
+        num_builds = len(self._all_builds_by_id)
+
+        # If offset & limit are not set, return all builds (don't break `/v1/build/`)
+        offset = offset if offset is not None else 0
+        limit = limit if limit is not None else num_builds
+
+        # Remove any negative values
+        offset = max(offset, 0)
+        limit = max(limit, 0)
+
+        # If limit is set higher than the number of builds, reduce limit
+        limit = min(num_builds, limit)
+
+        # Requested offset too high should yield no results
+        if offset > num_builds:
+            return []
+
+        starting_index = offset
+        ending_index = min((starting_index + limit), num_builds)
+
+        requested_builds = islice(self._all_builds_by_id, starting_index, ending_index)
+        return [self._all_builds_by_id[key] for key in requested_builds]
 
     def active_builds(self):
         """

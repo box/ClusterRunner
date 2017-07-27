@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import http.client
 import re
 import tornado.escape
@@ -61,6 +63,31 @@ class ClusterBaseHandler(tornado.web.RequestHandler):
         status_code = self._exception_status_codes.get(type(ex), http.client.INTERNAL_SERVER_ERROR)
         self.set_status(status_code)
         self.finish()
+
+    # For methods that annotate with `Tuple`, use `disable=invalid-sequence-index`
+    # This bug is fixed in https://github.com/PyCQA/astroid/commit/563031aaf13a44adc8db4f8d0ab8020d550aae00
+    # More information on the issue in https://github.com/PyCQA/pylint/issues/1212
+
+    def get_pagination_params(self) -> Tuple[int, int]:  # pylint: disable=invalid-sequence-index
+        offset = self.get_query_argument('offset', Configuration['pagination_offset'], True)
+        limit = self.get_query_argument('limit', Configuration['pagination_limit'], True)
+        try:
+            offset = int(offset)
+            limit = int(limit)
+        except ValueError as ex:
+            raise BadRequestError from ex
+        return self._validate_pagination_params(offset, limit)
+
+    @staticmethod
+    def _validate_pagination_params(offset: int, limit: int) -> Tuple[int, int]:  # pylint: disable=invalid-sequence-index
+        offset = offset if offset is not None else Configuration['pagination_offset']
+        limit = limit if limit is not None else Configuration['pagination_limit']
+
+        # A negative limit will give no results
+        limit = max(limit, 0)
+        offset = max(offset, 0)
+
+        return offset, min(limit, Configuration['pagination_max_limit'])
 
     def on_finish(self):
         if self._route_node is not None:

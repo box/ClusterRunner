@@ -1,15 +1,27 @@
+from typing import Optional
+
 from genty import genty, genty_dataset
 import tornado.httpserver
 from unittest.mock import ANY, call, MagicMock
 
 from app.util.conf.configuration import Configuration
 from app.web_framework.cluster_application import ClusterApplication
-from app.web_framework.cluster_base_handler import ClusterBaseAPIHandler
+from app.web_framework.cluster_base_handler import ClusterBaseHandler, ClusterBaseAPIHandler
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
 @genty
 class TestClusterBaseHandler(BaseUnitTestCase):
+
+    _PAGINATION_OFFSET = 0
+    _PAGINATION_LIMIT = 20
+    _PAGINATION_MAX_LIMIT = 200
+
+    def setUp(self):
+        super().setUp()
+        Configuration['pagination_offset'] = self._PAGINATION_OFFSET
+        Configuration['pagination_limit'] = self._PAGINATION_LIMIT
+        Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
 
     @genty_dataset(
         when_request_contains_no_origin_header=(None, '.*'),
@@ -72,3 +84,22 @@ class TestClusterBaseHandler(BaseUnitTestCase):
 
         self.assertIn(expected_set_access_control_methods_call, handler.set_header.call_args_list,
                       'set_default_headers() should not set the Access-Control-Allow-Methods header.')
+
+    @genty_dataset(
+        no_params=(None, None, _PAGINATION_OFFSET, _PAGINATION_LIMIT),
+        offset_param=(50, None, 50, _PAGINATION_LIMIT),
+        limit_param=(None, 50, _PAGINATION_OFFSET, 50),
+        offset_and_limit_param=(50, 100, 50, 100),
+        negative_offset_param=(-50, None, 0, _PAGINATION_LIMIT),
+        negative_limit_param=(None, -50, _PAGINATION_OFFSET, 0),
+    )
+    def test_validate_pagination_params(
+            self,
+            offset: Optional[int],
+            limit: Optional[int],
+            expected_offset: int,
+            expected_limit: int,
+            ):
+        actual_offset, actual_limit = ClusterBaseHandler._validate_pagination_params(offset, limit)
+        self.assertEqual(actual_offset, expected_offset, 'Actual offset does not match expected offset')
+        self.assertEqual(actual_limit, expected_limit, 'Actual limit does not match expected limit')
