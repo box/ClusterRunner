@@ -1,9 +1,11 @@
 import os
+from typing import List
 
 from app.common.build_artifact import BuildArtifact
 from app.master.atom import AtomState
 from app.util.conf.configuration import Configuration
 from app.util.log import get_logger
+from app.util.pagination import get_paginated_indices
 
 
 class Subjob(object):
@@ -85,11 +87,27 @@ class Subjob(object):
         }
 
     @property
-    def atoms(self):
+    def atoms(self) -> List['Atom']:
         """
-        :rtype: list[app.master.atom.Atom]
+        Returns a list of all atoms for this subjob
         """
         return self._atoms
+
+    def get_atoms(self, offset: int=None, limit: int=None) -> List['Atom']:
+        """
+        Returns a list of atoms for this subjob
+        :param offset: The starting index of the requested build
+        :param limit: The number of builds requested
+        :rtype: list[app.master.atom.Atom]
+        """
+        num_atoms = len(self._atoms)
+        start, end = get_paginated_indices(offset, limit, num_atoms)
+
+        # Offset request/starting index is out of bounds, so return no results.
+        if start > num_atoms:
+            return []
+
+        return self._atoms[start:end]
 
     def build_id(self):
         """

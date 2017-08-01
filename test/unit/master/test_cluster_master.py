@@ -6,9 +6,11 @@ from hypothesis import given
 from hypothesis.strategies import text, dictionaries, integers
 from unittest.mock import MagicMock, Mock
 
+from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.cluster_master import ClusterMaster
+from app.master.subjob import Subjob
 from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError
@@ -24,7 +26,7 @@ class TestClusterMaster(BaseUnitTestCase):
     _PAGINATION_OFFSET = 0
     _PAGINATION_LIMIT = 5
     _PAGINATION_MAX_LIMIT = 10
-    _NUM_BUILDS = 20
+    _NUM_BUILDS = _NUM_SUBJOBS = _NUM_ATOMS = 20
 
     def setUp(self):
         super().setUp()
@@ -311,3 +313,140 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(id_of_last_build, expected_last_build_id, 'Received the wrong last build from request')
         if offset is not None and limit is not None:
             self.assertLessEqual(num_builds, self._PAGINATION_MAX_LIMIT, 'Received too many builds from request')
+
+    @genty_dataset(
+        # No params simulates a v1 request
+        no_params=(
+            None, None,
+            1,
+            0 + _NUM_SUBJOBS
+        ),
+        # Params simulate a v2 request
+        offset_param=(
+            3, _PAGINATION_LIMIT,
+            3 + 1,
+            3 + _PAGINATION_LIMIT
+        ),
+        limit_param=(
+            _PAGINATION_OFFSET, 5,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 5
+        ),
+        offset_and_limit_params=(
+            3, 5,
+            3 + 1,
+            3 + 5
+        ),
+        low_limit=(
+            _PAGINATION_OFFSET, 2,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 2
+        ),
+        max_limit=(
+            _PAGINATION_OFFSET, _PAGINATION_MAX_LIMIT,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + _PAGINATION_MAX_LIMIT
+        ),
+        too_high_offset=(
+            1000, _PAGINATION_LIMIT,
+            None,
+            None
+        ),
+    )
+    def test_subjobs_with_pagination_request(
+            self,
+            offset: Optional[int],
+            limit: Optional[int],
+            expected_first_subjob_id: int,
+            expected_last_subjob_id: int,
+            ):
+        build = Build(BuildRequest({}))
+        # Create 20 mock subjobs with ids 1 to 20
+        for subjob_id in range(1, self._NUM_SUBJOBS + 1):
+            subjob_mock = Mock(spec=Subjob)
+            subjob_mock.subjob_id = subjob_id
+            build._all_subjobs_by_id[subjob_id] = subjob_mock
+
+        requested_subjobs = build.all_subjobs(offset, limit)
+
+        id_of_first_subjob = requested_subjobs[0].subjob_id if len(requested_subjobs) else None
+        id_of_last_subjob = requested_subjobs[-1].subjob_id if len(requested_subjobs) else None
+        num_subjobs = len(requested_subjobs)
+
+        self.assertEqual(id_of_first_subjob, expected_first_subjob_id, 'Received the wrong first subjob from request')
+        self.assertEqual(id_of_last_subjob, expected_last_subjob_id, 'Received the wrong last subjob from request')
+        if offset is not None and limit is not None:
+            self.assertLessEqual(num_subjobs, self._PAGINATION_MAX_LIMIT, 'Received too many subjobs from request')
+
+
+
+    @genty_dataset(
+        # No params simulates a v1 request
+        no_params=(
+            None, None,
+            1,
+            0 + _NUM_ATOMS
+        ),
+        # Params simulate a v2 request
+        offset_param=(
+            3, _PAGINATION_LIMIT,
+            3 + 1,
+            3 + _PAGINATION_LIMIT
+        ),
+        limit_param=(
+            _PAGINATION_OFFSET, 5,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 5
+        ),
+        offset_and_limit_params=(
+            3, 5,
+            3 + 1,
+            3 + 5
+        ),
+        low_limit=(
+            _PAGINATION_OFFSET, 2,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + 2
+        ),
+        max_limit=(
+            _PAGINATION_OFFSET, _PAGINATION_MAX_LIMIT,
+            _PAGINATION_OFFSET + 1,
+            _PAGINATION_OFFSET + _PAGINATION_MAX_LIMIT
+        ),
+        too_high_offset=(
+            1000, _PAGINATION_LIMIT,
+            None,
+            None
+        ),
+    )
+    def test_subjobs_with_pagination_request(
+            self,
+            offset: Optional[int],
+            limit: Optional[int],
+            expected_first_atom_id: int,
+            expected_last_atom_id: int,
+            ):
+        # Create 20 mock atoms with ids 1 to 20
+        atoms = []
+        for atom_id in range(1, self._NUM_ATOMS + 1):
+            atom_mock = Mock(spec=Atom)
+            atom_mock.id = atom_id
+            atoms.append(atom_mock)
+
+        build_id = 1
+        subjob_id = 1
+        project_type = None
+        job_config = None
+        subjob_atoms = atoms
+        subjob = Subjob(build_id, subjob_id, project_type, job_config, atoms)
+
+        requested_atoms = subjob.get_atoms(offset, limit)
+
+        id_of_first_atom = requested_atoms[0].id if len(requested_atoms) else None
+        id_of_last_atom = requested_atoms[-1].id if len(requested_atoms) else None
+        num_atoms = len(requested_atoms)
+
+        self.assertEqual(id_of_first_atom, expected_first_atom_id, 'Received the wrong first atom from request')
+        self.assertEqual(id_of_last_atom, expected_last_atom_id, 'Received the wrong last atom from request')
+        if offset is not None and limit is not None:
+            self.assertLessEqual(num_atoms, self._PAGINATION_MAX_LIMIT, 'Received too many atoms from request')
