@@ -73,11 +73,6 @@ class ClusterMaster(ClusterService):
         """
         num_builds = len(self._all_builds_by_id)
         start, end = get_paginated_indices(offset, limit, num_builds)
-
-        # Offset request/starting index is out of bounds, so return no results.
-        if start > num_builds:
-            return []
-
         requested_builds = islice(self._all_builds_by_id, start, end)
         return [self._all_builds_by_id[key] for key in requested_builds]
 

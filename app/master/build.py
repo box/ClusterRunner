@@ -194,11 +194,6 @@ class Build(object):
         """
         num_subjobs = len(self._all_subjobs_by_id)
         start, end = get_paginated_indices(offset, limit, num_subjobs)
-
-        # Offset request/starting index is out of bounds, so return no results.
-        if start > num_subjobs:
-            return []
-
         requested_subjobs = islice(self._all_subjobs_by_id, start, end)
         return [self._all_subjobs_by_id[key] for key in requested_subjobs]
 

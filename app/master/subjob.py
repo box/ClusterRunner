@@ -102,7 +102,6 @@ class Subjob(object):
         """
         num_atoms = len(self._atoms)
         start, end = get_paginated_indices(offset, limit, num_atoms)
-
         return self._atoms[start:end]
 
     def build_id(self):
