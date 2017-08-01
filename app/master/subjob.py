@@ -103,10 +103,6 @@ class Subjob(object):
         num_atoms = len(self._atoms)
         start, end = get_paginated_indices(offset, limit, num_atoms)
 
-        # Offset request/starting index is out of bounds, so return no results.
-        if start > num_atoms:
-            return []
-
         return self._atoms[start:end]
 
     def build_id(self):

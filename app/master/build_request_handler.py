@@ -91,7 +91,7 @@ class BuildRequestHandler(object):
                     analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=True,
                                            log_msg='Build {build_id} successfully prepared.')
                     # If the atomizer found no work to do, perform build cleanup and skip the slave allocation.
-                    if len(build.all_subjobs()) == 0:
+                    if len(build.get_subjobs()) == 0:
                         self._logger.info('Build {} has no work to perform and is exiting.', build.build_id())
                         build.finish()
                     # If there is work to be done, this build must queue to be allocated slaves.

@@ -186,7 +186,7 @@ class Build(object):
         """
         return self._build_request
 
-    def all_subjobs(self, offset: int=None, limit: int=None) -> List['Subjob']:
+    def get_subjobs(self, offset: int=None, limit: int=None) -> List['Subjob']:
         """
         Returns a list of subjobs for this build
         :param offset: The starting index of the requested build

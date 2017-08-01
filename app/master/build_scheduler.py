@@ -57,7 +57,7 @@ class BuildScheduler(object):
             return False
         if self._build._unstarted_subjobs.empty():
             return False
-        if self._num_executors_allocated >= len(self._build.all_subjobs()):
+        if self._num_executors_allocated >= len(self._build.get_subjobs()):
             return False
         return True
 

@@ -65,7 +65,7 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def builds(self, offset: int=None, limit: int=None) -> List['Build']:
+    def get_builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
         Returns a list of all builds.
         :param offset: The starting index of the requested build
@@ -86,7 +86,7 @@ class ClusterMaster(ClusterService):
         Returns a list of incomplete builds
         :rtype: list[Build]
         """
-        return [build for build in self.builds() if not build.is_finished]
+        return [build for build in self.get_builds() if not build.is_finished]
 
     def all_slaves_by_id(self):
         """

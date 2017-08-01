@@ -303,7 +303,7 @@ class TestClusterMaster(BaseUnitTestCase):
             build_mock.build_id = build_id
             master._all_builds_by_id[build_id] = build_mock
 
-        requested_builds = master.builds(offset, limit)
+        requested_builds = master.get_builds(offset, limit)
 
         id_of_first_build = requested_builds[0].build_id if len(requested_builds) else None
         id_of_last_build = requested_builds[-1].build_id if len(requested_builds) else None
@@ -367,7 +367,7 @@ class TestClusterMaster(BaseUnitTestCase):
             subjob_mock.subjob_id = subjob_id
             build._all_subjobs_by_id[subjob_id] = subjob_mock
 
-        requested_subjobs = build.all_subjobs(offset, limit)
+        requested_subjobs = build.get_subjobs(offset, limit)
 
         id_of_first_subjob = requested_subjobs[0].subjob_id if len(requested_subjobs) else None
         id_of_last_subjob = requested_subjobs[-1].subjob_id if len(requested_subjobs) else None
@@ -419,7 +419,7 @@ class TestClusterMaster(BaseUnitTestCase):
             None
         ),
     )
-    def test_subjobs_with_pagination_request(
+    def test_atoms_with_pagination_request(
             self,
             offset: Optional[int],
             limit: Optional[int],

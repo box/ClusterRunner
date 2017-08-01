@@ -146,7 +146,7 @@ class _SubjobsHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id):
         build = self._cluster_master.get_build(int(build_id))
         response = {
-            'subjobs': [subjob.api_representation() for subjob in build.all_subjobs()]
+            'subjobs': [subjob.api_representation() for subjob in build.get_subjobs()]
         }
         self.write(response)
 
@@ -156,7 +156,7 @@ class _V2SubjobsHandler(_SubjobsHandler):
         offset, limit = self.get_pagination_params()
         build = self._cluster_master.get_build(int(build_id))
         response = {
-            'subjobs': [subjob.api_representation() for subjob in build.all_subjobs(offset, limit)]
+            'subjobs': [subjob.api_representation() for subjob in build.get_subjobs(offset, limit)]
         }
         self.write(response)
 
@@ -279,7 +279,7 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
 
     def get(self):
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.builds()]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds()]
         }
         self.write(response)
 
@@ -288,7 +288,7 @@ class _V2BuildsHandler(_BuildsHandler):
     def get(self):
         offset, limit = self.get_pagination_params()
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.builds(offset, limit)]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds(offset, limit)]
         }
         self.write(response)
 
