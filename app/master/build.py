@@ -416,7 +416,7 @@ class Build(object):
     @property
     def is_finished(self):
         # WIP(joey): Calling logic should check _is_canceled if it needs to instead of including the check here.
-        return self._is_canceled() or self._postbuild_tasks_are_finished
+        return self.is_canceled or self._postbuild_tasks_are_finished
 
     @property
     def _detail_message(self):
@@ -438,7 +438,8 @@ class Build(object):
     def has_error(self):
         return self._status() is BuildState.ERROR
 
-    def _is_canceled(self):
+    @property
+    def is_canceled(self):
         return self._status() is BuildState.CANCELED
 
     def _is_stopped(self):
@@ -451,7 +452,7 @@ class Build(object):
         :rtype: list[Atom] | None
         """
         if self._failed_atoms is None and self.is_finished:
-            if self._is_canceled():
+            if self.is_canceled:
                 return []
 
             self._failed_atoms = []
@@ -470,7 +471,7 @@ class Build(object):
             NO_FAILURES:
         :rtype: BuildResult | None
         """
-        if self._is_canceled():
+        if self.is_canceled:
             return BuildResult.FAILURE
 
         if self.is_finished:
