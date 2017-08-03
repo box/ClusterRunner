@@ -68,9 +68,9 @@ class ClusterMasterApplication(ClusterApplication):
                     RouteNode(r'result', _BuildResultRedirectHandler),
                     RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
                     RouteNode(r'artifacts.zip', _BuildZipResultHandler),
-                    RouteNode(r'subjobs', _SubjobsHandler,).add_children([
+                    RouteNode(r'subjobs', _V2SubjobsHandler,).add_children([
                         RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
-                            RouteNode(r'atoms', _AtomsHandler).add_children([
+                            RouteNode(r'atoms', _V2AtomsHandler).add_children([
                                 RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
                                     RouteNode(r'console', _AtomConsoleHandler)
                                 ])
@@ -146,7 +146,17 @@ class _SubjobsHandler(_ClusterMasterBaseAPIHandler):
     def get(self, build_id):
         build = self._cluster_master.get_build(int(build_id))
         response = {
-            'subjobs': [subjob.api_representation() for subjob in build.all_subjobs()]
+            'subjobs': [subjob.api_representation() for subjob in build.get_subjobs()]
+        }
+        self.write(response)
+
+
+class _V2SubjobsHandler(_SubjobsHandler):
+    def get(self, build_id):
+        offset, limit = self.get_pagination_params()
+        build = self._cluster_master.get_build(int(build_id))
+        response = {
+            'subjobs': [subjob.api_representation() for subjob in build.get_subjobs(offset, limit)]
         }
         self.write(response)
 
@@ -188,6 +198,17 @@ class _AtomsHandler(_ClusterMasterBaseAPIHandler):
         subjob = build.subjob(int(subjob_id))
         response = {
             'atoms': [atom.api_representation() for atom in subjob.atoms()],
+        }
+        self.write(response)
+
+
+class _V2AtomsHandler(_AtomsHandler):
+    def get(self, build_id, subjob_id):
+        offset, limit = self.get_pagination_params()
+        build = self._cluster_master.get_build(int(build_id))
+        subjob = build.subjob(int(subjob_id))
+        response = {
+            'atoms': [atom.api_representation() for atom in subjob.get_atoms(offset, limit)],
         }
         self.write(response)
 
@@ -258,7 +279,7 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
 
     def get(self):
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.builds()]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds()]
         }
         self.write(response)
 
@@ -267,7 +288,7 @@ class _V2BuildsHandler(_BuildsHandler):
     def get(self):
         offset, limit = self.get_pagination_params()
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.builds(offset, limit)]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds(offset, limit)]
         }
         self.write(response)
 

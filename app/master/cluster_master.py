@@ -17,6 +17,7 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util import fs
 from app.util.log import get_logger
+from app.util.pagination import get_paginated_indices
 
 
 class ClusterMaster(ClusterService):
@@ -64,33 +65,15 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def builds(self, offset: int=None, limit: int=None) -> List['Build']:
+    def get_builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
         Returns a list of all builds.
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
         num_builds = len(self._all_builds_by_id)
-
-        # If offset & limit are not set, return all builds (don't break `/v1/build/`)
-        offset = offset if offset is not None else 0
-        limit = limit if limit is not None else num_builds
-
-        # Remove any negative values
-        offset = max(offset, 0)
-        limit = max(limit, 0)
-
-        # If limit is set higher than the number of builds, reduce limit
-        limit = min(num_builds, limit)
-
-        # Requested offset too high should yield no results
-        if offset > num_builds:
-            return []
-
-        starting_index = offset
-        ending_index = min((starting_index + limit), num_builds)
-
-        requested_builds = islice(self._all_builds_by_id, starting_index, ending_index)
+        start, end = get_paginated_indices(offset, limit, num_builds)
+        requested_builds = islice(self._all_builds_by_id, start, end)
         return [self._all_builds_by_id[key] for key in requested_builds]
 
     def active_builds(self):
@@ -98,7 +81,7 @@ class ClusterMaster(ClusterService):
         Returns a list of incomplete builds
         :rtype: list[Build]
         """
-        return [build for build in self.builds() if not build.is_finished]
+        return [build for build in self.get_builds() if not build.is_finished]
 
     def all_slaves_by_id(self):
         """

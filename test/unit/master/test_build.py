@@ -142,7 +142,7 @@ class TestBuild(BaseUnitTestCase):
         fake_atom_exit_code = 777
         mock_open(mock=self.mock_open, read_data=str(fake_atom_exit_code))
         build = self._create_test_build(BuildStatus.BUILDING, num_subjobs=1, num_atoms_per_subjob=1)
-        subjob = build.all_subjobs()[0]
+        subjob = build.get_subjobs()[0]
 
         build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
@@ -155,7 +155,7 @@ class TestBuild(BaseUnitTestCase):
 
     def test_complete_subjob_marks_atoms_of_subjob_as_completed(self):
         build = self._create_test_build(BuildStatus.BUILDING)
-        subjob = build.all_subjobs()[0]
+        subjob = build.get_subjobs()[0]
 
         build.complete_subjob(subjob.subjob_id(), payload=self._FAKE_PAYLOAD)
 
@@ -164,7 +164,7 @@ class TestBuild(BaseUnitTestCase):
 
     def test_complete_subjob_writes_and_extracts_payload_to_correct_directory(self):
         build = self._create_test_build(BuildStatus.BUILDING)
-        subjob = build.all_subjobs()[0]
+        subjob = build.get_subjobs()[0]
 
         payload = {'filename': 'turtles.txt', 'body': 'Heroes in a half shell.'}
         build.complete_subjob(subjob.subjob_id(), payload=payload)
@@ -175,7 +175,7 @@ class TestBuild(BaseUnitTestCase):
 
     def test_exception_is_raised_if_problem_occurs_writing_subjob(self):
         build = self._create_test_build(BuildStatus.BUILDING)
-        subjob = build.all_subjobs()[0]
+        subjob = build.get_subjobs()[0]
 
         self.mock_util.fs.write_file.side_effect = FileExistsError
 

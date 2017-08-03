@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from enum import Enum
+from itertools import islice
 import os
 from queue import Queue, Empty
 import shutil
@@ -8,7 +9,7 @@ from threading import Lock, Thread
 import time
 import uuid
 
-from typing import Dict
+from typing import Dict, List
 
 from app.common.build_artifact import BuildArtifact
 from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
@@ -22,6 +23,7 @@ from app.util.counter import Counter
 from app.util.exceptions import ItemNotFoundError
 import app.util.fs
 from app.util.log import get_logger
+from app.util.pagination import get_paginated_indices
 from app.util.single_use_coin import SingleUseCoin
 
 
@@ -61,7 +63,7 @@ class Build(object):
         self._project_type = None
         self._build_completion_lock = Lock()  # protects against more than one thread detecting the build's finish
 
-        self._all_subjobs_by_id = {}
+        self._all_subjobs_by_id = OrderedDict()
         self._unstarted_subjobs = None  # WIP(joey): Move subjob queues to BuildScheduler class.
         self._finished_subjobs = None
         self._failed_atoms = None
@@ -184,12 +186,16 @@ class Build(object):
         """
         return self._build_request
 
-    def all_subjobs(self):
+    def get_subjobs(self, offset: int=None, limit: int=None) -> List['Subjob']:
         """
         Returns a list of subjobs for this build
-        :rtype: list[Subjob]
+        :param offset: The starting index of the requested build
+        :param limit: The number of builds requested
         """
-        return [subjob for subjob in self._all_subjobs_by_id.values()]
+        num_subjobs = len(self._all_subjobs_by_id)
+        start, end = get_paginated_indices(offset, limit, num_subjobs)
+        requested_subjobs = islice(self._all_subjobs_by_id, start, end)
+        return [self._all_subjobs_by_id[key] for key in requested_subjobs]
 
     def subjob(self, subjob_id: int) -> Subjob:
         """Return the subjob for this build with the specified id."""
