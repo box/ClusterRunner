@@ -59,6 +59,8 @@ class BuildScheduler(object):
             return False
         if self._num_executors_allocated >= len(self._build.get_subjobs()):
             return False
+        if self._build.is_canceled:
+            return False
         return True
 
     def allocate_slave(self, slave: Slave) -> bool:
@@ -103,29 +105,33 @@ class BuildScheduler(object):
 
         :type slave: Slave
         """
-        try:
-            # This lock prevents the scenario where a subjob is pulled from the queue but cannot be assigned to this
-            # slave because it is shutdown, so we put it back on the queue but in the meantime another slave enters
-            # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
-            # build would be stuck.
-            with self._subjob_assignment_lock:
-                subjob = self._build._unstarted_subjobs.get(block=False)
-                self._logger.debug('Sending {} to {}.', subjob, slave)
-                try:
-                    slave.start_subjob(subjob)
-                    subjob.mark_in_progress(slave)
-
-                except SlaveError as ex:
-                    internal_errors.labels(ErrorType.SubjobWriteFailure).inc()  # pylint: disable=no-member
-                    self._logger.warning('Failed to start {} on {}: {}. Requeuing subjob and freeing slave executor...',
-                                         subjob, slave, repr(ex))
-                    self._build._unstarted_subjobs.put(subjob)  # todo: This changes subjob execution order. (Issue #226)
-                    # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
-                    # Since the slave has been marked for shutdown, we need to free the executor.
-                    self._free_slave_executor(slave)
-
-        except Empty:
+        if self._build.is_canceled:
             self._free_slave_executor(slave)
+            return
+
+        # This lock prevents the scenario where a subjob is pulled from the queue but cannot be assigned to this
+        # slave because it is shutdown, so we put it back on the queue but in the meantime another slave enters
+        # this method, finds the subjob queue empty, and is torn down.  If that was the last 'living' slave, the
+        # build would be stuck.
+        with self._subjob_assignment_lock:
+            try:
+                subjob = self._build._unstarted_subjobs.get(block=False)
+            except Empty:
+                self._free_slave_executor(slave)
+                return
+            self._logger.debug('Sending {} to {}.', subjob, slave)
+            try:
+                slave.start_subjob(subjob)
+                subjob.mark_in_progress(slave)
+
+            except SlaveError as ex:
+                internal_errors.labels(ErrorType.SubjobWriteFailure).inc()  # pylint: disable=no-member
+                self._logger.warning('Failed to start {} on {}: {}. Requeuing subjob and freeing slave executor...',
+                                     subjob, slave, repr(ex))
+                # An executor is currently allocated for this subjob in begin_subjob_executions_on_slave.
+                # Since the slave has been marked for shutdown, we need to free the executor.
+                self._build._unstarted_subjobs.put(subjob)
+                self._free_slave_executor(slave)
 
     def _free_slave_executor(self, slave):
         num_executors_in_use = slave.free_executor()

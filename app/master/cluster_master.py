@@ -1,7 +1,7 @@
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from itertools import islice
 import os
-from threading import Thread
 from typing import List
 
 from app.common.cluster_service import ClusterService
@@ -37,6 +37,17 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+        # The best practice for determining the number of threads to use is
+        # the number of threads per core multiplied by the number of physical
+        # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
+        # max would be 40.
+        #
+        # Currently we use threads for incrementing/decrementing slave executor
+        # counts (lock acquisition) and tearing down the slave (network IO). 32 threads should be
+        # plenty for these tasks. In the case of heavy load, the bottle neck will be the number
+        # of executors, not the time it takes to lock/unlock the executor counts or the number of
+        # teardown requests. Tweak the number to find the sweet spot if you feel this is the case.
+        self._thread_pool_executor = ThreadPoolExecutor(max_workers=32)
 
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
@@ -216,11 +227,7 @@ class ClusterMaster(ClusterService):
         """
         build = self.get_build(slave.current_build_id)
         scheduler = self._scheduler_pool.get(build)
-        Thread(
-            target=scheduler.begin_subjob_executions_on_slave,
-            kwargs={'slave': slave},
-            name='Sched{}'.format(build.build_id()),
-        ).start()
+        self._thread_pool_executor.submit(scheduler.begin_subjob_executions_on_slave, slave=slave)
 
     def _handle_setup_failure_on_slave(self, slave):
         """
@@ -294,17 +301,12 @@ class ClusterMaster(ClusterService):
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
         build = self._all_builds_by_id[int(build_id)]
         slave = self._all_slaves_by_url[slave_url]
-        # If the build has been canceled, don't work on the next subjob.
-        if not build.is_finished or build.has_error:  # WIP(joey): This check should be internal to the Build object.
-            try:
-                build.complete_subjob(subjob_id, payload)
-            finally:
-                scheduler = self._scheduler_pool.get(build)
-                Thread(
-                    target=scheduler.execute_next_subjob_or_free_executor,
-                    kwargs={'slave': slave},
-                    name='Post{}:{}'.format(build_id, subjob_id),
-                ).start()
+        try:
+            build.complete_subjob(subjob_id, payload)
+        finally:
+            scheduler = self._scheduler_pool.get(build)
+            self._thread_pool_executor.submit(scheduler.execute_next_subjob_or_free_executor,
+                                              slave=slave)
 
     def get_build(self, build_id):
         """

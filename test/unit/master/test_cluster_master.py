@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from typing import Optional
 
@@ -19,10 +20,6 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 @genty
 class TestClusterMaster(BaseUnitTestCase):
-    # todo: This test class leaks threads. Every time we instantiate a ClusterMaster object we start up two threads
-    # todo: that will live for the rest of the nosetests run. We should 1) enable ClusterMaster to shut down the
-    # todo: threads that it starts and 2) make tests fail that leak threads.
-
     _PAGINATION_OFFSET = 0
     _PAGINATION_LIMIT = 5
     _PAGINATION_MAX_LIMIT = 10
@@ -35,10 +32,21 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
+
+        # Two threads are ran everytime we start up the ClusterMaster. We redirect the calls to
+        # `ThreadPoolExecutor.submit` through a mock proxy so we can capture events.
+        self.thread_pool_executor = ThreadPoolExecutor(max_workers=2)
+        self._thread_pool_executor_cls = self.patch('app.master.cluster_master.ThreadPoolExecutor')
+        self._thread_pool_executor_cls.return_value.submit.side_effect = \
+            self.thread_pool_executor.submit
+
         Configuration['pagination_offset'] = self._PAGINATION_OFFSET
         Configuration['pagination_limit'] = self._PAGINATION_LIMIT
         Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
 
+    def tearDown(self):
+        super().tearDown()
+        self.thread_pool_executor.shutdown()
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),
@@ -204,7 +212,7 @@ class TestClusterMaster(BaseUnitTestCase):
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
 
-    def test_handle_result_reported_from_slave_does_nothing_when_build_is_canceled(self):
+    def test_handle_result_reported_from_slave_when_build_is_canceled(self):
         build_id = 1
         slave_url = "url"
         build = Build(BuildRequest({}))
@@ -219,10 +227,11 @@ class TestClusterMaster(BaseUnitTestCase):
 
         master.handle_result_reported_from_slave(slave_url, build_id, 1)
 
-        self.assertEqual(build._handle_subjob_payload.call_count, 0, "Build is canceled, should not handle payload")
-        self.assertEqual(build._mark_subjob_complete.call_count, 0, "Build is canceled, should not complete subjobs")
-        self.assertEqual(mock_scheduler.execute_next_subjob_or_free_executor.call_count, 0,
-                         "Build is canceled, should not do next subjob")
+        self.assertEqual(build._handle_subjob_payload.call_count, 1, "Canceled builds should "
+                                                                     "handle payload")
+        self.assertEqual(build._mark_subjob_complete.call_count, 1, "Canceled builds should mark "
+                                                                    "their subjobs complete")
+        self.assertTrue(mock_scheduler.execute_next_subjob_or_free_executor.called)
 
     def test_exception_raised_during_complete_subjob_does_not_prevent_slave_teardown(self):
         slave_url = 'raphael.turtles.gov'
