@@ -6,11 +6,7 @@ from app.master.build import Build
 from app.util.exceptions import ItemNotFoundError
 
 
-<<<<<<< HEAD
 class BuildStore:
-=======
-class BuildStore(object):
->>>>>>> Migrate builds from master to BuildStore
     """
     Build storage service that stores and handles all builds.
     """
@@ -29,20 +25,12 @@ class BuildStore(object):
         return build
 
     @classmethod
-<<<<<<< HEAD
     def get_range(cls, start: int, end: int) -> List[Build]:
         """
         Returns a list of all builds.
         :param start: The starting index of the requested build
         :param end: 1 + the index of the last requested element, although if this is greater than the total number
                     of builds available the length of the returned list may be smaller than (end - start)
-=======
-    def get_range(cls, start: int, end: int) -> List['Build']:
-        """
-        Returns a list of all builds.
-        :param offset: The starting index of the requested build
-        :param limit: The number of builds requested
->>>>>>> Migrate builds from master to BuildStore
         """
         requested_builds = islice(cls._all_builds_by_id, start, end)
         return [cls._all_builds_by_id[key] for key in requested_builds]
