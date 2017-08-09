@@ -87,7 +87,7 @@ class BuildRequestHandler(object):
                                    log_msg='Build preparation loop is handling request for build {build_id}.')
             try:
                 build.prepare(self._subjob_calculator)
-                if not build.has_error:
+                if not build.is_stopped():
                     analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=True,
                                            log_msg='Build {build_id} successfully prepared.')
                     # If the atomizer found no work to do, perform build cleanup and skip the slave allocation.

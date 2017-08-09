@@ -77,6 +77,7 @@ class Build(object):
             enter_state_callbacks={
                 BuildState.ERROR: self._on_enter_error_state,
                 BuildState.CANCELED: self._on_enter_canceled_state,
+                BuildState.PREPARING: self._on_enter_preparing_state,
             },
             leave_state_callbacks=leave_state_callbacks
         )
@@ -148,30 +149,9 @@ class Build(object):
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
 
-        self._state_machine.trigger(BuildEvent.START_PREPARE)
-        # WIP(joey): Move the following code into a PREPARING state callback
-        #  (so that it won't execute if the build has already been canceled.)
-
-        self._logger.info('Fetching project for build {}.', self._build_id)
-        self.project_type.fetch_project()
-        self._logger.info('Successfully fetched project for build {}.', self._build_id)
-
-        job_config = self.project_type.job_config()
-        if job_config is None:
-            raise RuntimeError('Build failed while trying to parse clusterrunner.yaml.')
-
-        subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
-
-        self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
-        self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
-
-        for subjob in subjobs:
-            self._all_subjobs_by_id[subjob.subjob_id()] = subjob
-            self._unstarted_subjobs.put(subjob)
-
-        self._timing_file_path = self._project_type.timing_file_path(job_config.name)
-        app.util.fs.create_dir(self._build_results_dir())
-        self._state_machine.trigger(BuildEvent.FINISH_PREPARE)
+        self._logger.error('SS_DEBUG sleeping now')
+        time.sleep(10)
+        self._state_machine.trigger(BuildEvent.START_PREPARE, subjob_calculator=subjob_calculator)
 
     def build_id(self):
         """
@@ -268,7 +248,7 @@ class Build(object):
         subjob.mark_completed()
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
-            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self._is_stopped()
+            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped()
 
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
@@ -308,6 +288,36 @@ class Build(object):
         default_error_msg = 'An unspecified error occurred.'
         self._error_message = getattr(event, 'error_msg', default_error_msg)
         self._logger.warning('Build {} failed: {}', self.build_id(), self._error_message)
+
+    def _on_enter_preparing_state(self, event):
+        """
+        Atomize the build. This method is triggered by a state machine transition to the PREPARING state.
+        :param event: The Fysom event object
+        """
+        self._logger.error('SS_DEBUG _on_enter_preparing_state I am here')
+        self._logger.info('Fetching project for build {}.', self._build_id)
+        self.project_type.fetch_project()
+        self._logger.info('Successfully fetched project for build {}.', self._build_id)
+
+        job_config = self.project_type.job_config()
+        if job_config is None:
+            raise RuntimeError('Build failed while trying to parse clusterrunner.yaml.')
+
+        subjob_calculator = getattr(event, 'subjob_calculator', None)
+        if subjob_calculator is None:
+            raise RuntimeError('Build failed while trying to get subjobs in PREPARING state.')
+        subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
+
+        self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
+        self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
+
+        for subjob in subjobs:
+            self._all_subjobs_by_id[subjob.subjob_id()] = subjob
+            self._unstarted_subjobs.put(subjob)
+
+        self._timing_file_path = self._project_type.timing_file_path(job_config.name)
+        app.util.fs.create_dir(self._build_results_dir())
+        self._state_machine.trigger(BuildEvent.FINISH_PREPARE)
 
     def _on_leave_state(self, event):
         start_time = self._state_machine.transition_timestamps.get(event.src)
@@ -442,7 +452,7 @@ class Build(object):
     def is_canceled(self):
         return self._status() is BuildState.CANCELED
 
-    def _is_stopped(self):
+    def is_stopped(self):
         return self._status() in (BuildState.ERROR, BuildState.CANCELED)
 
     def _get_failed_atoms(self):
