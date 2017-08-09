@@ -28,8 +28,8 @@ class BuildStore(object):
     def get_range(cls, start: int, end: int) -> List['Build']:
         """
         Returns a list of all builds.
-        :param offset: The starting index of the requested build
-        :param limit: The number of builds requested
+        :param start: The starting index of the requested build
+        :param end: The number of builds requested
         """
         requested_builds = islice(cls._all_builds_by_id, start, end)
         return [cls._all_builds_by_id[key] for key in requested_builds]
