@@ -11,6 +11,7 @@ import uuid
 
 from typing import Dict, List
 
+from app.master.atomizer import AtomizerError
 from app.common.build_artifact import BuildArtifact
 from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
@@ -149,8 +150,6 @@ class Build(object):
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
 
-        self._logger.error('SS_DEBUG sleeping now')
-        time.sleep(10)
         self._state_machine.trigger(BuildEvent.START_PREPARE, subjob_calculator=subjob_calculator)
 
     def build_id(self):
@@ -294,7 +293,6 @@ class Build(object):
         Atomize the build. This method is triggered by a state machine transition to the PREPARING state.
         :param event: The Fysom event object
         """
-        self._logger.error('SS_DEBUG _on_enter_preparing_state I am here')
         self._logger.info('Fetching project for build {}.', self._build_id)
         self.project_type.fetch_project()
         self._logger.info('Successfully fetched project for build {}.', self._build_id)
@@ -305,8 +303,16 @@ class Build(object):
 
         subjob_calculator = getattr(event, 'subjob_calculator', None)
         if subjob_calculator is None:
-            raise RuntimeError('Build failed while trying to get subjobs in PREPARING state.')
+            raise RuntimeError('Build failed due to invalid subjob_calculator in PREPARING state.')
+        #try:
         subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
+        # except AtomizerError:
+        #     # Ignore the AtomizerError if the build is canceled (AtomizerError can be intentional when build
+        #     # is in canceled state.
+        #     if self.is_canceled:
+        #         raise
+        #     else:
+        #         raise
 
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
         self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
@@ -336,6 +342,10 @@ class Build(object):
         self._state_machine.trigger(BuildEvent.CANCEL)
 
     def _on_enter_canceled_state(self, event):
+        # Set the kill_event to kill the subprocesses for the build
+        self._logger.notice('Set the kill_event for subprocesses for build {}.', self._build_id)
+        self.project_type.kill_subprocesses()
+
         # Deplete the unstarted subjob queue.
         # WIP(joey): Just remove this completely and adjust behavior of other methods based on self._is_canceled().
         # TODO: Handle situation where cancel() is called while subjobs are being added to _unstarted_subjobs
