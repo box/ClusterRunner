@@ -247,7 +247,7 @@ class Build(object):
         subjob.mark_completed()
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
-            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped()
+            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped
 
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
@@ -310,7 +310,7 @@ class Build(object):
             if self.is_canceled:
                 # Add info to the AtomizerError error message. If build is canceled, then AtomizerError is expected.
                 ex.args = ex.args + ('This is expected as Build {} is CANCELED.'.format(self._build_id),)
-                raise
+            raise
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
         self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
 
@@ -459,6 +459,7 @@ class Build(object):
     def is_canceled(self):
         return self._status() is BuildState.CANCELED
 
+    @property
     def is_stopped(self):
         return self._status() in (BuildState.ERROR, BuildState.CANCELED)
 

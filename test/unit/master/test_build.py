@@ -8,7 +8,7 @@ from genty import genty, genty_dataset
 
 from app.common.build_artifact import BuildArtifact
 from app.master.atom import Atom, AtomState
-from app.master.atomizer import Atomizer
+from app.master.atomizer import Atomizer, AtomizerError
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_fsm import BuildState
 from app.master.build_request import BuildRequest
@@ -272,6 +272,25 @@ class TestBuild(BaseUnitTestCase):
                          'Canceling a finished build should not change its state.')
         self.assertEqual(len(mock_slave.method_calls), num_slave_calls_before_cancel,
                          'Canceling a finished build should not cause any further calls to slave.')
+
+    def test_cancel_calls_kill_subprocesses_to_set_kill_event(self):
+        mock_slave = self._create_mock_slave()
+        build = self._create_test_build(BuildStatus.QUEUED, slaves=[mock_slave])
+        self.patch('app.master.build.util')
+        build.generate_project_type()
+
+        build.cancel()
+
+        build._project_type.kill_subprocesses.assert_called_once_with()
+
+    def test_prepare_callback_handles_atomizererror_exception_and_raises_again(self):
+        job_config = self._create_job_config()
+        subjobs = self._create_subjobs(job_config=job_config)
+        mock_subjob_calculator = self._create_mock_subjob_calc(subjobs, compute_subjob_raises_exception=True)
+        build = self._create_test_build(BuildStatus.QUEUED)
+
+        with self.assertRaises(AtomizerError):
+            build.prepare(mock_subjob_calculator)
 
     def test_validate_update_params_for_cancelling_build(self):
         build = self._create_test_build()
@@ -563,13 +582,16 @@ class TestBuild(BaseUnitTestCase):
 
         return mock_slave
 
-    def _create_mock_subjob_calc(self, subjobs):
+    def _create_mock_subjob_calc(self, subjobs, compute_subjob_raises_exception=False):
         """
         :type subjobs: list[Subjob]
         :rtype: SubjobCalculator
         """
         mock_subjob_calculator = MagicMock(spec_set=SubjobCalculator)
-        mock_subjob_calculator.compute_subjobs_for_build.return_value = subjobs
+        if compute_subjob_raises_exception:
+            mock_subjob_calculator.compute_subjobs_for_build.side_effect = [AtomizerError('Atomizer command failed!')]
+        else:
+            mock_subjob_calculator.compute_subjobs_for_build.return_value = subjobs
         return mock_subjob_calculator
 
     def _finish_test_build(self, build, assert_postbuild_tasks_complete=True):

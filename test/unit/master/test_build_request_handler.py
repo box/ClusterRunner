@@ -15,7 +15,7 @@ class TestBuildRequestHandler(BaseUnitTestCase):
         build_scheduler_mock = self.patch('app.master.build_scheduler.BuildScheduler').return_value
         build_request_handler = BuildRequestHandler(build_scheduler_mock)
         build_mock = self.patch('app.master.build.Build').return_value
-        build_mock.has_error = False
+        build_mock.is_stopped = False
         build_mock.get_subjobs.return_value = subjobs
 
         build_request_handler._prepare_build_async(build_mock, mock_project_lock)
