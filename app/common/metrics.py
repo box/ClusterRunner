@@ -62,12 +62,17 @@ class SlavesCollector:
     def collect(self) -> Iterator[GaugeMetricFamily]:
         active, idle, dead = 0, 0, 0
         for slave in self._get_slaves():
-            if not slave.is_alive(use_cached=True):
-                dead += 1
-            elif slave.current_build_id is not None:
+            if slave.is_alive(use_cached=True) and slave.current_build_id is not None:
                 active += 1
-            else:
+            elif slave.is_alive(use_cached=True) and slave.current_build_id is None:
                 idle += 1
+            elif not slave.is_alive(use_cached=True) and not slave.is_shutdown():
+                # Slave is not alive and was not deliberately put in shutdown mode. Count it as dead.
+                dead += 1
+            else:
+                # If not slave.is_alive() and slave.is_shutdown() = True then we have deliberately
+                # and gracefully killed the slave. We do not want to categorize such a slave as 'dead'
+                pass
 
         slaves_gauge = GaugeMetricFamily('slaves', 'Total number of slaves', labels=['state'])
         slaves_gauge.add_metric(['active'], active)
