@@ -303,17 +303,14 @@ class Build(object):
 
         subjob_calculator = getattr(event, 'subjob_calculator', None)
         if subjob_calculator is None:
-            raise RuntimeError('Build failed due to invalid subjob_calculator in PREPARING state.')
-        #try:
-        subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
-        # except AtomizerError:
-        #     # Ignore the AtomizerError if the build is canceled (AtomizerError can be intentional when build
-        #     # is in canceled state.
-        #     if self.is_canceled:
-        #         raise
-        #     else:
-        #         raise
-
+            raise RuntimeError('Build failed as subjob_calculator is not set for this build {}.', self._build_id)
+        try:
+            subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
+        except AtomizerError as ex:
+            if self.is_canceled:
+                # Add info to the AtomizerError error message. If build is canceled, then AtomizerError is expected.
+                ex.args = ex.args + ('This is expected as Build {} is CANCELED.'.format(self._build_id),)
+                raise
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
         self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
 
