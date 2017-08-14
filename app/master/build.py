@@ -11,12 +11,12 @@ import uuid
 
 from typing import Dict, List
 
-from app.master.atomizer import AtomizerError
 from app.common.build_artifact import BuildArtifact
 from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
 from app.master.subjob import Subjob
+from app.master.subjob_calculator import compute_subjobs_for_build
 from app.project_type.project_type import ProjectType
 from app.util import util
 from app.util.conf.configuration import Configuration
@@ -136,11 +136,7 @@ class Build(object):
         if self._project_type is None:
             raise BuildProjectError('Build failed due to an invalid project type.')
 
-    def prepare(self, subjob_calculator):
-        """
-        :param subjob_calculator: Used after project fetch to atomize and group subjobs for this build
-        :type subjob_calculator: SubjobCalculator
-        """
+    def prepare(self):
         if not isinstance(self.build_request, BuildRequest):
             raise RuntimeError('Build {} has no associated request object.'.format(self._build_id))
 
@@ -150,7 +146,7 @@ class Build(object):
         if not self._preparation_coin.spend():
             raise RuntimeError('prepare() was called more than once on build {}.'.format(self._build_id))
 
-        self._state_machine.trigger(BuildEvent.START_PREPARE, subjob_calculator=subjob_calculator)
+        self._state_machine.trigger(BuildEvent.START_PREPARE)
 
     def build_id(self):
         """
@@ -247,7 +243,7 @@ class Build(object):
         subjob.mark_completed()
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
-            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped()
+            should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped
 
         # We use a local variable here which was set inside the _build_completion_lock to prevent a race condition
         if should_trigger_postbuild_tasks:
@@ -290,8 +286,10 @@ class Build(object):
 
     def _on_enter_preparing_state(self, event):
         """
-        Atomize the build. This method is triggered by a state machine transition to the PREPARING state.
+        Prepare the build by atomization and subjobs creation.
+        This method is triggered by a state machine transition to the PREPARING state.
         :param event: The Fysom event object
+        :type event: BuildEvent
         """
         self._logger.info('Fetching project for build {}.', self._build_id)
         self.project_type.fetch_project()
@@ -301,16 +299,8 @@ class Build(object):
         if job_config is None:
             raise RuntimeError('Build failed while trying to parse clusterrunner.yaml.')
 
-        subjob_calculator = getattr(event, 'subjob_calculator', None)
-        if subjob_calculator is None:
-            raise RuntimeError('Build failed as subjob_calculator is not set for this build {}.', self._build_id)
-        try:
-            subjobs = subjob_calculator.compute_subjobs_for_build(self._build_id, job_config, self.project_type)
-        except AtomizerError as ex:
-            if self.is_canceled:
-                # Add info to the AtomizerError error message. If build is canceled, then AtomizerError is expected.
-                ex.args = ex.args + ('This is expected as Build {} is CANCELED.'.format(self._build_id),)
-                raise
+        subjobs = compute_subjobs_for_build(self._build_id, job_config, self.project_type)
+
         self._unstarted_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Move this into BuildScheduler?
         self._finished_subjobs = Queue(maxsize=len(subjobs))  # WIP(joey): Remove this and just record finished count.
 
@@ -335,12 +325,15 @@ class Build(object):
         """
         Cancel a running build.
         """
-        self._logger.notice('Request received to cancel build {}.', self._build_id)
         self._state_machine.trigger(BuildEvent.CANCEL)
 
     def _on_enter_canceled_state(self, event):
+        """
+        :param event: The Fysom event object
+        :type event: BuildEvent
+        """
+        self._logger.notice('Canceling build {}.', self._build_id)
         # Set the kill_event to kill the subprocesses for the build
-        self._logger.notice('Set the kill_event for subprocesses for build {}.', self._build_id)
         self.project_type.kill_subprocesses()
 
         # Deplete the unstarted subjob queue.
@@ -459,6 +452,7 @@ class Build(object):
     def is_canceled(self):
         return self._status() is BuildState.CANCELED
 
+    @property
     def is_stopped(self):
         return self._status() in (BuildState.ERROR, BuildState.CANCELED)
 

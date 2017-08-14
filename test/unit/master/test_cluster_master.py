@@ -217,7 +217,10 @@ class TestClusterMaster(BaseUnitTestCase):
         build_id = 1
         slave_url = "url"
         build = Build(BuildRequest({}))
+        self.patch('app.master.build.util')
+        build.generate_project_type()
         build.cancel()
+
         self.patch_object(build, '_handle_subjob_payload')
         self.patch_object(build, '_mark_subjob_complete')
 
