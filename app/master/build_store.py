@@ -6,7 +6,7 @@ from app.master.build import Build
 from app.util.exceptions import ItemNotFoundError
 
 
-class BuildStore():
+class BuildStore:
     """
     Build storage service that stores and handles all builds.
     """
