@@ -326,7 +326,7 @@ class ClusterMaster(ClusterService):
         :param is_tar_request: If true, download the tar.gz archive instead of a zip.
         :return: The path to the archived results file
         """
-        build = BuildStore.get(build_id)  # type: Build
+        build = BuildStore.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
