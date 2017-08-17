@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-import os
 from typing import List
 
 from app.common.cluster_service import ClusterService
@@ -14,7 +13,6 @@ from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
-from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 
@@ -47,6 +45,13 @@ class ClusterMaster(ClusterService):
         # teardown requests. Tweak the number to find the sweet spot if you feel this is the case.
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=32)
 
+<<<<<<< HEAD
+=======
+        # Set up database
+        DatabaseSetup.reset()
+        DatabaseSetup.prepare()
+
+>>>>>>> Fix linting errors
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
         if os.path.exists(self._master_results_path):
@@ -80,7 +85,7 @@ class ClusterMaster(ClusterService):
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        num_builds = BuildStore.size()
+        num_builds, _ = BuildStore.size()
         start, end = get_paginated_indices(offset, limit, num_builds)
         return BuildStore.get_range(start, end)
 

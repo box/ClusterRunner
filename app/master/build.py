@@ -26,7 +26,7 @@ import app.util.fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 from app.util.single_use_coin import SingleUseCoin
-from app.util.util import stringify
+from app.util.util import stringify  # since this is only used for testing, only define in a test file not util
 
 
 MAX_SETUP_FAILURES = 5
@@ -93,8 +93,12 @@ class Build(object):
 =======
     def __str__(self):
         return stringify(self)
+<<<<<<< HEAD
     
 >>>>>>> Clean up and small refactors
+=======
+
+>>>>>>> Fix linting errors
     def api_representation(self):
         failed_atoms_api_representation = None
         if self._get_failed_atoms() is not None:
@@ -509,7 +513,7 @@ class Build(object):
             serialized_build_time_seconds.observe(sum(timing_data.values()))
             self._delete_temporary_build_artifact_files()
             self._postbuild_tasks_are_finished = True
-            self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE)
+            self._state_machine.trigger(BuildEvent.POSTBUILD_TASKS_COMPLETE, build=self)
 
         except Exception as ex:  # pylint: disable=broad-except
             internal_errors.labels(ErrorType.PostBuildFailure).inc()  # pylint: disable=no-member

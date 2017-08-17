@@ -4,7 +4,6 @@ import shutil
 import sys
 import time
 
-from app.database.build_store import BuildStore
 from app.master.build import BuildStatus, BuildResult
 import app.util.fs
 from app.util.log import get_logger

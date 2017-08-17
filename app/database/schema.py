@@ -4,13 +4,13 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+
 class BuildStateSchema(Base):
     """Describes the state of a Build"""
     __tablename__ = 'builds'
 
     build_id = Column(Integer, primary_key=True, autoincrement=True)
     completed = Column(Boolean)
-    prepared = Column(Boolean)
 
 
 class BuildMetaSchema(Base):
@@ -25,6 +25,7 @@ class BuildMetaSchema(Base):
     setup_failures = Column(Integer)
     timing_file_path = Column(String)
     # call `self.generate_project_type()` after init
+
 
 class BuildArtifactSchema(Base):
     """Describes the _build_artifact attribute of a Build"""

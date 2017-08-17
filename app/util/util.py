@@ -1,3 +1,5 @@
+import re
+
 from app.project_type.directory import Directory
 from app.project_type.git import Git
 
@@ -52,6 +54,7 @@ def create_project_type(project_type_params):
     # Not yet implemented other project types
     return None
 
+
 def stringify(obj):
     """
     Recursively construct a string representation of an object or class.
@@ -64,6 +67,7 @@ def stringify(obj):
         if hasattr(v, '__dict__'):
             result += stringify(v)
         else:
-            result += '{}: {}: {}\n'.format(obj.__class__.__name__, attr, v)
-        
+            cleaned_v = re.sub(r'0x[\d\w]+', '[address]', str(v))
+            result += '{}: {}: {}\n'.format(obj.__class__.__name__, attr, cleaned_v)
+
     return result
