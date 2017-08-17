@@ -91,7 +91,6 @@ class BuildRequestHandler(object):
                     # If the atomizer found no work to do, perform build cleanup and skip the slave allocation.
                     if len(build.get_subjobs()) == 0:
                         self._logger.info('Build {} has no work to perform and is exiting.', build.build_id())
-                        build.finish()
                     # If there is work to be done, this build must queue to be allocated slaves.
                     else:
                         self._logger.info('Build {} is waiting for slaves.', build.build_id())

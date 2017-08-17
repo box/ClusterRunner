@@ -51,3 +51,19 @@ def create_project_type(project_type_params):
 
     # Not yet implemented other project types
     return None
+
+def stringify(obj):
+    """
+    Recursively construct a string representation of an object or class.
+    :param obj: The object to stringify.
+    """
+    result = ''
+    attributes = [attr for attr in dir(obj) if attr[:2] != '__']
+    for attr in attributes:
+        v = getattr(obj, attr)
+        if hasattr(v, '__dict__'):
+            result += stringify(v)
+        else:
+            result += '{}: {}: {}\n'.format(obj.__class__.__name__, attr, v)
+        
+    return result

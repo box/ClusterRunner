@@ -249,6 +249,7 @@ class ClusterMaster(ClusterService):
         :type build_params: dict[str, str]
         :rtype tuple [bool, dict [str, str]]
         """
+        print(build_params)
         build_request = BuildRequest(build_params)
         success = False
 

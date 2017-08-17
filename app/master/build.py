@@ -26,6 +26,7 @@ import app.util.fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 from app.util.single_use_coin import SingleUseCoin
+from app.util.util import stringify
 
 
 MAX_SETUP_FAILURES = 5
@@ -88,6 +89,12 @@ class Build(object):
         # cancelled
         self.setup_failures = 0
 
+<<<<<<< HEAD
+=======
+    def __str__(self):
+        return stringify(self)
+    
+>>>>>>> Clean up and small refactors
     def api_representation(self):
         failed_atoms_api_representation = None
         if self._get_failed_atoms() is not None:

@@ -43,4 +43,5 @@ class MasterSubcommand(ServiceSubcommand):
 
         ioloop.start()  # this call blocks until the server is stopped
         ioloop.close(all_fds=True)  # all_fds=True is necessary here to make sure connections don't hang
+
         self._logger.notice('Master server was stopped.')
