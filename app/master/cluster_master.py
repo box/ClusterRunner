@@ -1,6 +1,4 @@
-from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from itertools import islice
 import os
 from typing import List
 
@@ -10,6 +8,7 @@ from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
 from app.master.build_scheduler_pool import BuildSchedulerPool
+from app.master.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
@@ -31,7 +30,6 @@ class ClusterMaster(ClusterService):
         self._logger = get_logger(__name__)
         self._master_results_path = Configuration['results_directory']
         self._all_slaves_by_url = {}
-        self._all_builds_by_id = OrderedDict()
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
@@ -82,10 +80,9 @@ class ClusterMaster(ClusterService):
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        num_builds = len(self._all_builds_by_id)
+        num_builds = BuildStore.size()
         start, end = get_paginated_indices(offset, limit, num_builds)
-        requested_builds = islice(self._all_builds_by_id, start, end)
-        return [self._all_builds_by_id[key] for key in requested_builds]
+        return BuildStore.get_range(start, end)
 
     def active_builds(self):
         """
@@ -257,7 +254,7 @@ class ClusterMaster(ClusterService):
 
         if build_request.is_valid():
             build = Build(build_request)
-            self._all_builds_by_id[build.build_id()] = build
+            BuildStore.add(build)
             build.generate_project_type()  # WIP(joey): This should be internal to the Build object.
             self._build_request_handler.handle_build_request(build)
             response = {'build_id': build.build_id()}
@@ -280,7 +277,7 @@ class ClusterMaster(ClusterService):
         :return: The success/failure and the response we want to send to the requestor
         :rtype: tuple [bool, dict [str, str]]
         """
-        build = self._all_builds_by_id.get(int(build_id))
+        build = BuildStore.get(int(build_id))
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
@@ -299,7 +296,7 @@ class ClusterMaster(ClusterService):
         :rtype: str
         """
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
-        build = self._all_builds_by_id[int(build_id)]
+        build = BuildStore.get(int(build_id))
         slave = self._all_slaves_by_url[slave_url]
         try:
             build.complete_subjob(subjob_id, payload)
@@ -315,7 +312,7 @@ class ClusterMaster(ClusterService):
         :type build_id: int
         :rtype: Build
         """
-        build = self._all_builds_by_id.get(build_id)
+        build = BuildStore.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id: {}.'.format(build_id))
 
@@ -329,7 +326,7 @@ class ClusterMaster(ClusterService):
         :param is_tar_request: If true, download the tar.gz archive instead of a zip.
         :return: The path to the archived results file
         """
-        build = self._all_builds_by_id.get(build_id)  # type: Build
+        build = BuildStore.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
