@@ -1,7 +1,6 @@
 from queue import Queue
 from threading import Lock
 
-from app.master.subjob_calculator import SubjobCalculator
 from app.util import analytics
 from app.util.log import get_logger
 from app.util.safe_thread import SafeThread
@@ -35,7 +34,6 @@ class BuildRequestHandler(object):
         self._request_queue_worker_thread = SafeThread(
             target=self._build_preparation_loop, name='RequestHandlerLoop', daemon=True)
         self._project_preparation_locks = {}
-        self._subjob_calculator = SubjobCalculator()
 
     def start(self):
         """
@@ -86,8 +84,8 @@ class BuildRequestHandler(object):
             analytics.record_event(analytics.BUILD_PREPARE_START, build_id=build.build_id(),
                                    log_msg='Build preparation loop is handling request for build {build_id}.')
             try:
-                build.prepare(self._subjob_calculator)
-                if not build.has_error:
+                build.prepare()
+                if not build.is_stopped:
                     analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=True,
                                            log_msg='Build {build_id} successfully prepared.')
                     # If the atomizer found no work to do, perform build cleanup and skip the slave allocation.
@@ -100,6 +98,7 @@ class BuildRequestHandler(object):
                         self._scheduler_pool.add_build_waiting_for_slaves(build)
 
             except Exception as ex:  # pylint: disable=broad-except
-                build.mark_failed(str(ex))  # WIP(joey): Build should do this internally.
-                self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
+                if not build.is_canceled:
+                    build.mark_failed(str(ex))  # WIP(joey): Build should do this internally.
+                    self._logger.exception('Could not handle build request for build {}.'.format(build.build_id()))
                 analytics.record_event(analytics.BUILD_PREPARE_FINISH, build_id=build.build_id(), is_success=False)

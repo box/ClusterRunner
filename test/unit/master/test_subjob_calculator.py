@@ -5,7 +5,7 @@ from genty import genty, genty_dataset
 from app.master.atom import Atom
 from app.master.atomizer import Atomizer
 from app.master.job_config import JobConfig
-from app.master.subjob_calculator import SubjobCalculator
+from app.master.subjob_calculator import compute_subjobs_for_build
 from app.project_type.project_type import ProjectType
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
@@ -35,8 +35,6 @@ class TestSubjobCalculator(BaseUnitTestCase):
         mock_job_config.max_executors = 1
         mock_job_config.atomizer = mock_atomizer
 
-        subjob_calculator = SubjobCalculator()
-        subjob_calculator.compute_subjobs_for_build(build_id=1, job_config=mock_job_config,
-                                                    project_type=mock_project)
+        compute_subjobs_for_build(build_id=1, job_config=mock_job_config, project_type=mock_project)
 
         self.assertEquals(mock_atomizer.atomize_in_project.called, atomizer_called)

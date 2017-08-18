@@ -8,7 +8,7 @@ from genty import genty, genty_dataset
 
 from app.common.build_artifact import BuildArtifact
 from app.master.atom import Atom, AtomState
-from app.master.atomizer import Atomizer
+from app.master.atomizer import Atomizer, AtomizerError
 from app.master.build import Build, BuildStatus, BuildProjectError
 from app.master.build_fsm import BuildState
 from app.master.build_request import BuildRequest
@@ -16,7 +16,7 @@ from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.job_config import JobConfig
 from app.master.slave import Slave, DeadSlaveError, SlaveCommunicationError, SlaveMarkedForShutdownError
 from app.master.subjob import Subjob
-from app.master.subjob_calculator import SubjobCalculator
+from app.master.subjob_calculator import compute_subjobs_for_build
 from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
 from app.util.counter import Counter
@@ -207,12 +207,12 @@ class TestBuild(BaseUnitTestCase):
         build = self._create_test_build(BuildStatus.QUEUED)
         job_config = self._create_job_config()
         subjobs = self._create_subjobs(count=3, job_config=job_config)
-        subjob_calculator = self._create_mock_subjob_calc(subjobs)
+        self._patch_compute_subjob_for_build(subjobs)
 
-        build.prepare(subjob_calculator)
+        build.prepare()
 
         with self.assertRaisesRegex(RuntimeError, r'prepare\(\) was called more than once'):
-            build.prepare(subjob_calculator)
+            build.prepare()
 
     def test_teardown_called_on_slave_when_no_subjobs_remain(self):
         mock_slave = self._create_mock_slave(num_executors=1)
@@ -247,6 +247,17 @@ class TestBuild(BaseUnitTestCase):
         self._create_test_build(BuildStatus.BUILDING, num_subjobs=30, slaves=[mock_slave])
 
         mock_slave.teardown.assert_called_with()
+
+    @genty_dataset(BuildStatus.QUEUED, BuildStatus.PREPARED, BuildStatus.BUILDING)
+    def test_canceling_build_calls_kill_subprocesses(self, build_state):
+        build = self._create_test_build(build_state)
+        self.patch('app.master.build.util')
+        build.generate_project_type()
+
+        build.cancel()
+
+        self.assertTrue(build._project_type.kill_subprocesses.called,
+                        'On cancel, build did not attempt to kill subprocesses')
 
     def test_cancel_prevents_further_subjob_starts_and_sets_canceled(self):  # dev: this is flaky now
         mock_slave = self._create_mock_slave(num_executors=5)
@@ -350,22 +361,22 @@ class TestBuild(BaseUnitTestCase):
     def test_preparing_build_sets_prepared_timestamps(self):
         job_config = self._create_job_config()
         subjobs = self._create_subjobs(job_config=job_config)
-        subjob_calculator = self._create_mock_subjob_calc(subjobs)
+        self._patch_compute_subjob_for_build(subjobs)
         build = self._create_test_build(BuildStatus.QUEUED)
 
         self.assertIsNone(self._get_build_state_timestamp(build, BuildState.PREPARED),
                           '"prepared" timestamp should not be set before build preparation.')
 
-        build.prepare(subjob_calculator)
+        build.prepare()
 
         self.assertIsNotNone(self._get_build_state_timestamp(build, BuildState.PREPARED),
                              '"prepared" timestamp should not be set before build preparation.')
 
     def test_preparing_build_creates_empty_results_directory(self):
-        subjob_calculator = self._create_mock_subjob_calc([])
+        self._patch_compute_subjob_for_build([])
         build = self._create_test_build(BuildStatus.QUEUED)
 
-        build.prepare(subjob_calculator)
+        build.prepare()
 
         self.mock_util.fs.create_dir.assert_called_once_with(build._build_results_dir())
 
@@ -495,8 +506,8 @@ class TestBuild(BaseUnitTestCase):
         job_config = job_config or self._create_job_config()
         mock_project_type.job_config.return_value = job_config
         subjobs = self._create_subjobs(count=num_subjobs, num_atoms_each=num_atoms_per_subjob, job_config=job_config)
-        subjob_calculator = self._create_mock_subjob_calc(subjobs)
-        build.prepare(subjob_calculator)
+        self._patch_compute_subjob_for_build(subjobs)
+        build.prepare()
         if build_status is BuildStatus.PREPARED:
             return build
 
@@ -563,14 +574,15 @@ class TestBuild(BaseUnitTestCase):
 
         return mock_slave
 
-    def _create_mock_subjob_calc(self, subjobs):
+    def _patch_compute_subjob_for_build(self, subjobs, compute_subjob_raises_exception=False):
         """
         :type subjobs: list[Subjob]
-        :rtype: SubjobCalculator
         """
-        mock_subjob_calculator = MagicMock(spec_set=SubjobCalculator)
-        mock_subjob_calculator.compute_subjobs_for_build.return_value = subjobs
-        return mock_subjob_calculator
+        mock_compute_subjobs_for_build = self.patch('app.master.build.compute_subjobs_for_build')
+        if compute_subjob_raises_exception:
+            mock_compute_subjobs_for_build.side_effect = AtomizerError('Atomizer command failed!')
+        else:
+            mock_compute_subjobs_for_build.return_value = subjobs
 
     def _finish_test_build(self, build, assert_postbuild_tasks_complete=True):
         """
