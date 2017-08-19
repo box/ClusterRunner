@@ -7,7 +7,6 @@ import yaml
 from genty import genty, genty_dataset
 from tornado import httpserver, ioloop, web
 
-from app.util.conf.configuration import Configuration
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.functional.job_configs import JOB_WITH_SETUP_AND_TEARDOWN
 
