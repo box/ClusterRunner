@@ -7,7 +7,7 @@ from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
 from app.master.build_scheduler_pool import BuildSchedulerPool
-from app.master.build_store import BuildStore
+from app.database.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
@@ -48,9 +48,10 @@ class ClusterMaster(ClusterService):
 
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
-        if os.path.exists(self._master_results_path):
-            fs.async_delete(self._master_results_path)
-        fs.create_dir(self._master_results_path)
+        # TODO: We can remove this code since we persist builds across master restarts
+        # if os.path.exists(self._master_results_path):
+        #     fs.async_delete(self._master_results_path)
+        # fs.create_dir(self._master_results_path)
 
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
 

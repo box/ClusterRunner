@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, Mock
 from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.build_store import BuildStore
+from app.database.build_store import BuildStore
 from app.master.cluster_master import ClusterMaster
 from app.master.subjob import Subjob
 from app.slave.cluster_slave import SlaveState
