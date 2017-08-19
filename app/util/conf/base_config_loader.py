@@ -110,6 +110,10 @@ class BaseConfigLoader(object):
         conf.set('pagination_limit', 20)
         conf.set('pagination_max_limit', 200)
 
+        # Database connection
+        conf.set('database_name', 'clusterrunner.db')
+        conf.set('database_url', 'sqlite:///clusterrunner.db')
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory

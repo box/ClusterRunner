@@ -33,6 +33,7 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+        self._build_store = BuildStore()
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -45,13 +46,6 @@ class ClusterMaster(ClusterService):
         # teardown requests. Tweak the number to find the sweet spot if you feel this is the case.
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=32)
 
-<<<<<<< HEAD
-=======
-        # Set up database
-        DatabaseSetup.reset()
-        DatabaseSetup.prepare()
-
->>>>>>> Fix linting errors
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
         if os.path.exists(self._master_results_path):
@@ -85,9 +79,10 @@ class ClusterMaster(ClusterService):
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        num_builds, _ = BuildStore.size()
+        builds_in_cache, builds_in_db = self._build_store.size()
+        num_builds = max(builds_in_cache, builds_in_db)
         start, end = get_paginated_indices(offset, limit, num_builds)
-        return BuildStore.get_range(start, end)
+        return self._build_store.get_range(start, end)
 
     def active_builds(self):
         """
@@ -254,13 +249,12 @@ class ClusterMaster(ClusterService):
         :type build_params: dict[str, str]
         :rtype tuple [bool, dict [str, str]]
         """
-        print(build_params)
         build_request = BuildRequest(build_params)
         success = False
 
         if build_request.is_valid():
             build = Build(build_request)
-            BuildStore.add(build)
+            self._build_store.add(build)
             build.generate_project_type()  # WIP(joey): This should be internal to the Build object.
             self._build_request_handler.handle_build_request(build)
             response = {'build_id': build.build_id()}
@@ -283,7 +277,7 @@ class ClusterMaster(ClusterService):
         :return: The success/failure and the response we want to send to the requestor
         :rtype: tuple [bool, dict [str, str]]
         """
-        build = BuildStore.get(int(build_id))
+        build = self._build_store.get(int(build_id))
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
@@ -302,7 +296,7 @@ class ClusterMaster(ClusterService):
         :rtype: str
         """
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
-        build = BuildStore.get(int(build_id))
+        build = self._build_store.get(int(build_id))
         slave = self._all_slaves_by_url[slave_url]
         try:
             build.complete_subjob(subjob_id, payload)
@@ -318,7 +312,7 @@ class ClusterMaster(ClusterService):
         :type build_id: int
         :rtype: Build
         """
-        build = BuildStore.get(build_id)
+        build = self._build_store.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id: {}.'.format(build_id))
 
@@ -332,7 +326,7 @@ class ClusterMaster(ClusterService):
         :param is_tar_request: If true, download the tar.gz archive instead of a zip.
         :return: The path to the archived results file
         """
-        build = BuildStore.get(build_id)
+        build = self._build_store.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 

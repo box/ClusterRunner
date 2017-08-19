@@ -18,6 +18,10 @@ from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
 
 
+TEST_DB_NAME = 'test.db'
+TEST_DB_URL = 'sqlite:///test.db'
+
+
 class FunctionalTestCluster(object):
     """
     This class can create and destroy local clusters consisting of a single master and multiple slave services. It also
@@ -76,6 +80,8 @@ class FunctionalTestCluster(object):
             'secret': Secret.get(),
             'base_directory': base_dir_sys_path,
             'max_log_file_size': 1024 * 5,
+            'database_name': TEST_DB_NAME,
+            'database_url': TEST_DB_URL
         }
         conf_values_to_set.update(extra_conf_vals)
         for conf_key, conf_value in conf_values_to_set.items():

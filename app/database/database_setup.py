@@ -1,11 +1,13 @@
 import sqlite3
 
+from app.util.conf.configuration import Configuration
+
 
 class FailedSQLiteTableSetup(Exception):
     pass
 
 
-class DatabaseSetup():
+class DatabaseSetup:
     _builds_query = """CREATE TABLE IF NOT EXISTS builds (
         build_id INTEGER PRIMARY KEY,
         completed BOOLEAN
@@ -41,10 +43,7 @@ class DatabaseSetup():
 
     _build_requests_query = """CREATE TABLE IF NOT EXISTS build_requests (
         build_id INTEGER PRIMARY KEY,
-        type STRING,
-        url STRING,
-        branch STRING,
-        job_name STRING
+        build_parameters STRING
     )"""
 
     _build_fsm_query = """CREATE TABLE IF NOT EXISTS build_fsms (
@@ -80,8 +79,8 @@ class DatabaseSetup():
 
     @classmethod
     def prepare(cls):
-        print('Preparing SQLite tables...')
-        sqlite_connection = sqlite3.connect('clusterrunner.db')
+        print('Preparing SQLite tables for {}'.format(Configuration['database_name']))
+        sqlite_connection = sqlite3.connect(Configuration['database_name'])
         sqlite_cursor = sqlite_connection.cursor()
         sqlite_cursor.execute(cls._builds_query)
         sqlite_cursor.execute(cls._build_metas_query)
@@ -94,12 +93,11 @@ class DatabaseSetup():
         sqlite_cursor.execute(cls._atoms_query)
         sqlite_connection.commit()
         sqlite_connection.close()
-        print('...done')
 
     @classmethod
     def reset(cls):
-        print('Resetting SQLite tables...')
-        sqlite_connection = sqlite3.connect('clusterrunner.db')
+        print('Resetting SQLite tables for {}'.format(Configuration['database_name']))
+        sqlite_connection = sqlite3.connect(Configuration['database_name'])
         sqlite_cursor = sqlite_connection.cursor()
         try:
             sqlite_cursor.execute('DROP TABLE IF EXISTS builds')
@@ -122,7 +120,5 @@ class DatabaseSetup():
             sqlite_cursor.execute(cls._atoms_query)
             sqlite_connection.commit()
             sqlite_connection.close()
-            print('...done')
         except:
-            print('...failed')
             raise FailedSQLiteTableSetup

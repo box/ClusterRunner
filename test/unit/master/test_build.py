@@ -492,6 +492,10 @@ class TestBuild(BaseUnitTestCase):
         :rtype: Build
         """
         build = Build(BuildRequest(build_parameters={}))
+
+        # Manually set build_id to one since this is usually set by the BuildStore
+        build._build_id = 1
+
         if build_status is None:
             return build
 

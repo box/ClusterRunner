@@ -59,11 +59,7 @@ class BuildRequestSchema(Base):
     __tablename__ = 'build_requests'
 
     build_id = Column(Integer, primary_key=True)
-    type = Column(String)
-    url = Column(String)
-    branch = Column(String)
-    job_name = Column(String)
-    # other optional attributes...
+    build_parameters = Column(String)
 
 
 class BuildFsmSchema(Base):

@@ -1,4 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
+from os import remove
+from os.path import isfile
 from threading import Event
 from typing import Optional
 
@@ -17,6 +19,10 @@ from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError
 from test.framework.base_unit_test_case import BaseUnitTestCase
+
+
+TEST_DB_NAME = 'test.db'
+TEST_DB_URL = 'sqlite:///test.db'
 
 
 @genty
@@ -44,10 +50,19 @@ class TestClusterMaster(BaseUnitTestCase):
         Configuration['pagination_offset'] = self._PAGINATION_OFFSET
         Configuration['pagination_limit'] = self._PAGINATION_LIMIT
         Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
+        Configuration['database_name'] = TEST_DB_NAME
+        Configuration['database_url'] = TEST_DB_URL
 
     def tearDown(self):
         super().tearDown()
         self.thread_pool_executor.shutdown()
+
+    def tearDownClass():
+        # Delete testing database after we're done
+        if isfile(TEST_DB_NAME):
+            remove(TEST_DB_NAME)
+        else:
+            print('Warning: Unable to locate test database file on tearDownClass.')
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),
@@ -116,7 +131,7 @@ class TestClusterMaster(BaseUnitTestCase):
         master = ClusterMaster()
         master.connect_slave('running-slave.turtles.gov', 10)
         build_mock = MagicMock(spec_set=Build)
-        BuildStore._all_builds_by_id[1] = build_mock
+        master._build_store._cached_builds_by_id[1] = build_mock
         existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
         existing_slave.current_build_id = 1
 
@@ -129,7 +144,7 @@ class TestClusterMaster(BaseUnitTestCase):
         update_params = {'key': 'value'}
         master = ClusterMaster()
         build = Mock()
-        BuildStore._all_builds_by_id[build_id] = build
+        master._build_store._cached_builds_by_id[build_id] = build
         build.validate_update_params = Mock(return_value=(True, update_params))
         build.update_state = Mock()
 
@@ -141,11 +156,11 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_update_build_with_bad_build_id_fails(self):
         build_id = 1
-        invalid_build_id = 2
+        invalid_build_id = 0
         update_params = {'key': 'value'}
         master = ClusterMaster()
         build = Mock()
-        BuildStore._all_builds_by_id[build_id] = build
+        master._build_store._cached_builds_by_id[build_id] = build
         build.validate_update_params = Mock(return_value=(True, update_params))
         build.update_state = Mock()
 
@@ -225,7 +240,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch_object(build, '_mark_subjob_complete')
 
         master = ClusterMaster()
-        BuildStore._all_builds_by_id[build_id] = build
+        master._build_store._cached_builds_by_id[build_id] = build
         master._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(build)
 
@@ -243,7 +258,7 @@ class TestClusterMaster(BaseUnitTestCase):
         mock_build.complete_subjob.side_effect = [RuntimeError('Write failed')]
 
         master = ClusterMaster()
-        BuildStore._all_builds_by_id[mock_build.build_id()] = mock_build
+        master._build_store._cached_builds_by_id[mock_build.build_id()] = mock_build
         master._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(mock_build)
 
@@ -260,7 +275,7 @@ class TestClusterMaster(BaseUnitTestCase):
     @given(integers(), dictionaries(text(), text()))
     def test_handle_request_to_update_build_does_not_raise_exception(self, build_id, update_params):
         master = ClusterMaster()
-        BuildStore._all_builds_by_id = {build_id: Build({})}
+        master._build_store._cached_builds_by_id = {build_id: Build({})}
         master.handle_request_to_update_build(build_id, update_params)
 
     @genty_dataset(
@@ -314,7 +329,7 @@ class TestClusterMaster(BaseUnitTestCase):
         for build_id in range(1, self._NUM_BUILDS + 1):
             build_mock = Mock(spec=Build)
             build_mock.build_id = build_id
-            BuildStore._all_builds_by_id[build_id] = build_mock
+            master._build_store._cached_builds_by_id[build_id] = build_mock
 
         requested_builds = master.get_builds(offset, limit)
 
