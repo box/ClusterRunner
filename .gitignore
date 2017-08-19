@@ -50,3 +50,6 @@ slave_results/
 
 # virtualenv
 .python-version
+
+# Database files
+clusterrunner.db
