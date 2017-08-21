@@ -110,6 +110,7 @@ class BuildStore:
         """
         Serialize a Build object and commit all of the parts to the database, and then
         return the build_id that was assigned after committing.
+        :param build: The build to store into the database.
         """
         # Build Status
         build_schema = BuildStateSchema(
@@ -221,24 +222,26 @@ class BuildStore:
         NOTE: These changes are not committed here. If you want these changes to persist,
               make sure to commit the session afterwards.
               We do selectively call commit a few times here but only after we delete rows.
+        :param build_id: The build_id of the build to update in the database.
         """
         build_id = build.build_id()
-
-        # Query for the build status associated with this `build_id`
-        q_build_schema = self._session.query(BuildStateSchema) \
-            .filter(BuildStateSchema.build_id == build_id) \
-            .first()
+        (
+            q_build_schema,
+            q_build_state,
+            q_build_meta,
+            q_build_artifact,
+            _,
+            _,
+            q_build_request,
+            q_build_fsm,
+            _,
+            _) = self._get_query_build_object(build_id)
 
         # If this wasn't found, it's safe to assume that the build doesn't exist within the database
         if q_build_schema is None:
-            raise ItemNotFoundError('Unable to find in database build with id: {}.'.format(build_id))
+            raise ItemNotFoundError('Unable to find build (id: {}) in database.'.format(build_id))
 
         q_build_schema.completed = build._status() == BuildState.FINISHED
-
-        # Query for the basic build attributes associated with this `build_id`
-        q_build_meta = self._session.query(BuildMetaSchema) \
-            .filter(BuildMetaSchema.build_id == build_id) \
-            .first()
 
         q_build_meta.artifacts_tar_file = build._artifacts_tar_file
         q_build_meta.artifacts_zip_file = build._artifacts_zip_file
@@ -252,11 +255,7 @@ class BuildStore:
         if build._build_artifact is not None:
             build_artifact_dir = build._build_artifact.build_artifact_dir
 
-        build_artifact = self._session.query(BuildArtifactSchema) \
-            .filter(BuildArtifactSchema.build_id == build_id) \
-            .first()
-
-        build_artifact.build_artifact_dir = build_artifact_dir
+        q_build_artifact.build_artifact_dir = build_artifact_dir
 
         # Query for the FailedArtifactDirectories associated with this `build_id`
         if build._build_artifact is not None:
@@ -295,28 +294,17 @@ class BuildStore:
                 )
                 self._session.add(failed_subjob_and_atom_ids)
 
-        # BuildRequest
-        build_request = self._session.query(BuildRequestSchema) \
-            .filter(BuildRequestSchema.build_id == build_id) \
-            .first()
-
-        build_request.build_parameters = json.dumps(build._build_request.build_parameters())
-
-        # BuildFsm
-        build_fsm = self._session.query(BuildFsmSchema) \
-            .filter(BuildFsmSchema.build_id == build_id) \
-            .first()
+        q_build_request.build_parameters = json.dumps(build._build_request.build_parameters())
 
         fsm_timestamps = {state.lower(): timestamp for state, timestamp in build._state_machine.transition_timestamps.items()}
-        build_fsm.state = build._status()
-        build_fsm.queued = fsm_timestamps['queued']
-        build_fsm.finished = fsm_timestamps['finished']
-        build_fsm.prepared = fsm_timestamps['prepared']
-        build_fsm.preparing = fsm_timestamps['preparing']
-        build_fsm.error = fsm_timestamps['error']
-        build_fsm.canceled = fsm_timestamps['canceled']
-        build_fsm.building = fsm_timestamps['building']
-        self._session.add(build_fsm)
+        q_build_fsm.state = build._status()
+        q_build_fsm.queued = fsm_timestamps['queued']
+        q_build_fsm.finished = fsm_timestamps['finished']
+        q_build_fsm.prepared = fsm_timestamps['prepared']
+        q_build_fsm.preparing = fsm_timestamps['preparing']
+        q_build_fsm.error = fsm_timestamps['error']
+        q_build_fsm.canceled = fsm_timestamps['canceled']
+        q_build_fsm.building = fsm_timestamps['building']
 
         # Subjobs
         # Clear all old Subjobs and Atoms associated with this `build_id`
@@ -355,50 +343,28 @@ class BuildStore:
                 )
                 self._session.add(atom_schema)
 
-    def _reconstruct_build(self, build_id):
-        # Bulk query for tables that will return a single result each.
-        # Returns tuple of (<BuildStateSchema>, <BuildMetaSchema>, <BuildRequestSchema>, ...)
-        bulk_query = self._session.query(
-            BuildStateSchema,
-            BuildMetaSchema,
-            BuildRequestSchema,
-            BuildFsmSchema,
-            BuildArtifactSchema
-        ).filter(BuildRequestSchema.build_id == build_id) \
-         .filter(BuildMetaSchema.build_id == build_id) \
-         .filter(BuildFsmSchema.build_id == build_id) \
-         .filter(BuildArtifactSchema.build_id == build_id) \
-         .first()
+    def _reconstruct_build(self, build_id) -> Build:
+        """
+        Given a build_id, fetch all the stored information from the database to reconstruct
+        a Build object to represent that build.
+        :param build_id: The id of the build to recreate.
+        """
+        (
+            _,
+            q_build_state,
+            q_build_meta,
+            q_build_artifact,
+            q_failed_artifact_directories,
+            q_failed_subjob_atom_pairs,
+            q_build_request,
+            q_build_fsm,
+            q_build_subjobs,
+            q_build_atoms
+        ) = self._get_query_build_object(build_id)
 
-        # Query for all `failed_artifact_directories` associated with this build
-        q_failed_artifact_directories = self._session.query(FailedArtifactDirectoriesSchema) \
-            .filter(FailedArtifactDirectoriesSchema.build_id == build_id) \
-            .all()
-
-        # Query for all `failed_subjob_atom_pairs` associated with this build
-        failed_subjob_atom_pairs = self._session.query(FailedSubjobAtomPairsSchema) \
-            .filter(FailedSubjobAtomPairsSchema.build_id == build_id) \
-            .all()
-
-        # Query for all the Atoms associated with this build
-        build_atoms = self._session.query(AtomsSchema) \
-            .filter(AtomsSchema.build_id == build_id) \
-            .all()
-
-        # Query for all the Subjobs associated with this build
-        build_subjobs = self._session.query(SubjobsSchema) \
-            .filter(SubjobsSchema.build_id == build_id) \
-            .all()
-
-        # No results, build wasn't found in database
-        if not bulk_query:
+        # If a query returns None, then we know the build wasn't found in the database
+        if not q_build_state:
             return None
-
-        q_build_state = bulk_query[0]
-        q_build_meta = bulk_query[1]
-        q_build_request = bulk_query[2]
-        q_build_fsm = bulk_query[3]
-        q_build_artifact = bulk_query[4]
 
         build_parameters = json.loads(q_build_request.build_parameters)
 
@@ -442,15 +408,15 @@ class BuildStore:
         build_artifact._failed_artifact_directories = directories
 
         pairs = []
-        for pair in failed_subjob_atom_pairs:
+        for pair in q_failed_subjob_atom_pairs:
             pairs.append((pair.subjob_id, pair.atom_id))
-        build_artifact._failed_subjob_atom_pairs = pairs
+        build_artifact._q_failed_subjob_atom_pairs = pairs
 
         # The `build_artifact` is prepared, so manually assign it to build
         build._build_artifact = build_artifact
 
         atoms_by_subjob_id = {}
-        for atom in build_atoms:
+        for atom in q_build_atoms:
             atoms_by_subjob_id.setdefault(atom.subjob_id, [])
             atoms_by_subjob_id[atom.subjob_id].append(Atom(
                 atom.command_string,
@@ -463,7 +429,7 @@ class BuildStore:
             ))
 
         subjobs = OrderedDict()
-        for subjob in build_subjobs:
+        for subjob in q_build_subjobs:
             atoms = atoms_by_subjob_id[subjob.subjob_id]
             # Add atoms after subjob is created so we don't alter their state on initialization
             subjob_to_add = Subjob(build_id, subjob.subjob_id, build.project_type, job_config, [])
@@ -487,3 +453,67 @@ class BuildStore:
 
         # Build should be correctly deserialized
         return build
+
+    def _get_query_build_object(self, build_id):
+        """
+        Query the database to build a series of SQLAlchemy objects related to the build.
+        :param build_id: The id of the build to query from the database.
+        """
+        # Query for the build status associated with this `build_id`
+        q_build_schema = self._session.query(BuildStateSchema) \
+            .filter(BuildStateSchema.build_id == build_id) \
+            .first()
+
+        # Bulk query for tables that will return a single result each.
+        # Returns tuple of (<BuildStateSchema>, <BuildMetaSchema>, <BuildRequestSchema>, ...)
+        q_bulk_query = self._session.query(
+            BuildStateSchema,
+            BuildMetaSchema,
+            BuildRequestSchema,
+            BuildFsmSchema,
+            BuildArtifactSchema
+        ).filter(BuildRequestSchema.build_id == build_id) \
+         .filter(BuildMetaSchema.build_id == build_id) \
+         .filter(BuildFsmSchema.build_id == build_id) \
+         .filter(BuildArtifactSchema.build_id == build_id) \
+         .first()
+
+        # Destruct results from query if we got a response
+        q_build_state = q_bulk_query[0] if q_bulk_query else None
+        q_build_meta = q_bulk_query[1] if q_bulk_query else None
+        q_build_request = q_bulk_query[2] if q_bulk_query else None
+        q_build_fsm = q_bulk_query[3] if q_bulk_query else None
+        q_build_artifact = q_bulk_query[4] if q_bulk_query else None
+
+        # Query for all `failed_artifact_directories` associated with this build
+        q_failed_artifact_directories = self._session.query(FailedArtifactDirectoriesSchema) \
+            .filter(FailedArtifactDirectoriesSchema.build_id == build_id) \
+            .all()
+
+        # Query for all `failed_subjob_atom_pairs` associated with this build
+        q_failed_subjob_atom_pairs = self._session.query(FailedSubjobAtomPairsSchema) \
+            .filter(FailedSubjobAtomPairsSchema.build_id == build_id) \
+            .all()
+
+        # Query for all the Atoms associated with this build
+        q_build_atoms = self._session.query(AtomsSchema) \
+            .filter(AtomsSchema.build_id == build_id) \
+            .all()
+
+        # Query for all the Subjobs associated with this build
+        q_build_subjobs = self._session.query(SubjobsSchema) \
+            .filter(SubjobsSchema.build_id == build_id) \
+            .all()
+
+        return (
+            q_build_schema,
+            q_build_state,
+            q_build_meta,
+            q_build_artifact,
+            q_failed_artifact_directories,
+            q_failed_subjob_atom_pairs,
+            q_build_request,
+            q_build_fsm,
+            q_build_subjobs,
+            q_build_atoms
+        )
