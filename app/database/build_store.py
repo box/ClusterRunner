@@ -37,10 +37,11 @@ class BuildStore:
     def __init__(self):
         self._logger = get_logger(__name__)
         self._cached_builds_by_id = OrderedDict()
-        DatabaseSetup.prepare()
         self._session = Connection.get(Configuration['database_url'])
         # TODO: Resetting the database empties all data currently stored.
-        #       This should be called somewhere else if ever, here right now for testing.
+        #       Preparing the database attempts to build all the tables if they aren't already created.
+        #       These should be called somewhere else if ever, here right now for testing.
+        DatabaseSetup.prepare()
         # DatabaseSetup.reset()
 
     def get(self, build_id: int) -> Optional[Build]:

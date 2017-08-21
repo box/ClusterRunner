@@ -77,10 +77,6 @@ class BuildFsmSchema(Base):
     building = Column(Float)
 
 
-# project_type = build.generate_project_type()
-# job_config = self.project_type.job_config()
-# Subjob(build_id, subjob_id, project_type, job_config, atoms)
-# ^-- this will set all the atoms to `NOT_STARTED` fyi
 class SubjobsSchema(Base):
     """Describes the subjobs associated with a Build"""
     __tablename__ = 'subjobs'

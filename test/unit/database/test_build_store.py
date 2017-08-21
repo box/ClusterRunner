@@ -90,9 +90,9 @@ class TestBuildStore(BaseUnitTestCase):
         self._build_store.add(build)
         reconstructed_build = self._build_store._reconstruct_build(build.build_id())
 
-        first_results = build.api_representation()
-        second_results = reconstructed_build.api_representation()
-        diff = self._compare_dictionaries_with_same_keys(first_results, second_results)
+        original_build_results = build.api_representation()
+        reconstructed_build_results = reconstructed_build.api_representation()
+        diff = self._compare_dictionaries_with_same_keys(original_build_results, reconstructed_build_results)
 
         # The build_project_directory is an auto generated tmp directory -- these will never be the same
         diff.pop('request_params|build_project_directory', None)
@@ -127,8 +127,7 @@ class TestBuildStore(BaseUnitTestCase):
 
     def _flatten(self, d, parent_key=''):
         """
-        Flatten a nested dictionary. Reference:
-            https://stackoverflow.com/questions/6027558/flatten-nested-python-dictionaries-compressing-keys
+        Flatten a nested dictionary. Join together parents with children using a pipe character.
         :param d: Dictionary to flatten.
         :param parent_key: Name of the previous key. These are concatenated together
                            to form the flattened key.
