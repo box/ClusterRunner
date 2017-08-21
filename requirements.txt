@@ -7,6 +7,8 @@ prometheus_client==0.0.19
 psutil==2.1.2
 PyYAML==3.11
 requests==2.3.0
+sqlalchemy=1.1.13
+sqlite3=3.16.0
 termcolor==1.1.0
 tornado==3.2.2
 typing==3.6.1

@@ -1,6 +1,6 @@
 from collections import MutableMapping
 from concurrent.futures import ThreadPoolExecutor
-from os import remove
+import os
 from os.path import isfile
 import re
 from sqlalchemy import create_engine
@@ -54,7 +54,7 @@ class TestBuildStore(BaseUnitTestCase):
     def tearDownClass():
         # Delete testing database after we're done
         if isfile(TEST_DB_NAME):
-            remove(TEST_DB_NAME)
+            os.remove(TEST_DB_NAME)
         else:
             print('Warning: Unable to locate test database file on tearDownClass.')
 

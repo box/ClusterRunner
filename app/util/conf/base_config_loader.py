@@ -166,6 +166,11 @@ class BaseConfigLoader(object):
             'default_http_timeout',
             'https_cert_file',
             'https_key_file',
+            'pagination_offset',
+            'pagination_limit',
+            'pagination_max_limit',
+            'database_name',
+            'database_url',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):

@@ -1,7 +1,7 @@
 from contextlib import suppress
 import functools
 import os
-from os.path import dirname, join, realpath
+from os.path import dirname, isfile, join, realpath
 from pprint import pformat
 from subprocess import DEVNULL, Popen
 import sys
@@ -16,6 +16,10 @@ from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
 from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
+
+
+TEST_DB_NAME = 'test.db'
+TEST_DB_URL = 'sqlite:///test.db'
 
 
 class FunctionalTestCluster(object):
@@ -76,6 +80,8 @@ class FunctionalTestCluster(object):
             'secret': Secret.get(),
             'base_directory': base_dir_sys_path,
             'max_log_file_size': 1024 * 5,
+            'database_name': TEST_DB_NAME,
+            'database_url': TEST_DB_URL
         }
         conf_values_to_set.update(extra_conf_vals)
         for conf_key, conf_value in conf_values_to_set.items():
@@ -300,6 +306,12 @@ class FunctionalTestCluster(object):
         :return: The killed master service with return code, stdout, and stderr set.
         :rtype: ClusterController
         """
+        # Delete testing database after we're done
+        if isfile(TEST_DB_NAME):
+            os.remove(TEST_DB_NAME)
+        else:
+            print('Warning: Unable to locate test database file on tearDownClass.')
+
         if self.master:
             self.master.kill()
 

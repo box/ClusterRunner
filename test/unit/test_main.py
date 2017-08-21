@@ -46,6 +46,7 @@ class TestMain(BaseUnitTestCase):
 
     def test_master_args_correctly_create_cluster_master(self):
         mock_cluster_master = self.mock_ClusterMaster.return_value  # get the mock for the ClusterMaster instance
+        # Manually add a _build_store because private member attributes aren't created by mock objects
         mock_cluster_master._build_store = _FakeBuildStore()
 
         main.main(['master'])
