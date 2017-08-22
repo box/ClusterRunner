@@ -174,6 +174,46 @@ BasicSleepingJob:
     expected_num_atoms=5,
 )
 
+# This is a very basic job where each atom (total 90) just sleeps for 1 second.
+JOB_WITH_SLEEPS_90SEC = FunctionalTestJobConfig(
+    config={
+        'posix': """
+SleepingJob90Sec:
+    commands:
+        - sleep 1
+    atomizers:
+        - TOKEN: seq 0 90 | xargs -I {} echo "This is atom {}"
+
+""",
+        'nt': """
+SleepingJob90Sec:
+    commands:
+        - timeout 1 > NUL
+    atomizers:
+        - TOKEN: FOR /l %n in (0,1,90) DO @echo This is atom %n
+""",
+    },
+    expected_to_fail=False,
+    expected_num_subjobs=90,
+    expected_num_atoms=90,
+)
+
+# This is a very basic job where each atom (total 90) just sleeps for 1 second.
+JOB_WITH_SLEEPING_ATOMIZER_90SEC = FunctionalTestJobConfig(
+    config={
+        'posix': """
+SleepingAtomizerJob90Sec:
+    commands:
+        - echo $ATOM
+    atomizers:
+        - ATOM: echo "$$" > /tmp/atomizer_pid.txt; for x in $(seq 1 90); do sleep 1 && echo $x; done
+""",
+    },
+    expected_to_fail=False,
+    expected_num_subjobs=90,
+    expected_num_atoms=90,
+)
+
 FAILING_SETUP_JOB = FunctionalTestJobConfig(
     config={
         'posix': """
