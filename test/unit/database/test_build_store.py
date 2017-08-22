@@ -10,7 +10,7 @@ from sys import maxsize
 from genty import genty, genty_dataset
 from unittest.mock import MagicMock, Mock
 
-from app.database.build_store import BuildStore
+from app.database.build_store import BuildStore, IncompleteBuild
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus
@@ -27,6 +27,12 @@ TEST_DB_URL = 'sqlite:///test.db'
 
 @genty
 class TestBuildStore(BaseUnitTestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Delete testing database if one was left over"""
+        if isfile(TEST_DB_NAME):
+            os.remove(TEST_DB_NAME)
+
     def setUp(self):
         super().setUp()
         self.patch('app.util.fs.create_dir')
@@ -52,7 +58,7 @@ class TestBuildStore(BaseUnitTestCase):
         self.thread_pool_executor.shutdown()
 
     def tearDownClass():
-        # Delete testing database after we're done
+        """Delete testing database after we're done"""
         if isfile(TEST_DB_NAME):
             os.remove(TEST_DB_NAME)
         else:
@@ -69,15 +75,20 @@ class TestBuildStore(BaseUnitTestCase):
         self.assertEqual(build.build_id(), expected_build_id, 'The wrong build_id was set.')
 
     @genty_dataset(
-        build_id_1=(1, 1),
-        build_id_invalid=(1000, None),
+        build_id_1_allow_incompleted_builds=(1, 1, True),
+        build_id_invalid_allow_incompleted_builds=(1000, None, True),
+        build_id_1_disallow_incompleted_builds=(1, None, False),
+        build_id_invalid_disallow_incompleted_builds=(1000, None, False),
     )
-    def test_get_build_from_store(self, build_id, expected_build_id):
-        build = self._build_store.get(build_id)
-        if build is None:
-            self.assertEqual(None, expected_build_id, 'Couldn\'t find build in BuildStore.')
-        else:
-            self.assertEqual(build.build_id(), expected_build_id, 'Got the wrong build from BuildStore.')
+    def test_get_build_from_store(self, build_id, expected_build_id, allow_incompleted_builds):
+        try:
+            build = self._build_store.get(build_id, allow_incompleted_builds=allow_incompleted_builds)
+            if build is None:
+                self.assertEqual(None, expected_build_id, 'Couldn\'t find build in BuildStore.')
+            else:
+                self.assertEqual(build.build_id(), expected_build_id, 'Got the wrong build from BuildStore.')
+        except IncompleteBuild:
+            self.assertEqual(allow_incompleted_builds, False, 'A completed build was marked as incompleted.')
 
     def test_deserialized_build_api_representation_is_same_as_original_build_no_failures(self):
         build = Build(BuildRequest({
@@ -88,7 +99,7 @@ class TestBuildStore(BaseUnitTestCase):
         build.generate_project_type()
 
         self._build_store.add(build)
-        reconstructed_build = self._build_store._reconstruct_build(build.build_id())
+        reconstructed_build = self._build_store._reconstruct_build(build.build_id(), allow_incompleted_builds=True)
 
         original_build_results = build.api_representation()
         reconstructed_build_results = reconstructed_build.api_representation()

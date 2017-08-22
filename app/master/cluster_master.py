@@ -74,16 +74,15 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def get_builds(self, offset: int=None, limit: int=None) -> List['Build']:
+    def get_builds(self, offset: int=None, limit: int=None, allow_incompleted_builds=False) -> List['Build']:
         """
         Returns a list of all builds.
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        builds_in_cache, builds_in_db = self._build_store.size()
-        num_builds = max(builds_in_cache, builds_in_db)
+        num_builds = self._build_store.count_all_builds()
         start, end = get_paginated_indices(offset, limit, num_builds)
-        return self._build_store.get_range(start, end)
+        return self._build_store.get_range(start, end, allow_incompleted_builds=allow_incompleted_builds)
 
     def active_builds(self):
         """

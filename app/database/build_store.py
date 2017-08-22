@@ -1,7 +1,7 @@
 from collections import OrderedDict
 import json
 from queue import Queue
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from sqlalchemy import func
 
 from app.database.connection import Connection
@@ -44,7 +44,7 @@ class BuildStore:
         DatabaseSetup.prepare()
         # DatabaseSetup.reset()
 
-    def get(self, build_id: int) -> Optional[Build]:
+    def get(self, build_id: int, allow_incompleted_builds=False) -> Optional[Build]:
         """
         Returns a build by id.
         :param build_id: The id for the build whose status we are getting
@@ -52,14 +52,14 @@ class BuildStore:
         build = self._cached_builds_by_id.get(build_id)
         if build is None:
             self._logger.info('Requested build (id: {}) was not found in cache, checking database.'.format(build_id))
-            build = self._reconstruct_build(build_id)
+            build = self._reconstruct_build(build_id, allow_incompleted_builds=allow_incompleted_builds)
             if build is not None:
                 self._cached_builds_by_id[build_id] = build
                 self._logger.notice('Build (id: {}) was added to cache.'.format(build_id))
 
         return build
 
-    def get_range(self, start: int, end: int) -> List[Build]:
+    def get_range(self, start: int, end: int, allow_incompleted_builds=False) -> List[Build]:
         """
         Returns a list of all builds.
         :param start: The starting index of the requested build.
@@ -67,7 +67,13 @@ class BuildStore:
                     of builds available the length of the returned list may be smaller than (end - start).
         """
         # Add 1 to start & end because we're create build_id's, not indices
-        return [self.get(build_id) for build_id in range(start + 1, end + 1)]
+        builds = []
+        for build_id in range(start + 1, end + 1):
+            try:
+                builds.append(self.get(build_id, allow_incompleted_builds=allow_incompleted_builds))
+            except IncompleteBuild:
+                builds.append(None)
+        return builds
 
     def add(self, build: Build):
         """
@@ -98,14 +104,17 @@ class BuildStore:
             self._update_build(build)
         self._session.commit()
 
-    def size(self) -> Tuple[int, int]:  # pylint: disable=invalid-sequence-index
+    def count_all_builds(self) -> int:
         """
-        Return a tuple of both the amount of builds cached within memory and the
-        total amount of builds stored in the database
+        Return the total amount of builds stored in the database.
         """
-        total_amount = self._session.query(func.count('*')).select_from(BuildStateSchema).scalar()
-        cached_amount = len(self._cached_builds_by_id)
-        return cached_amount, total_amount
+        return self._session.query(func.count('*')).select_from(BuildStateSchema).scalar()
+
+    def count_cached_builds(self) -> int:
+        """
+        Return the amount of builds stored in the cache.
+        """
+        return len(self._cached_builds_by_id)
 
     def _store_build(self, build: Build) -> int:
         """
@@ -220,8 +229,8 @@ class BuildStore:
     def _update_build(self, build: Build) -> int:
         """
         Serialize a Build object and update all of the parts to the database.
-        NOTE: These changes are not committed here. If you want these changes to persist,
-              make sure to commit the session afterwards.
+        NOTE: These changes are not committed here. If you want these changes to persist, \
+              make sure to commit the session afterwards. \
               We do selectively call commit a few times here but only after we delete rows.
         :param build_id: The build_id of the build to update in the database.
         """
@@ -344,14 +353,14 @@ class BuildStore:
                 )
                 self._session.add(atom_schema)
 
-    def _reconstruct_build(self, build_id) -> Build:
+    def _reconstruct_build(self, build_id, allow_incompleted_builds=False) -> Build:
         """
         Given a build_id, fetch all the stored information from the database to reconstruct
         a Build object to represent that build.
         :param build_id: The id of the build to recreate.
         """
         (
-            _,
+            q_build_schema,
             q_build_state,
             q_build_meta,
             q_build_artifact,
@@ -364,8 +373,12 @@ class BuildStore:
         ) = self._get_query_build_object(build_id)
 
         # If a query returns None, then we know the build wasn't found in the database
-        if not q_build_state:
+        if not q_build_schema:
             return None
+
+        # Build wasn't completed when we stored it
+        if not allow_incompleted_builds and not bool(int(q_build_schema.completed)):
+            raise IncompleteBuild('Cannot load build (id: {}) because it was never completed.'.format(build_id))
 
         build_parameters = json.loads(q_build_request.build_parameters)
 
@@ -518,3 +531,7 @@ class BuildStore:
             q_build_subjobs,
             q_build_atoms
         )
+
+
+class IncompleteBuild(Exception):
+    pass

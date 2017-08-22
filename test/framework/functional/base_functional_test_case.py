@@ -1,6 +1,7 @@
 from contextlib import suppress
 import http.client
 import os
+from os.path import isfile
 import tempfile
 from unittest import TestCase
 
@@ -13,7 +14,7 @@ from app.util.network import Network
 from app.util.secret import Secret
 from app.util.url_builder import UrlBuilder
 from test.framework.functional.fs_item import Directory
-from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError
+from test.framework.functional.functional_test_cluster import FunctionalTestCluster, TestClusterTimeoutError, TEST_DB_NAME, TEST_DB_URL
 
 
 class BaseFunctionalTestCase(TestCase):
@@ -22,6 +23,12 @@ class BaseFunctionalTestCase(TestCase):
         - Make available a `FunctionalTestCluster` object for use in functional tests (self.cluster)
         - Implement any helper assertion methods that might be useful for making our tests easier to read and write
     """
+    @classmethod
+    def setUpClass(cls):
+        """Delete testing database if one was left over"""
+        if isfile(TEST_DB_NAME):
+            os.remove(TEST_DB_NAME)
+
     def setUp(self):
         # Configure logging to go to stdout. This makes debugging easier by allowing us to see logs for failed tests.
         log.configure_logging('DEBUG')

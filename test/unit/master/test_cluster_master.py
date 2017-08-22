@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, Mock
 from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.database.build_store import BuildStore
 from app.master.cluster_master import ClusterMaster
 from app.master.subjob import Subjob
 from app.slave.cluster_slave import SlaveState
@@ -331,7 +330,11 @@ class TestClusterMaster(BaseUnitTestCase):
             build_mock.build_id = build_id
             master._build_store._cached_builds_by_id[build_id] = build_mock
 
-        requested_builds = master.get_builds(offset, limit)
+        # Normally `get_builds` counts the amount of builds in database, but since we're directly adding builds into the cache here,
+        # we want to count those instead.
+        self.patch('app.database.build_store.BuildStore.count_all_builds').return_value = master._build_store.count_cached_builds()
+        requested_builds = master.get_builds(offset, limit, allow_incompleted_builds=True)
+        print(requested_builds)
 
         id_of_first_build = requested_builds[0].build_id if len(requested_builds) else None
         id_of_last_build = requested_builds[-1].build_id if len(requested_builds) else None
