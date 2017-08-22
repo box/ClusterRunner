@@ -11,6 +11,7 @@ from genty import genty, genty_dataset
 from unittest.mock import MagicMock, Mock
 
 from app.database.build_store import BuildStore, IncompleteBuild
+from app.database.connection import Connection
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from app.master.atomizer import Atomizer
 from app.master.build import Build, BuildStatus
@@ -21,8 +22,8 @@ from app.project_type.project_type import ProjectType
 from app.util.conf.configuration import Configuration
 
 
-TEST_DB_NAME = 'test.db'
-TEST_DB_URL = 'sqlite:///test.db'
+TEST_DB_NAME = 'test_build_store.db'
+TEST_DB_URL = 'sqlite:///{}'.format(TEST_DB_NAME)
 
 
 @genty
@@ -32,6 +33,7 @@ class TestBuildStore(BaseUnitTestCase):
         self.patch('app.master.build.util.create_project_type').return_value = self._create_mock_project_type()
         Configuration['database_name'] = TEST_DB_NAME
         Configuration['database_url'] = TEST_DB_URL
+        Connection.create(Configuration['database_url'])
         self._build_store = BuildStore()
 
     def tearDownClass():

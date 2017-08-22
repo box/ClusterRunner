@@ -9,6 +9,7 @@ from hypothesis import given
 from hypothesis.strategies import text, dictionaries, integers
 from unittest.mock import MagicMock, Mock
 
+from app.database.connection import Connection
 from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
@@ -20,8 +21,8 @@ from app.util.exceptions import BadRequestError, ItemNotFoundError
 from test.framework.base_unit_test_case import BaseUnitTestCase
 
 
-TEST_DB_NAME = 'test.db'
-TEST_DB_URL = 'sqlite:///test.db'
+TEST_DB_NAME = 'test_cluster_master.db'
+TEST_DB_URL = 'sqlite:///{}'.format(TEST_DB_NAME)
 
 
 @genty
@@ -51,6 +52,7 @@ class TestClusterMaster(BaseUnitTestCase):
         Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
         Configuration['database_name'] = TEST_DB_NAME
         Configuration['database_url'] = TEST_DB_URL
+        Connection.create(Configuration['database_url'])
 
     def tearDown(self):
         super().tearDown()

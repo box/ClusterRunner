@@ -43,6 +43,4 @@ class MasterSubcommand(ServiceSubcommand):
 
         ioloop.start()  # this call blocks until the server is stopped
         ioloop.close(all_fds=True)  # all_fds=True is necessary here to make sure connections don't hang
-        self._logger.notice('About to shut down master service, saving all active builds to database.')
-        cluster_master._build_store.clean_up()  # pylint: disable=protected-access
         self._logger.notice('Master server was stopped.')

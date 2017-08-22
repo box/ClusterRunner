@@ -11,6 +11,7 @@ import tempfile
 import requests
 
 from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAPIClient
+from app.database.connection import Connection
 from app.util import log, poll, process_utils
 from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
@@ -18,8 +19,8 @@ from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
 
 
-TEST_DB_NAME = 'test.db'
-TEST_DB_URL = 'sqlite:///test.db'
+TEST_DB_NAME = 'functional_test_cluster.db'
+TEST_DB_URL = 'sqlite:///{}'.format(TEST_DB_NAME)
 
 
 class FunctionalTestCluster(object):
@@ -50,6 +51,8 @@ class FunctionalTestCluster(object):
 
         self._master_app_base_dir = None
         self._slaves_app_base_dirs = []
+
+        Connection.create(TEST_DB_URL)
 
     @property
     def master_app_base_dir(self):
@@ -306,10 +309,10 @@ class FunctionalTestCluster(object):
         :return: The killed master service with return code, stdout, and stderr set.
         :rtype: ClusterController
         """
-        os.remove(TEST_DB_NAME)
         if self.master:
             self.master.kill()
-
+        
+        os.remove(TEST_DB_NAME)
         master, self.master = self.master, None
         return master
 

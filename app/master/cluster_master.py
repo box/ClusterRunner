@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 from app.common.cluster_service import ClusterService
+from app.database.connection import Connection
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
 from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
@@ -33,6 +34,9 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+
+        # Initialize the database connection before we initialize a BuildStore
+        Connection.create(Configuration['database_url'])
         self._build_store = BuildStore()
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical

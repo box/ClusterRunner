@@ -279,7 +279,7 @@ class _BuildsHandler(_ClusterMasterBaseAPIHandler):
 
     def get(self):
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.get_builds() if build is not None]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds()]
         }
         self.write(response)
 
@@ -288,7 +288,7 @@ class _V2BuildsHandler(_BuildsHandler):
     def get(self):
         offset, limit = self.get_pagination_params()
         response = {
-            'builds': [build.api_representation() for build in self._cluster_master.get_builds(offset, limit) if build is not None]
+            'builds': [build.api_representation() for build in self._cluster_master.get_builds(offset, limit)]
         }
         self.write(response)
 

@@ -5,7 +5,6 @@ from typing import List, Optional
 from sqlalchemy import func
 
 from app.database.connection import Connection
-from app.database.database_setup import DatabaseSetup
 from app.database.schema import (
     BuildStateSchema,
     BuildMetaSchema,
@@ -25,7 +24,7 @@ from app.master.build_fsm import BuildState
 from app.master.subjob import Subjob
 from app.util.exceptions import ItemNotFoundError
 from app.util.log import get_logger
-from app.util.conf.configuration import Configuration
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 # pylint: disable=protected-access
@@ -37,12 +36,8 @@ class BuildStore:
     def __init__(self):
         self._logger = get_logger(__name__)
         self._cached_builds_by_id = OrderedDict()
-        self._session = Connection.get(Configuration['database_url'])
-        # TODO: Resetting the database empties all data currently stored.
-        #       Preparing the database attempts to build all the tables if they aren't already created.
-        #       These should be called somewhere else if ever, here right now for testing.
-        DatabaseSetup.prepare()
-        # DatabaseSetup.reset()
+        self._session = Connection.get()
+        UnhandledExceptionHandler.singleton().add_teardown_callback(self.clean_up)
 
     def get(self, build_id: int, allow_incompleted_builds=False) -> Optional[Build]:
         """
@@ -72,7 +67,7 @@ class BuildStore:
             try:
                 builds.append(self.get(build_id, allow_incompleted_builds=allow_incompleted_builds))
             except IncompleteBuild:
-                builds.append(None)
+                pass
         return builds
 
     def add(self, build: Build):
@@ -99,10 +94,12 @@ class BuildStore:
         """
         Save current state of all cached builds.
         """
+        self._logger.notice('Saving all active builds to database...')
         for build_id in self._cached_builds_by_id:
             build = self._cached_builds_by_id[build_id]
             self._update_build(build)
         self._session.commit()
+        self._logger.notice('...done')
 
     def count_all_builds(self) -> int:
         """
