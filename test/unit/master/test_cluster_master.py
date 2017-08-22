@@ -58,10 +58,7 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def tearDownClass():
         # Delete testing database after we're done
-        if isfile(TEST_DB_NAME):
-            remove(TEST_DB_NAME)
-        else:
-            print('Warning: Unable to locate test database file on tearDownClass.')
+        remove(TEST_DB_NAME)
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),

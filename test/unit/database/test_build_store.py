@@ -27,42 +27,16 @@ TEST_DB_URL = 'sqlite:///test.db'
 
 @genty
 class TestBuildStore(BaseUnitTestCase):
-    @classmethod
-    def setUpClass(cls):
-        """Delete testing database if one was left over"""
-        if isfile(TEST_DB_NAME):
-            os.remove(TEST_DB_NAME)
-
     def setUp(self):
         super().setUp()
-        self.patch('app.util.fs.create_dir')
-        self.patch('app.util.fs.async_delete')
-        self.patch('os.makedirs')
-        self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
-        self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
-
-        # Two threads are ran everytime we start up the ClusterMaster. We redirect the calls to
-        # `ThreadPoolExecutor.submit` through a mock proxy so we can capture events.
-        self.thread_pool_executor = ThreadPoolExecutor(max_workers=2)
-        self._thread_pool_executor_cls = self.patch('app.master.cluster_master.ThreadPoolExecutor')
-        self._thread_pool_executor_cls.return_value.submit.side_effect = \
-            self.thread_pool_executor.submit
-
         self.patch('app.master.build.util.create_project_type').return_value = self._create_mock_project_type()
         Configuration['database_name'] = TEST_DB_NAME
         Configuration['database_url'] = TEST_DB_URL
         self._build_store = BuildStore()
 
-    def tearDown(self):
-        super().tearDown()
-        self.thread_pool_executor.shutdown()
-
     def tearDownClass():
         """Delete testing database after we're done"""
-        if isfile(TEST_DB_NAME):
-            os.remove(TEST_DB_NAME)
-        else:
-            print('Warning: Unable to locate test database file on tearDownClass.')
+        os.remove(TEST_DB_NAME)
 
     @genty_dataset(
         first_build=(1,),

@@ -306,12 +306,7 @@ class FunctionalTestCluster(object):
         :return: The killed master service with return code, stdout, and stderr set.
         :rtype: ClusterController
         """
-        # Delete testing database after we're done
-        if isfile(TEST_DB_NAME):
-            os.remove(TEST_DB_NAME)
-        else:
-            print('Warning: Unable to locate test database file on tearDownClass.')
-
+        os.remove(TEST_DB_NAME)
         if self.master:
             self.master.kill()
 
