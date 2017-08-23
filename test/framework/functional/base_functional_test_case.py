@@ -6,7 +6,6 @@ from unittest import TestCase
 
 from app.common.build_artifact import BuildArtifact
 from app.util import fs, log
-from app.database.connection import Connection
 from app.util.conf.base_config_loader import BaseConfigLoader
 from app.util.conf.configuration import Configuration
 from app.util.process_utils import is_windows

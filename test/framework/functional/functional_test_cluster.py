@@ -1,7 +1,7 @@
 from contextlib import suppress
 import functools
 import os
-from os.path import dirname, isfile, join, realpath
+from os.path import dirname, join, realpath
 from pprint import pformat
 from subprocess import DEVNULL, Popen
 import sys

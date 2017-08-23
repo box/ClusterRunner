@@ -10,7 +10,7 @@ class Connection():
     @classmethod
     def create(cls, url: str):
         """
-        Initialize the single database connection session.
+        Initialize the database connection session given a url.
         :param url: The url for connecting to a database.
         """
         # Allow for multithreading so we can share this session amoung different threads

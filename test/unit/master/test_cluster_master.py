@@ -1,6 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 from os import remove
-from os.path import isfile
 from threading import Event
 from typing import Optional
 
@@ -59,7 +58,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.thread_pool_executor.shutdown()
 
     def tearDownClass():
-        # Delete testing database after we're done
+        """Delete testing database after we're done"""
         remove(TEST_DB_NAME)
 
     @genty_dataset(

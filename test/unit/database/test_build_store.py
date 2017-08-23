@@ -1,7 +1,6 @@
 from collections import MutableMapping
 from concurrent.futures import ThreadPoolExecutor
 import os
-from os.path import isfile
 import re
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
