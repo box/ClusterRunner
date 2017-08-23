@@ -21,4 +21,6 @@ class Connection():
 
     @classmethod
     def get(cls):
-        return cls._Session
+        if cls._Session is not None:
+            return cls._Session
+        raise Exception('Session was not created yet.')

@@ -51,8 +51,6 @@ class BuildSubcommand(Subcommand):
         if not runner.run():
             sys.exit(1)
 
-        self._logger.warning('build completed?')
-
     def _start_local_services_if_needed(self, master_url):
         """
         In the case that:

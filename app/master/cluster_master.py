@@ -39,6 +39,7 @@ class ClusterMaster(ClusterService):
         # Initialize the database connection before we initialize a BuildStore
         Connection.create(Configuration['database_url'])
         UnhandledExceptionHandler.singleton().add_teardown_callback(BuildStore.clean_up)
+
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
