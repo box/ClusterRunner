@@ -14,7 +14,6 @@ from app.master.build_fsm import BuildState
 from app.master.subjob import Subjob
 from app.util.exceptions import ItemNotFoundError
 from app.util.log import get_logger
-from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 # pylint: disable=protected-access
@@ -22,54 +21,54 @@ class BuildStore:
     """
     Build storage service that stores and handles all builds.
     """
+    _logger = get_logger(__name__)
+    _cached_builds_by_id = OrderedDict()
 
-    def __init__(self):
-        self._logger = get_logger(__name__)
-        self._cached_builds_by_id = OrderedDict()
-        self._session = Connection.get()
-        UnhandledExceptionHandler.singleton().add_teardown_callback(self.clean_up)
-
-    def get(self, build_id: int, allow_incompleted_builds=False) -> Optional[Build]:
+    @classmethod
+    def get(cls, build_id: int, allow_incompleted_builds=False) -> Optional[Build]:
         """
         Returns a build by id.
         :param build_id: The id for the build whose status we are getting
         """
-        build = self._cached_builds_by_id.get(build_id)
+        build = cls._cached_builds_by_id.get(build_id)
         if build is None:
-            self._logger.info('Requested build (id: {}) was not found in cache, checking database.'.format(build_id))
-            build = self._reconstruct_build(build_id, allow_incompleted_builds=allow_incompleted_builds)
+            cls._logger.info('Requested build (id: {}) was not found in cache, checking database.'.format(build_id))
+            build = cls._reconstruct_build(build_id, allow_incompleted_builds=allow_incompleted_builds)
             if build is not None:
-                self._cached_builds_by_id[build_id] = build
-                self._logger.notice('Build (id: {}) was added to cache.'.format(build_id))
+                cls._cached_builds_by_id[build_id] = build
+                cls._logger.notice('Build (id: {}) was added to cache.'.format(build_id))
 
         return build
 
-    def get_range(self, start: int, end: int, allow_incompleted_builds=False) -> List[Build]:
+    @classmethod
+    def get_range(cls, start: int, end: int, allow_incompleted_builds=False) -> List[Build]:
         """
         Returns a list of all builds.
         :param start: The starting index of the requested build.
         :param end: 1 + the index of the last requested element, although if this is greater than the total number
                     of builds available the length of the returned list may be smaller than (end - start).
         """
-        # Add 1 to start & end because we're create build_id's, not indices
         builds = []
+        # Add 1 to start & end because we're create build_id's, not indices
         for build_id in range(start + 1, end + 1):
             try:
-                builds.append(self.get(build_id, allow_incompleted_builds=allow_incompleted_builds))
+                builds.append(cls.get(build_id, allow_incompleted_builds=allow_incompleted_builds))
             except IncompleteBuild:
                 pass
         return builds
 
-    def add(self, build: Build):
+    @classmethod
+    def add(cls, build: Build):
         """
         Add new build to collection.
         :param build: The build to add to the store.
         """
-        build_id = self._store_build(build)
+        build_id = cls._store_build(build)
         build._build_id = build_id
-        self._cached_builds_by_id[build_id] = build
+        cls._cached_builds_by_id[build_id] = build
 
-    def save(self, build: Build):
+    @classmethod
+    def save(cls, build: Build):
         """
         Save current state of given build.
         We assume that this build already exists in the database. You should always call `add` before
@@ -77,38 +76,46 @@ class BuildStore:
         We also assume this build is already in the cache in its current state.
         :param build: The build to save to database.
         """
-        self._logger.notice('Saving build (id: {}) in database.'.format(build.build_id()))
-        self._update_build(build)
+        cls._logger.notice('Saving build (id: {}) in database.'.format(build.build_id()))
+        cls._update_build(build)
 
-    def clean_up(self):
+    @classmethod
+    def clean_up(cls):
         """
         Save current state of all cached builds.
         """
-        self._logger.notice('Saving all active builds to database...')
-        for build_id in self._cached_builds_by_id:
-            build = self._cached_builds_by_id[build_id]
-            self._update_build(build)
-        self._session.commit()
-        self._logger.notice('...done')
+        session = Connection.get()
+        cls._logger.notice('Saving all active builds to database...')
+        for build_id in cls._cached_builds_by_id:
+            build = cls._cached_builds_by_id[build_id]
+            cls._update_build(build)
+        session.commit()
+        cls._logger.notice('...done')
 
-    def count_all_builds(self) -> int:
+    @classmethod
+    def count_all_builds(cls) -> int:
         """
         Return the total amount of builds stored in the database.
         """
-        return self._session.query(func.count('*')).select_from(BuildSchema).scalar()
+        session = Connection.get()
+        return session.query(func.count('*')).select_from(BuildSchema).scalar()
 
-    def count_cached_builds(self) -> int:
+    @classmethod
+    def count_cached_builds(cls) -> int:
         """
         Return the amount of builds stored in the cache.
         """
-        return len(self._cached_builds_by_id)
+        return len(cls._cached_builds_by_id)
 
-    def _store_build(self, build: Build) -> int:
+    @classmethod
+    def _store_build(cls, build: Build) -> int:
         """
         Serialize a Build object and commit all of the parts to the database, and then
         return the build_id that was assigned after committing.
         :param build: The build to store into the database.
         """
+        session = Connection.get()
+
         build_params = build._build_request._build_parameters
         fsm_timestamps = {state.lower(): timestamp for state, timestamp in build._state_machine.transition_timestamps.items()}
         build_artifact_dir = None
@@ -134,11 +141,11 @@ class BuildStore:
             canceled_ts=fsm_timestamps['canceled'],
             building_ts=fsm_timestamps['building']
         )
-        self._session.add(build_schema)
+        session.add(build_schema)
 
         # Commit this first to get the build_id created by the database
         # We use this build_id to store the other parts of a Build object
-        self._session.commit()
+        session.commit()
         build_id = build_schema.build_id
 
         # FailedArtifactDirectories
@@ -148,7 +155,7 @@ class BuildStore:
                     build_id=build_id,
                     failed_artifact_directory=directory
                 )
-                self._session.add(failed_artifact_directory)
+                session.add(failed_artifact_directory)
 
         # FailedSubjobAtomPairs
         if build._build_artifact is not None:
@@ -158,7 +165,7 @@ class BuildStore:
                     subjob_id=subjob_id,
                     atom_id=atom_id
                 )
-                self._session.add(failed_subjob_and_atom_ids)
+                session.add(failed_subjob_and_atom_ids)
 
         # Subjobs
         subjobs = build._all_subjobs_by_id
@@ -169,7 +176,7 @@ class BuildStore:
                 build_id=build_id,
                 completed=subjob.completed
             )
-            self._session.add(subjob_schema)
+            session.add(subjob_schema)
 
             # Atoms
             for atom in subjob._atoms:
@@ -183,12 +190,13 @@ class BuildStore:
                     exit_code=atom.exit_code,
                     state=atom.state,
                 )
-                self._session.add(atom_schema)
+                session.add(atom_schema)
 
-        self._session.commit()
+        session.commit()
         return build_id
 
-    def _update_build(self, build: Build) -> int:
+    @classmethod
+    def _update_build(cls, build: Build) -> int:
         """
         Serialize a Build object and update all of the parts to the database.
         NOTE: These changes are not committed here. If you want these changes to persist, \
@@ -196,9 +204,11 @@ class BuildStore:
               We do selectively call commit a few times here but only after we delete rows.
         :param build_id: The build_id of the build to update in the database.
         """
+        session = Connection.get()
+
         build_id = build.build_id()
         (q_build, q_failed_artifact_directories, q_failed_subjob_atom_pairs,
-         q_build_subjobs, q_build_atoms) = self._get_query_build_object(build_id)
+         q_build_subjobs, q_build_atoms) = cls._get_query_build_object(build_id)
 
         # If this wasn't found, it's safe to assume that the build doesn't exist within the database
         if q_build is None:
@@ -223,12 +233,12 @@ class BuildStore:
         # Query for the FailedArtifactDirectories associated with this `build_id`
         if build._build_artifact is not None:
             # Clear all old directories associated with this `build_id`
-            self._session.query(FailedArtifactDirectoriesSchema) \
+            session.query(FailedArtifactDirectoriesSchema) \
                 .filter(FailedArtifactDirectoriesSchema.build_id == build_id) \
                 .delete()
 
             # Commit changes so we don't delete the newly added rows later
-            self._session.commit()
+            session.commit()
 
             # Add all the updated versions of the directories
             for directory in build._build_artifact._get_failed_artifact_directories():
@@ -236,17 +246,17 @@ class BuildStore:
                     build_id=build_id,
                     failed_artifact_directory=directory
                 )
-                self._session.add(failed_artifact_directory)
+                session.add(failed_artifact_directory)
 
         # Query for the FailedSubjobAtomPairs associated with this `build_id`
         if build._build_artifact is not None:
             # Clear all old data associated with this build_id
-            self._session.query(FailedSubjobAtomPairsSchema) \
+            session.query(FailedSubjobAtomPairsSchema) \
                 .filter(FailedSubjobAtomPairsSchema.build_id == build_id) \
                 .delete()
 
             # Commit changes so we don't delete the newly added rows later
-            self._session.commit()
+            session.commit()
 
             # Add all the updated versions of the data
             for subjob_id, atom_id in build._build_artifact.get_failed_subjob_and_atom_ids():
@@ -255,7 +265,7 @@ class BuildStore:
                     subjob_id=subjob_id,
                     atom_id=atom_id
                 )
-                self._session.add(failed_subjob_and_atom_ids)
+                session.add(failed_subjob_and_atom_ids)
 
         q_build.build_parameters = json.dumps(build._build_request.build_parameters())
 
@@ -271,15 +281,15 @@ class BuildStore:
 
         # Subjobs
         # Clear all old Subjobs and Atoms associated with this `build_id`
-        self._session.query(SubjobsSchema) \
+        session.query(SubjobsSchema) \
             .filter(SubjobsSchema.build_id == build_id) \
             .delete()
-        self._session.query(AtomsSchema) \
+        session.query(AtomsSchema) \
             .filter(AtomsSchema.build_id == build_id) \
             .delete()
 
         # Commit changes so we don't delete the newly added rows later
-        self._session.commit()
+        session.commit()
 
         # Add all the updated versions of Subjobs and Atoms
         subjobs = build._all_subjobs_by_id
@@ -290,7 +300,7 @@ class BuildStore:
                 build_id=build_id,
                 completed=subjob.completed
             )
-            self._session.add(subjob_schema)
+            session.add(subjob_schema)
 
             # Atoms
             for atom in subjob._atoms:
@@ -304,16 +314,17 @@ class BuildStore:
                     exit_code=atom.exit_code,
                     state=atom.state
                 )
-                self._session.add(atom_schema)
+                session.add(atom_schema)
 
-    def _reconstruct_build(self, build_id, allow_incompleted_builds=False) -> Build:
+    @classmethod
+    def _reconstruct_build(cls, build_id, allow_incompleted_builds=False) -> Build:
         """
         Given a build_id, fetch all the stored information from the database to reconstruct
         a Build object to represent that build.
         :param build_id: The id of the build to recreate.
         """
         (q_build, q_failed_artifact_directories, q_failed_subjob_atom_pairs,
-         q_build_subjobs, q_build_atoms) = self._get_query_build_object(build_id)
+         q_build_subjobs, q_build_atoms) = cls._get_query_build_object(build_id)
 
         # If a query returns None, then we know the build wasn't found in the database
         if not q_build:
@@ -408,16 +419,19 @@ class BuildStore:
 
         return build
 
-    def _get_query_build_object(self, build_id):
+    @classmethod
+    def _get_query_build_object(cls, build_id):
         """
         Query the database to build a series of SQLAlchemy objects related to the build.
         :param build_id: The id of the build to query from the database.
         """
-        q_build = self._session.query(BuildSchema).filter(BuildSchema.build_id == build_id).first()
-        q_failed_artifact_directories = self._session.query(FailedArtifactDirectoriesSchema).filter(FailedArtifactDirectoriesSchema.build_id == build_id).all()
-        q_failed_subjob_atom_pairs = self._session.query(FailedSubjobAtomPairsSchema).filter(FailedSubjobAtomPairsSchema.build_id == build_id).all()
-        q_build_atoms = self._session.query(AtomsSchema).filter(AtomsSchema.build_id == build_id).all()
-        q_build_subjobs = self._session.query(SubjobsSchema).filter(SubjobsSchema.build_id == build_id).all()
+        session = Connection.get()
+
+        q_build = session.query(BuildSchema).filter(BuildSchema.build_id == build_id).first()
+        q_failed_artifact_directories = session.query(FailedArtifactDirectoriesSchema).filter(FailedArtifactDirectoriesSchema.build_id == build_id).all()
+        q_failed_subjob_atom_pairs = session.query(FailedSubjobAtomPairsSchema).filter(FailedSubjobAtomPairsSchema.build_id == build_id).all()
+        q_build_atoms = session.query(AtomsSchema).filter(AtomsSchema.build_id == build_id).all()
+        q_build_subjobs = session.query(SubjobsSchema).filter(SubjobsSchema.build_id == build_id).all()
         return q_build, q_failed_artifact_directories, q_failed_subjob_atom_pairs, q_build_subjobs, q_build_atoms
 
 

@@ -52,4 +52,4 @@ slave_results/
 .python-version
 
 # Database files
-clusterrunner.db
+*.db

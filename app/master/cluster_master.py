@@ -16,6 +16,7 @@ from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 class ClusterMaster(ClusterService):
@@ -37,7 +38,7 @@ class ClusterMaster(ClusterService):
 
         # Initialize the database connection before we initialize a BuildStore
         Connection.create(Configuration['database_url'])
-        self._build_store = BuildStore()
+        UnhandledExceptionHandler.singleton().add_teardown_callback(BuildStore.clean_up)
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -84,9 +85,9 @@ class ClusterMaster(ClusterService):
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        num_builds = self._build_store.count_all_builds()
+        num_builds = BuildStore.count_all_builds()
         start, end = get_paginated_indices(offset, limit, num_builds)
-        return self._build_store.get_range(start, end, allow_incompleted_builds=allow_incompleted_builds)
+        return BuildStore.get_range(start, end, allow_incompleted_builds=allow_incompleted_builds)
 
     def active_builds(self):
         """
@@ -258,7 +259,7 @@ class ClusterMaster(ClusterService):
 
         if build_request.is_valid():
             build = Build(build_request)
-            self._build_store.add(build)
+            BuildStore.add(build)
             build.generate_project_type()  # WIP(joey): This should be internal to the Build object.
             self._build_request_handler.handle_build_request(build)
             response = {'build_id': build.build_id()}
@@ -281,7 +282,7 @@ class ClusterMaster(ClusterService):
         :return: The success/failure and the response we want to send to the requestor
         :rtype: tuple [bool, dict [str, str]]
         """
-        build = self._build_store.get(int(build_id))
+        build = BuildStore.get(int(build_id))
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 
@@ -300,7 +301,7 @@ class ClusterMaster(ClusterService):
         :rtype: str
         """
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
-        build = self._build_store.get(int(build_id))
+        build = BuildStore.get(int(build_id))
         slave = self._all_slaves_by_url[slave_url]
         try:
             build.complete_subjob(subjob_id, payload)
@@ -316,7 +317,7 @@ class ClusterMaster(ClusterService):
         :type build_id: int
         :rtype: Build
         """
-        build = self._build_store.get(build_id)
+        build = BuildStore.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id: {}.'.format(build_id))
 
@@ -330,7 +331,7 @@ class ClusterMaster(ClusterService):
         :param is_tar_request: If true, download the tar.gz archive instead of a zip.
         :return: The path to the archived results file
         """
-        build = self._build_store.get(build_id)
+        build = BuildStore.get(build_id)
         if build is None:
             raise ItemNotFoundError('Invalid build id.')
 

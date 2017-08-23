@@ -33,7 +33,7 @@ class TestBuildStore(BaseUnitTestCase):
         Configuration['database_name'] = TEST_DB_NAME
         Configuration['database_url'] = TEST_DB_URL
         Connection.create(Configuration['database_url'])
-        self._build_store = BuildStore()
+        BuildStore._cached_builds_by_id.clear()
 
     def tearDownClass():
         """Delete testing database after we're done"""
@@ -46,7 +46,7 @@ class TestBuildStore(BaseUnitTestCase):
     )
     def test_add_build_to_store_sets_build_id(self, expected_build_id):
         build = Build(BuildRequest({}))
-        self._build_store.add(build)
+        BuildStore.add(build)
         self.assertEqual(build.build_id(), expected_build_id, 'The wrong build_id was set.')
 
     @genty_dataset(
@@ -57,7 +57,7 @@ class TestBuildStore(BaseUnitTestCase):
     )
     def test_get_build_from_store(self, build_id, expected_build_id, allow_incompleted_builds):
         try:
-            build = self._build_store.get(build_id, allow_incompleted_builds=allow_incompleted_builds)
+            build = BuildStore.get(build_id, allow_incompleted_builds=allow_incompleted_builds)
             if build is None:
                 self.assertEqual(None, expected_build_id, 'Couldn\'t find build in BuildStore.')
             else:
@@ -73,8 +73,8 @@ class TestBuildStore(BaseUnitTestCase):
         }))
         build.generate_project_type()
 
-        self._build_store.add(build)
-        reconstructed_build = self._build_store._reconstruct_build(build.build_id(), allow_incompleted_builds=True)
+        BuildStore.add(build)
+        reconstructed_build = BuildStore._reconstruct_build(build.build_id(), allow_incompleted_builds=True)
 
         original_build_results = build.api_representation()
         reconstructed_build_results = reconstructed_build.api_representation()
@@ -83,6 +83,8 @@ class TestBuildStore(BaseUnitTestCase):
         # The build_project_directory is an auto generated tmp directory -- these will never be the same
         diff.pop('request_params|build_project_directory', None)
 
+        # This is very similar to self.assertDictEqual, but here we won't consider different key orderings
+        # as "not equal" which matters because `api_representation` does not have deterministic ordering
         self.assertEqual(diff, {}, 'Deserialized build is not the same as the original build.')
 
     def _create_job_config(self) -> JobConfig:

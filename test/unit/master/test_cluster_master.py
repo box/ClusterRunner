@@ -9,6 +9,7 @@ from hypothesis.strategies import text, dictionaries, integers
 from unittest.mock import MagicMock, Mock
 
 from app.database.connection import Connection
+from app.database.build_store import BuildStore
 from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
@@ -52,6 +53,7 @@ class TestClusterMaster(BaseUnitTestCase):
         Configuration['database_name'] = TEST_DB_NAME
         Configuration['database_url'] = TEST_DB_URL
         Connection.create(Configuration['database_url'])
+        BuildStore._cached_builds_by_id.clear()
 
     def tearDown(self):
         super().tearDown()
@@ -128,7 +130,7 @@ class TestClusterMaster(BaseUnitTestCase):
         master = ClusterMaster()
         master.connect_slave('running-slave.turtles.gov', 10)
         build_mock = MagicMock(spec_set=Build)
-        master._build_store._cached_builds_by_id[1] = build_mock
+        BuildStore._cached_builds_by_id[1] = build_mock
         existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
         existing_slave.current_build_id = 1
 
@@ -141,7 +143,7 @@ class TestClusterMaster(BaseUnitTestCase):
         update_params = {'key': 'value'}
         master = ClusterMaster()
         build = Mock()
-        master._build_store._cached_builds_by_id[build_id] = build
+        BuildStore._cached_builds_by_id[build_id] = build
         build.validate_update_params = Mock(return_value=(True, update_params))
         build.update_state = Mock()
 
@@ -157,7 +159,7 @@ class TestClusterMaster(BaseUnitTestCase):
         update_params = {'key': 'value'}
         master = ClusterMaster()
         build = Mock()
-        master._build_store._cached_builds_by_id[build_id] = build
+        BuildStore._cached_builds_by_id[build_id] = build
         build.validate_update_params = Mock(return_value=(True, update_params))
         build.update_state = Mock()
 
@@ -237,7 +239,7 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch_object(build, '_mark_subjob_complete')
 
         master = ClusterMaster()
-        master._build_store._cached_builds_by_id[build_id] = build
+        BuildStore._cached_builds_by_id[build_id] = build
         master._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(build)
 
@@ -255,7 +257,7 @@ class TestClusterMaster(BaseUnitTestCase):
         mock_build.complete_subjob.side_effect = [RuntimeError('Write failed')]
 
         master = ClusterMaster()
-        master._build_store._cached_builds_by_id[mock_build.build_id()] = mock_build
+        BuildStore._cached_builds_by_id[mock_build.build_id()] = mock_build
         master._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(mock_build)
 
@@ -272,7 +274,7 @@ class TestClusterMaster(BaseUnitTestCase):
     @given(integers(), dictionaries(text(), text()))
     def test_handle_request_to_update_build_does_not_raise_exception(self, build_id, update_params):
         master = ClusterMaster()
-        master._build_store._cached_builds_by_id = {build_id: Build({})}
+        BuildStore._cached_builds_by_id = {build_id: Build({})}
         master.handle_request_to_update_build(build_id, update_params)
 
     @genty_dataset(
@@ -326,13 +328,12 @@ class TestClusterMaster(BaseUnitTestCase):
         for build_id in range(1, self._NUM_BUILDS + 1):
             build_mock = Mock(spec=Build)
             build_mock.build_id = build_id
-            master._build_store._cached_builds_by_id[build_id] = build_mock
+            BuildStore._cached_builds_by_id[build_id] = build_mock
 
-        # Normally `get_builds` counts the amount of builds in database, but since we're directly adding builds into the cache here,
-        # we want to count those instead.
-        self.patch('app.database.build_store.BuildStore.count_all_builds').return_value = master._build_store.count_cached_builds()
+        # Normally `get_builds` counts the amount of builds in database, but since we're directly
+        # adding builds into the cache here, we want to count those instead.
+        self.patch('app.database.build_store.BuildStore.count_all_builds', autospec=False).return_value = BuildStore.count_cached_builds()
         requested_builds = master.get_builds(offset, limit, allow_incompleted_builds=True)
-        print(requested_builds)
 
         id_of_first_build = requested_builds[0].build_id if len(requested_builds) else None
         id_of_last_build = requested_builds[-1].build_id if len(requested_builds) else None
