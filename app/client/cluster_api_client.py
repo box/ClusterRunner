@@ -126,6 +126,28 @@ class ClusterMasterAPIClient(ClusterAPIClient):
             build_in_progress_callback
         )
 
+    def block_until_build_canceled(
+            self,
+            build_id: int,
+            timeout: int=30,
+            build_in_progress_callback: Optional[Callable]=None,
+    ) -> bool:
+        """
+        Poll the build status endpoint until the build is in CANCELED state.
+
+        :param build_id: The id of the build to wait for
+        :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
+        :param build_in_progress_callback: A callback that will be called with the response data if the build has not
+            yet finished. This would be useful, for example, for logging build progress.
+        :return: Whether the build is in CANCELED state
+        """
+        return self.block_until_build_has_status(
+            build_id,
+            [BuildStatus.CANCELED],
+            timeout,
+            build_in_progress_callback
+        )
+
     def block_until_build_finished(
             self,
             build_id: int,
@@ -271,18 +293,23 @@ class ClusterSlaveAPIClient(ClusterAPIClient):
     This is a light wrapper client around the ClusterSlave REST API.
     """
     # TODO: Move the API call logic from slave.py into this class.
-    def block_until_idle(self, timeout=None):
+    def block_until_idle(self, timeout=None) -> bool:
         """
         Poll the slave executor endpoint until all executors are idle.
 
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
         :type timeout: int | None
+        :return: Whether the slave became idle during the timeout
         """
-        def is_slave_idle():
-            response_data = self.get_slave_status()
-            return response_data['slave']['current_build_id'] is None
 
-        poll.wait_for(is_slave_idle, timeout_seconds=timeout)
+        return poll.wait_for(self.is_slave_idle, timeout_seconds=timeout)
+
+    def is_slave_idle(self) -> bool:
+        """
+        :return: Whether slave is idle
+        """
+        response_data = self.get_slave_status()
+        return response_data['slave']['current_build_id'] is None
 
     def get_slave_status(self):
         """
