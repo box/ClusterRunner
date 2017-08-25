@@ -332,8 +332,8 @@ class TestClusterMaster(BaseUnitTestCase):
 
         # Normally `get_builds` counts the amount of builds in database, but since we're directly
         # adding builds into the cache here, we want to count those instead.
-        self.patch('app.database.build_store.BuildStore.count_all_builds', autospec=False).return_value = BuildStore.count_cached_builds()
-        requested_builds = master.get_builds(offset, limit, allow_incompleted_builds=True)
+        self.patch('app.database.build_store.BuildStore.count_all_builds', autospec=False).return_value = len(BuildStore._cached_builds_by_id)
+        requested_builds = master.get_builds(offset, limit)
 
         id_of_first_build = requested_builds[0].build_id if len(requested_builds) else None
         id_of_last_build = requested_builds[-1].build_id if len(requested_builds) else None

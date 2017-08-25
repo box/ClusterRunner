@@ -16,6 +16,7 @@ from app.common.build_artifact import BuildArtifact
 from app.common.metrics import build_state_duration_seconds, ErrorType, internal_errors, serialized_build_time_seconds
 from app.database.connection import Connection
 from app.database.schema import AtomsSchema, BuildSchema, FailedArtifactDirectoriesSchema, FailedSubjobAtomPairsSchema, SubjobsSchema
+from app.master.atom import Atom
 from app.master.build_fsm import BuildFsm, BuildEvent, BuildState
 from app.master.build_request import BuildRequest
 from app.master.subjob import Subjob
@@ -569,120 +570,225 @@ class Build(object):
         """
         return os.path.join(Configuration['build_symlink_directory'], str(uuid.uuid4()))
 
+    # pylint: disable=protected-access
     def save(self):
         """Serialize the Build object and update all of the parts to the database."""
-        session = Connection.get()
-
-        q_build = session.query(BuildSchema).filter(BuildSchema.build_id == self._build_id).first()
-        q_failed_artifact_directories = session.query(FailedArtifactDirectoriesSchema).filter(FailedArtifactDirectoriesSchema.build_id == self._build_id).all()
-        q_failed_subjob_atom_pairs = session.query(FailedSubjobAtomPairsSchema).filter(FailedSubjobAtomPairsSchema.build_id == self._build_id).all()
-        q_build_atoms = session.query(AtomsSchema).filter(AtomsSchema.build_id == self._build_id).all()
-        q_build_subjobs = session.query(SubjobsSchema).filter(SubjobsSchema.build_id == self._build_id).all()
-
-        # If this wasn't found, it's safe to assume that the build doesn't exist within the database
-        if q_build is None:
-            raise ItemNotFoundError('Unable to find build (id: {}) in database.'.format(self._build_id))
-
-        q_build.completed = self._status() == BuildState.FINISHED
-
-        q_build.artifacts_tar_file = self._artifacts_tar_file
-        q_build.artifacts_zip_file = self._artifacts_zip_file
-        q_build.error_message = self._error_message
-        q_build.postbuild_tasks_are_finished = self._postbuild_tasks_are_finished
-        q_build.setup_failures = self.setup_failures
-        q_build.timing_file_path = self._timing_file_path
-
-        build_artifact_dir = None
-        if self._build_artifact is not None:
-            build_artifact_dir = self._build_artifact.build_artifact_dir
-
-        q_build.build_artifact_dir = build_artifact_dir
-
-        if self._build_artifact is not None:
-            # Clear all old directories
-            session.query(FailedArtifactDirectoriesSchema) \
+        with Connection.get() as session:
+            build_schema = session.query(BuildSchema).filter(BuildSchema.build_id == self._build_id).first()
+            failed_artifact_directories_schema = session.query(FailedArtifactDirectoriesSchema) \
                 .filter(FailedArtifactDirectoriesSchema.build_id == self._build_id) \
-                .delete()
-
-            # Commit changes so we don't delete the newly added rows later
-            session.commit()
-
-            # Add all the updated versions of the directories
-            for directory in self._build_artifact._get_failed_artifact_directories():  # pylint: disable=protected-access
-                failed_artifact_directory = FailedArtifactDirectoriesSchema(
-                    build_id=self._build_id,
-                    failed_artifact_directory=directory
-                )
-                session.add(failed_artifact_directory)
-
-        if self._build_artifact is not None:
-            # Clear all old directories
-            session.query(FailedSubjobAtomPairsSchema) \
+                .all()
+            failed_subjob_atom_pairs_schema = session.query(FailedSubjobAtomPairsSchema) \
                 .filter(FailedSubjobAtomPairsSchema.build_id == self._build_id) \
+                .all()
+            atoms_schema = session.query(AtomsSchema).filter(AtomsSchema.build_id == self._build_id).all()
+            subjobs_schema = session.query(SubjobsSchema).filter(SubjobsSchema.build_id == self._build_id).all()
+
+            # If this wasn't found, it's safe to assume that the build doesn't exist within the database
+            if build_schema is None:
+                raise ItemNotFoundError('Unable to find build (id: {}) in database.'.format(self._build_id))
+
+            build_schema.completed = self._status() == BuildState.FINISHED
+
+            build_schema.artifacts_tar_file = self._artifacts_tar_file
+            build_schema.artifacts_zip_file = self._artifacts_zip_file
+            build_schema.error_message = self._error_message
+            build_schema.postbuild_tasks_are_finished = self._postbuild_tasks_are_finished
+            build_schema.setup_failures = self.setup_failures
+            build_schema.timing_file_path = self._timing_file_path
+
+            build_artifact_dir = None
+            if self._build_artifact is not None:
+                build_artifact_dir = self._build_artifact.build_artifact_dir
+
+            build_schema.build_artifact_dir = build_artifact_dir
+
+            if self._build_artifact is not None:
+                # Clear all old directories
+                session.query(FailedArtifactDirectoriesSchema) \
+                    .filter(FailedArtifactDirectoriesSchema.build_id == self._build_id) \
+                    .delete()
+
+                # Commit changes so we don't delete the newly added rows later
+                session.commit()
+
+                # Add all the updated versions of the directories
+                for directory in self._build_artifact._get_failed_artifact_directories():
+                    failed_artifact_directory = FailedArtifactDirectoriesSchema(
+                        build_id=self._build_id,
+                        failed_artifact_directory=directory
+                    )
+                    session.add(failed_artifact_directory)
+
+            if self._build_artifact is not None:
+                # Clear all old directories
+                session.query(FailedSubjobAtomPairsSchema) \
+                    .filter(FailedSubjobAtomPairsSchema.build_id == self._build_id) \
+                    .delete()
+
+                # Commit changes so we don't delete the newly added rows later
+                session.commit()
+
+                # Add all the updated versions of the data
+                for subjob_id, atom_id in self._build_artifact.get_failed_subjob_and_atom_ids():
+                    failed_subjob_and_atom_ids = FailedSubjobAtomPairsSchema(
+                        build_id=self._build_id,
+                        subjob_id=subjob_id,
+                        atom_id=atom_id
+                    )
+                    session.add(failed_subjob_and_atom_ids)
+
+            build_schema.build_parameters = json.dumps(self._build_request.build_parameters())
+
+            fsm_timestamps = {state.lower(): timestamp for state, timestamp in self._state_machine.transition_timestamps.items()}
+            build_schema.state = self._status()
+            build_schema.queued_ts = fsm_timestamps['queued']
+            build_schema.finished_ts = fsm_timestamps['finished']
+            build_schema.prepared_ts = fsm_timestamps['prepared']
+            build_schema.preparing_ts = fsm_timestamps['preparing']
+            build_schema.error_ts = fsm_timestamps['error']
+            build_schema.canceled_ts = fsm_timestamps['canceled']
+            build_schema.building_ts = fsm_timestamps['building']
+
+            # Subjobs
+            # Clear all old Subjobs and Atoms
+            session.query(SubjobsSchema) \
+                .filter(SubjobsSchema.build_id == self._build_id) \
+                .delete()
+            session.query(AtomsSchema) \
+                .filter(AtomsSchema.build_id == self._build_id) \
                 .delete()
 
             # Commit changes so we don't delete the newly added rows later
             session.commit()
 
-            # Add all the updated versions of the data
-            for subjob_id, atom_id in self._build_artifact.get_failed_subjob_and_atom_ids():
-                failed_subjob_and_atom_ids = FailedSubjobAtomPairsSchema(
-                    build_id=self._build_id,
+            # Add all the updated versions of Subjobs and Atoms
+            subjobs = self._all_subjobs_by_id
+            for subjob_id in subjobs:
+                subjob = self._all_subjobs_by_id[subjob_id]
+                subjob_schema = SubjobsSchema(
                     subjob_id=subjob_id,
-                    atom_id=atom_id
-                )
-                session.add(failed_subjob_and_atom_ids)
-
-        q_build.build_parameters = json.dumps(self._build_request.build_parameters())
-
-        fsm_timestamps = {state.lower(): timestamp for state, timestamp in self._state_machine.transition_timestamps.items()}
-        q_build.state = self._status()
-        q_build.queued_ts = fsm_timestamps['queued']
-        q_build.finished_ts = fsm_timestamps['finished']
-        q_build.prepared_ts = fsm_timestamps['prepared']
-        q_build.preparing_ts = fsm_timestamps['preparing']
-        q_build.error_ts = fsm_timestamps['error']
-        q_build.canceled_ts = fsm_timestamps['canceled']
-        q_build.building_ts = fsm_timestamps['building']
-
-        # Subjobs
-        # Clear all old Subjobs and Atoms
-        session.query(SubjobsSchema) \
-            .filter(SubjobsSchema.build_id == self._build_id) \
-            .delete()
-        session.query(AtomsSchema) \
-            .filter(AtomsSchema.build_id == self._build_id) \
-            .delete()
-
-        # Commit changes so we don't delete the newly added rows later
-        session.commit()
-
-        # Add all the updated versions of Subjobs and Atoms
-        subjobs = self._all_subjobs_by_id
-        for subjob_id in subjobs:
-            subjob = self._all_subjobs_by_id[subjob_id]
-            subjob_schema = SubjobsSchema(
-                subjob_id=subjob_id,
-                build_id=self._build_id,
-                completed=subjob.completed
-            )
-            session.add(subjob_schema)
-
-            # Atoms
-            for atom in subjob._atoms:  # pylint: disable=protected-access
-                atom_schema = AtomsSchema(
-                    atom_id=atom.id,
                     build_id=self._build_id,
-                    subjob_id=subjob_id,
-                    command_string=atom.command_string,
-                    expected_time=atom.expected_time,
-                    actual_time=atom.actual_time,
-                    exit_code=atom.exit_code,
-                    state=atom.state
+                    completed=subjob.completed
                 )
-                session.add(atom_schema)
+                session.add(subjob_schema)
 
-        session.commit()
+                # Atoms
+                for atom in subjob._atoms:
+                    atom_schema = AtomsSchema(
+                        atom_id=atom.id,
+                        build_id=self._build_id,
+                        subjob_id=subjob_id,
+                        command_string=atom.command_string,
+                        expected_time=atom.expected_time,
+                        actual_time=atom.actual_time,
+                        exit_code=atom.exit_code,
+                        state=atom.state
+                    )
+                    session.add(atom_schema)
+
+    @classmethod
+    def load_from_db(cls, build_id):
+        """
+        Given a build_id, fetch all the stored information from the database to reconstruct
+        a Build object to represent that build.
+        :param build_id: The id of the build to recreate.
+        """
+        with Connection.get() as session:
+            build_schema = session.query(BuildSchema).filter(BuildSchema.build_id == build_id).first()
+            failed_artifact_directories_schema = session.query(FailedArtifactDirectoriesSchema) \
+                .filter(FailedArtifactDirectoriesSchema.build_id == build_id) \
+                .all()
+            failed_subjob_atom_pairs_schema = session.query(FailedSubjobAtomPairsSchema) \
+                .filter(FailedSubjobAtomPairsSchema.build_id == build_id) \
+                .all()
+            atoms_schema = session.query(AtomsSchema).filter(AtomsSchema.build_id == build_id).all()
+            subjobs_schema = session.query(SubjobsSchema).filter(SubjobsSchema.build_id == build_id).all()
+
+            # If a query returns None, then we know the build wasn't found in the database
+            if not build_schema:
+                return None
+
+            build_parameters = json.loads(build_schema.build_parameters)
+
+            # Genereate a BuildRequest object with our query response
+            build_request = BuildRequest(build_parameters)
+
+            # Create initial Build object, we will be altering the state of this as we get more data
+            build = Build(build_request)
+            build._build_id = build_id
+
+            # Manually generate ProjectType object for build and create a `job_config` since this is usually done in `prepare()`
+            build.generate_project_type()
+            job_config = build.project_type.job_config()
+
+            # Manually update build data
+            build._artifacts_tar_file = build_schema.artifacts_tar_file
+            build._artifacts_zip_file = build_schema.artifacts_zip_file
+            build._error_message = build_schema.error_message
+            build._postbuild_tasks_are_finished = bool(int(build_schema.postbuild_tasks_are_finished))
+            build.setup_failures = build_schema.setup_failures
+            build._timing_file_path = build_schema.timing_file_path
+
+            # Manually set the state machine timestamps
+            build._state_machine._transition_timestamps = {
+                BuildState.QUEUED: build_schema.queued_ts,
+                BuildState.FINISHED: build_schema.finished_ts,
+                BuildState.PREPARED: build_schema.prepared_ts,
+                BuildState.PREPARING: build_schema.preparing_ts,
+                BuildState.ERROR: build_schema.error_ts,
+                BuildState.CANCELED: build_schema.canceled_ts,
+                BuildState.BUILDING: build_schema.building_ts
+            }
+            build._state_machine._fsm.current = BuildState[build_schema.state]
+
+            build_artifact = BuildArtifact(build_schema.build_artifact_dir)
+
+            directories = []
+            for directory in failed_artifact_directories_schema:
+                directories.append(directory.failed_artifact_directory)
+            build_artifact._failed_artifact_directories = directories
+
+            pairs = []
+            for pair in failed_subjob_atom_pairs_schema:
+                pairs.append((pair.subjob_id, pair.atom_id))
+            build_artifact._q_failed_subjob_atom_pairs = pairs
+
+            build._build_artifact = build_artifact
+
+            atoms_by_subjob_id = {}
+            for atom in atoms_schema:
+                atoms_by_subjob_id.setdefault(atom.subjob_id, [])
+                atoms_by_subjob_id[atom.subjob_id].append(Atom(
+                    atom.command_string,
+                    atom.expected_time,
+                    atom.actual_time,
+                    atom.exit_code,
+                    atom.state,
+                    atom.atom_id,
+                    atom.subjob_id
+                ))
+
+            subjobs = OrderedDict()
+            for subjob in subjobs_schema:
+                atoms = atoms_by_subjob_id[subjob.subjob_id]
+                # Add atoms after subjob is created so we don't alter their state on initialization
+                subjob_to_add = Subjob(build_id, subjob.subjob_id, build.project_type, job_config, [])
+                subjob_to_add._atoms = atoms
+                subjob_to_add.completed = subjob.completed
+                subjobs[subjob.subjob_id] = subjob_to_add
+            build._all_subjobs_by_id = subjobs
+
+            # Place subjobs into correct queues within the build
+            build._unstarted_subjobs = Queue(maxsize=len(subjobs))
+            build._finished_subjobs = Queue(maxsize=len(subjobs))
+            for _, subjob in subjobs.items():
+                if subjob.completed:
+                    build._finished_subjobs.put(subjob)
+                else:
+                    build._unstarted_subjobs.put(subjob)
+
+            return build
 
 
 class BuildStatus(str, Enum):  # WIP(joey): Remove this class.

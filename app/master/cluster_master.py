@@ -80,7 +80,7 @@ class ClusterMaster(ClusterService):
             'slaves': slaves_representation,
         }
 
-    def get_builds(self, offset: int=None, limit: int=None, allow_incompleted_builds=False) -> List['Build']:
+    def get_builds(self, offset: int=None, limit: int=None) -> List['Build']:
         """
         Returns a list of all builds.
         :param offset: The starting index of the requested build
@@ -88,7 +88,7 @@ class ClusterMaster(ClusterService):
         """
         num_builds = BuildStore.count_all_builds()
         start, end = get_paginated_indices(offset, limit, num_builds)
-        return BuildStore.get_range(start, end, allow_incompleted_builds=allow_incompleted_builds)
+        return BuildStore.get_range(start, end)
 
     def active_builds(self):
         """

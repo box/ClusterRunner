@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -34,7 +34,7 @@ class FailedArtifactDirectoriesSchema(Base):
     __tablename__ = 'failed_artifact_directories'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    build_id = Column(Integer)
+    build_id = Column(Integer, ForeignKey('builds.build_id'))
     failed_artifact_directory = Column(String)
 
 
@@ -43,7 +43,7 @@ class FailedSubjobAtomPairsSchema(Base):
     __tablename__ = 'failed_subjobs_atom_pairs'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    build_id = Column(Integer)
+    build_id = Column(Integer, ForeignKey('builds.build_id'))
     subjob_id = Column(Integer)
     atom_id = Column(Integer)
 
@@ -54,7 +54,7 @@ class SubjobsSchema(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     subjob_id = Column(Integer)
-    build_id = Column(Integer)
+    build_id = Column(Integer, ForeignKey('builds.build_id'))
     completed = Column(Boolean)
 
 
@@ -64,7 +64,7 @@ class AtomsSchema(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     atom_id = Column(Integer)
-    build_id = Column(Integer)
+    build_id = Column(Integer, ForeignKey('builds.build_id'))
     subjob_id = Column(Integer)
     command_string = Column(String)
     expected_time = Column(Float)
