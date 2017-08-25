@@ -588,8 +588,6 @@ class Build(object):
             if build_schema is None:
                 raise ItemNotFoundError('Unable to find build (id: {}) in database.'.format(self._build_id))
 
-            build_schema.completed = self._status() == BuildState.FINISHED
-
             build_schema.artifacts_tar_file = self._artifacts_tar_file
             build_schema.artifacts_zip_file = self._artifacts_zip_file
             build_schema.error_message = self._error_message

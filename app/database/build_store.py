@@ -61,6 +61,9 @@ class BuildStore:
             cls._logger.notice('Executing clean up process.')
             for build_id in cls._cached_builds_by_id:
                 build = cls._cached_builds_by_id[build_id]
+                # As master shuts down, mark any uncompleted jobs as failed
+                if build._status() != BuildState.FINISHED:
+                    build.mark_failed('Master service was shut down before this build could complete.')
                 build.save()
 
     @classmethod
@@ -78,7 +81,6 @@ class BuildStore:
                 build_artifact_dir = build._build_artifact.build_artifact_dir
 
             build_schema = BuildSchema(
-                completed=build._status() == BuildState.FINISHED,
                 artifacts_tar_file=build._artifacts_tar_file,
                 artifacts_zip_file=build._artifacts_zip_file,
                 error_message=build._error_message,

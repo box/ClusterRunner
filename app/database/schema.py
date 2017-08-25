@@ -10,7 +10,6 @@ class BuildSchema(Base):
     __tablename__ = 'builds'
 
     build_id = Column(Integer, primary_key=True, autoincrement=True)
-    completed = Column(Boolean)
     artifacts_tar_file = Column(String)
     artifacts_zip_file = Column(String)
     error_message = Column(String)
