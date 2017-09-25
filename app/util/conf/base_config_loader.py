@@ -1,5 +1,6 @@
+import errno
 from os.path import dirname, join, realpath, expanduser, isdir, isfile
-from os import chmod, environ
+from os import chmod, environ, strerror
 import platform
 import sys
 import shutil
@@ -149,8 +150,7 @@ class BaseConfigLoader(object):
             if isfile(cacert_file):
                 environ['REQUESTS_CA_BUNDLE'] = cacert_file
             else:
-                print('Missing SSL cacerts file {} in the frozen ClusterRunner package.'.format(cacert_file))
-                sys.exit(1)
+                raise FileNotFoundError(errno.ENOENT, strerror(errno.ENOENT), cacert_file)
 
     def _get_config_file_whitelisted_keys(self):
         """
