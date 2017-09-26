@@ -1,6 +1,7 @@
 from cx_Freeze import setup, Executable
 import os
 from os.path import dirname, join
+import requests
 import subprocess
 import sys
 
@@ -20,6 +21,7 @@ buildOptions = {
         ('bin/git_askpass.sh', 'bin/git_askpass.sh'),
         ('bin/git_ssh.sh', 'bin/git_ssh.sh'),
         ('conf/default_clusterrunner.conf', 'conf/default_clusterrunner.conf'),
+        (requests.certs.where(), 'cacert.pem'),
     ],
     'optimize': 1,  # This should not be set to 2 because that removes docstrings needed for command line help.
 }

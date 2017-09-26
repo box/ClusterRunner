@@ -1,5 +1,6 @@
-from os.path import dirname, join, realpath, expanduser, isdir
-from os import chmod
+import errno
+from os.path import dirname, join, realpath, expanduser, isdir, isfile
+from os import chmod, environ, strerror
 import platform
 import sys
 import shutil
@@ -125,6 +126,8 @@ class BaseConfigLoader(object):
         # Set protocol scheme (by default it is set to 'http')
         if Configuration['https_cert_file'] and Configuration['https_key_file']:
             conf.set('protocol_scheme', 'https')
+            # Workaround to fix the SSL cacerts not found issue if running CR frozen package.
+            self._override_cacerts()
 
     def load_from_config_file(self, config, config_filename):
         """
@@ -134,6 +137,20 @@ class BaseConfigLoader(object):
         self._load_section_from_config_file(config, config_filename, BASE_CONFIG_FILE_SECTION)
         if self.CONFIG_FILE_SECTION:
             self._load_section_from_config_file(config, config_filename, self.CONFIG_FILE_SECTION)
+
+    def _override_cacerts(self):
+        """
+        Override path for requests certs if this is a frozen executable run.
+        SSL cacerts cannot be found when running frozen CR package. Workaround the issue by bundling the cacert.pem
+        file into frozen package and at startup update the environment to point to these cacerts.
+        """
+        if getattr(sys, 'frozen', False):
+            root_directory = dirname(sys.executable)
+            cacert_file = '{}/cacert.pem'.format(root_directory)
+            if isfile(cacert_file):
+                environ['REQUESTS_CA_BUNDLE'] = cacert_file
+            else:
+                raise FileNotFoundError(errno.ENOENT, strerror(errno.ENOENT), cacert_file)
 
     def _get_config_file_whitelisted_keys(self):
         """
