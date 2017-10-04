@@ -76,6 +76,21 @@ def Popen_with_delayed_expansion(cmd, *args, **kwargs):
         else:
             cmd_with_deplayed_expansion.extend(cmd)
         cmd = cmd_with_deplayed_expansion
+    else:
+        # Ordinarily, if you pipe commands in bash (eg "cmd1 | cmd2 | cmd3")
+        # and the rightmost command succeeds, the whole command will succeed
+        # even if one of the earlier commands fail. This is potentially
+        # problematic. See https://github.com/box/ClusterRunner/issues/321 for
+        # an example. To prevent this, set bash's pipefail option
+        should_set_pipefail = (
+            kwargs.get('shell') is True and
+            kwargs.get('executabe') in [None, '/bin/bash'] and
+            os.path.exists('/bin/bash') and
+            isinstance(cmd, str)
+        )
+        if should_set_pipefail:
+            kwargs['executable'] = '/bin/bash'
+            cmd = 'set -o pipefail; ' + cmd
     return subprocess.Popen(cmd, *args, **kwargs)
 
 
