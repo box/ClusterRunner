@@ -40,7 +40,9 @@ class TestProcessUtils(BaseUnitTestCase):
         Popen_with_delayed_expansion(input_cmd)
 
         # Assert
-        mock_subprocess_popen.assert_called_once_with(expected_final_cmd)
+        self.assertEqual(len(mock_subprocess_popen.call_args_list), 1)
+        (cmd,), _ = mock_subprocess_popen.call_args
+        self.assertEqual(cmd, expected_final_cmd)
 
     @genty_dataset(
         windows=genty_args(
