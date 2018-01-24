@@ -87,6 +87,7 @@ class Build(object):
         # setup_failures increases beyond MAX_SETUP_FAILURES, the build is
         # cancelled
         self.setup_failures = 0
+        self._build_scheduler = None
 
     def api_representation(self):
         failed_atoms_api_representation = None
@@ -205,7 +206,10 @@ class Build(object):
             )
             atom_exit_code_file_sys_path = os.path.join(artifact_dir, BuildArtifact.EXIT_CODE_FILE)
             with open(atom_exit_code_file_sys_path, 'r') as atom_exit_code_file:
-                subjob.atoms[atom_id].exit_code = int(atom_exit_code_file.read())
+                exit_code = int(atom_exit_code_file.read())
+                subjob.atoms[atom_id].exit_code = exit_code
+                if subjob.is_canceled == False and (exit_code == -15 or exit_code == -9): # SIGTERM or SIGKILL
+                    subjob.is_canceled = True
 
     def _handle_subjob_payload(self, subjob_id, payload):
         if not payload:
@@ -240,7 +244,12 @@ class Build(object):
         :type subjob_id: int
         """
         subjob = self.subjob(subjob_id)
-        subjob.mark_completed()
+        # Update subjob completion state
+        if self.is_canceled == True:
+            subjob.mark_canceled()
+        else:
+            subjob.mark_completed()
+
         with self._build_completion_lock:
             self._finished_subjobs.put(subjob, block=False)
             should_trigger_postbuild_tasks = self._all_subjobs_are_finished() and not self.is_stopped
@@ -321,10 +330,11 @@ class Build(object):
             self._logger.warn('Build {} transitioned from state {} to state {} but never marked started timestamp for {}',
                               self._build_id, event.src, event.dst, event.src)
 
-    def cancel(self):
+    def cancel(self, build_scheduler):
         """
         Cancel a running build.
         """
+        self._build_scheduler = build_scheduler
         self._state_machine.trigger(BuildEvent.CANCEL)
 
     def _on_enter_canceled_state(self, event):
@@ -342,9 +352,17 @@ class Build(object):
         while self._unstarted_subjobs is not None and not self._unstarted_subjobs.empty():
             try:
                 # A subjob may be asynchronously pulled from this queue, so we need to avoid blocking when empty.
-                self._unstarted_subjobs.get(block=False)
+                subjob = self._unstarted_subjobs.get(block=False)
+                subjob.mark_canceled()
             except Empty:
                 break
+
+        # Hit cancel endpoint for all slaves assigned to this build
+        slaves = self._build_scheduler.get_allocated_slaves()
+        for slave in slaves:
+            slave.cancel()
+
+        self._logger.warning('Cancel request sent to all slaves allocated to build {}.', self._build_id)
 
     def validate_update_params(self, update_params):
         """
@@ -368,17 +386,19 @@ class Build(object):
             return False, {'error': message}
         return True, {}
 
-    def update_state(self, update_params):
+    def update_state(self, update_params, build_scheduler):
         """
         Make updates to the state of this build given a set of update params
         :param update_params: The keys and values to update on this build
         :type update_params: dict [str, str]
+        :param build_scheduler: Build scheduler object specific to build to be updated
+        :type build_scheduler: BuildScheduler
         """
         success = False
         for key, value in update_params.items():
             if key == 'status':
                 if value == 'canceled':
-                    self.cancel()
+                    self.cancel(build_scheduler)
                     success = True
         return success
 

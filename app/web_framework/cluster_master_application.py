@@ -37,6 +37,7 @@ class ClusterMasterApplication(ClusterApplication):
                 RouteNode(r'build', _BuildsHandler, 'builds').add_children([
                     RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
                         RouteNode(r'result', _BuildResultRedirectHandler),
+                        RouteNode(r'cancel', _BuildCancelHandler),
                         RouteNode(r'artifacts.tar.gz', _BuildTarResultHandler),
                         RouteNode(r'artifacts.zip', _BuildZipResultHandler),
                         RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
@@ -314,6 +315,14 @@ class _BuildResultRedirectHandler(_ClusterMasterBaseAPIHandler):
     """
     def get(self, build_id):
         self.redirect('/v1/build/{}/artifacts.tar.gz'.format(build_id))
+
+
+class _BuildCancelHandler(_ClusterMasterBaseAPIHandler):
+    """
+    Handle build cancel request for given build id.
+    """
+    def post(self, build_id):
+        build = self._cluster_master.handle_request_to_cancel_build(int(build_id))
 
 
 class _BuildResultHandler(ClusterBaseHandler, tornado.web.StaticFileHandler):

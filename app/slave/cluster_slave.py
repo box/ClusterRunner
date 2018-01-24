@@ -156,6 +156,40 @@ class ClusterSlave(ClusterService):
             name='Bld{}-Teardwn'.format(build_id)
         ).start()
 
+    def cancel_build(self, build_id=None):
+        """
+        Called as part of handling build cancel request.
+
+        :param build_id: The build id to cancel -- this parameter is used solely for correctness checking of the
+            master, to make sure that the master is not erroneously sending cancel commands for other builds.
+        :type build_id: int | None
+        """
+        if self._current_build_id is None:
+            raise BadRequestError('Tried to cancel a build but no build is active on this slave.')
+
+        if build_id is not None and build_id != self._current_build_id:
+            raise BadRequestError('Tried to cancel build {}, '
+                                  'but slave is running build {}!'.format(build_id, self._current_build_id))
+
+        self._logger.warning('Canceling subjob for build {}.', build_id)
+        SafeThread(
+            target=self._async_cancel_build,
+            name='Bld{}-Cancel'.format(build_id)
+        ).start()
+
+    def _async_cancel_build(self):
+        """
+        Called from cancel_build(). Do asynchronous cancel for the build.
+        """
+        self._kill_subjobs()
+
+    def _kill_subjobs(self):
+        """
+        Kill all subjob executors' processes.
+        """
+        for executor in self.executors_by_id.values():
+            executor.kill()
+
     def _async_teardown_build(self):
         """
         Called from teardown_build(). Do asynchronous teardown for the build so that we can make the call to
@@ -175,8 +209,7 @@ class ClusterSlave(ClusterService):
         :type timeout: int | None
         """
         # Kill all subjob executors' processes. This only has an effect if we are tearing down before a build completes.
-        for executor in self.executors_by_id.values():
-            executor.kill()
+        self._kill_subjobs()
 
         # Order matters! Spend the coin if it has been initialized.
         if not self._build_teardown_coin or not self._build_teardown_coin.spend() or not self._project_type:

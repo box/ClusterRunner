@@ -147,3 +147,6 @@ class BuildScheduler(object):
                 # https://github.com/box/ClusterRunner/issues/313
                 if len(self._slaves_allocated) == 0 and self.needs_more_slaves():
                     self._scheduler_pool.add_build_waiting_for_slaves(self._build)
+
+    def get_allocated_slaves(self):
+        return self._slaves_allocated

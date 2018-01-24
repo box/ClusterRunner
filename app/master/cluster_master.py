@@ -284,7 +284,19 @@ class ClusterMaster(ClusterService):
         success, response = build.validate_update_params(update_params)
         if not success:
             return success, response
-        return build.update_state(update_params), {}
+        return build.update_state(update_params, self._scheduler_pool.get(build_id)), {}
+
+    def handle_request_to_cancel_build(self, build_id):
+        """
+
+        :param build_id: Id of the build.
+        :type build_id: int
+        """
+        build = BuildStore.get(int(build_id))
+        if build is None:
+            raise ItemNotFoundError('Invalid build id.')
+
+        build.cancel(self._scheduler_pool.get(build_id))
 
     def handle_result_reported_from_slave(self, slave_url, build_id, subjob_id, payload=None):
         """

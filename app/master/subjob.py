@@ -33,6 +33,7 @@ class Subjob(object):
         self._set_atom_state(AtomState.NOT_STARTED)
         self.timings = {}  # a dict, atom_ids are the keys and seconds are the values
         self.slave = None  # The slave that had been assigned this subjob. Is None if not started.
+        self.is_canceled = False # Overall status for subjob, used for tracking if the build is canceled.
 
     def __str__(self):
         return '<subjob {} of build {}>'.format(self._subjob_id, self._build_id)
@@ -73,6 +74,12 @@ class Subjob(object):
         Mark the subjob COMPLETED, which marks the state of all the atoms of the subjob COMPLETED.
         """
         self._set_atom_state(AtomState.COMPLETED)
+
+    def mark_canceled(self):
+        """
+        Mark the subjob COMPLETED, which marks the state of all the atoms of the subjob COMPLETED.
+        """
+        self._set_atom_state(AtomState.CANCELED)
 
     def api_representation(self):
         """
