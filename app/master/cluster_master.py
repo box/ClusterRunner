@@ -1,22 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor
-import os
 from typing import List
 
 from app.common.cluster_service import ClusterService
+from app.database.connection import Connection
 from app.common.metrics import ErrorType, SlavesCollector, internal_errors
 from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
 from app.master.build_scheduler_pool import BuildSchedulerPool
-from app.master.build_store import BuildStore
+from app.database.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
-from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
+from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 
 class ClusterMaster(ClusterService):
@@ -35,6 +35,11 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+
+        # Initialize the database connection before we initialize a BuildStore
+        Connection.create(Configuration['database_url'])
+        UnhandledExceptionHandler.singleton().add_teardown_callback(BuildStore.clean_up)
+
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -49,9 +54,10 @@ class ClusterMaster(ClusterService):
 
         # Asynchronously delete (but immediately rename) all old builds when master starts.
         # Remove this if/when build numbers are unique across master starts/stops
-        if os.path.exists(self._master_results_path):
-            fs.async_delete(self._master_results_path)
-        fs.create_dir(self._master_results_path)
+        # TODO: We can remove this code since we persist builds across master restarts
+        # if os.path.exists(self._master_results_path):
+        #     fs.async_delete(self._master_results_path)
+        # fs.create_dir(self._master_results_path)
 
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
 
@@ -80,7 +86,7 @@ class ClusterMaster(ClusterService):
         :param offset: The starting index of the requested build
         :param limit: The number of builds requested
         """
-        num_builds = BuildStore.size()
+        num_builds = BuildStore.count_all_builds()
         start, end = get_paginated_indices(offset, limit, num_builds)
         return BuildStore.get_range(start, end)
 

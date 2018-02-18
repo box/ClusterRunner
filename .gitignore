@@ -50,3 +50,9 @@ slave_results/
 
 # virtualenv
 .python-version
+
+# Database files
+*.db
+
+# Misc.
+.DS_Store

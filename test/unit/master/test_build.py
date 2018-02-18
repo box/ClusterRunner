@@ -36,6 +36,7 @@ class TestBuild(BaseUnitTestCase):
         Configuration['results_directory'] = abspath(join('some', 'temp', 'directory'))
 
         self.patch('app.master.build.BuildArtifact.__new__')  # patch __new__ to mock instances but keep static methods
+        self.patch('app.master.build.Build.save').return_value = None  # Avoid establishing a connection to db
         self.mock_util = self.patch('app.master.build.app.util')  # stub out util - it often interacts with the fs
         self.mock_open = self.patch('app.master.build.open', autospec=False, create=True)
         self.mock_listdir = self.patch('os.listdir')
@@ -492,6 +493,10 @@ class TestBuild(BaseUnitTestCase):
         :rtype: Build
         """
         build = Build(BuildRequest(build_parameters={}))
+
+        # Manually set build_id to one since this is usually set by the BuildStore
+        build._build_id = 1
+
         if build_status is None:
             return build
 

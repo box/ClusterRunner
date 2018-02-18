@@ -11,11 +11,16 @@ import tempfile
 import requests
 
 from app.client.cluster_api_client import ClusterMasterAPIClient, ClusterSlaveAPIClient
+from app.database.connection import Connection
 from app.util import log, poll, process_utils
 from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION
 from app.util.conf.config_file import ConfigFile
 from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
+
+
+TEST_DB_NAME = 'functional_test_cluster.db'
+TEST_DB_URL = 'sqlite:///{}'.format(TEST_DB_NAME)
 
 
 class FunctionalTestCluster(object):
@@ -47,6 +52,8 @@ class FunctionalTestCluster(object):
         self._master_app_base_dir = None
         self._slaves_app_base_dirs = []
 
+        Connection.create(TEST_DB_URL)
+
     @property
     def master_app_base_dir(self):
         return self._master_app_base_dir
@@ -76,6 +83,8 @@ class FunctionalTestCluster(object):
             'secret': Secret.get(),
             'base_directory': base_dir_sys_path,
             'max_log_file_size': 1024 * 5,
+            'database_name': TEST_DB_NAME,
+            'database_url': TEST_DB_URL
         }
         conf_values_to_set.update(extra_conf_vals)
         for conf_key, conf_value in conf_values_to_set.items():
@@ -302,7 +311,8 @@ class FunctionalTestCluster(object):
         """
         if self.master:
             self.master.kill()
-
+        
+        os.remove(TEST_DB_NAME)
         master, self.master = self.master, None
         return master
 

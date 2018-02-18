@@ -240,3 +240,7 @@ class TestMain(BaseUnitTestCase):
 class _ImaginaryProjectType(ProjectType):
     def __init__(self, hero_name, party_size=13):
         super().__init__()
+
+class _FakeBuildStore:
+        def clean_up(self):
+            pass
