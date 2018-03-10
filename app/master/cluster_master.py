@@ -3,7 +3,7 @@ import os
 from typing import List
 
 from app.common.cluster_service import ClusterService
-from app.common.metrics import ErrorType, SlavesCollector, internal_errors
+from app.common.metrics import SlavesCollector
 from app.master.build import Build, MAX_SETUP_FAILURES
 from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
@@ -232,7 +232,6 @@ class ClusterMaster(ClusterService):
 
         :type slave: Slave
         """
-        internal_errors.labels(ErrorType.SetupBuildFailure).inc()  # pylint: disable=no-member
         build = self.get_build(slave.current_build_id)
         build.setup_failures += 1
         if build.setup_failures >= MAX_SETUP_FAILURES:
