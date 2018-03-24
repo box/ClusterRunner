@@ -76,6 +76,7 @@ class FunctionalTestCluster(object):
             'secret': Secret.get(),
             'base_directory': base_dir_sys_path,
             'max_log_file_size': 1024 * 5,
+            'hostname': 'localhost',  # Ensure the slave is reachable by master.
         }
         conf_values_to_set.update(extra_conf_vals)
         for conf_key, conf_value in conf_values_to_set.items():
