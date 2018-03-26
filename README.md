@@ -28,7 +28,7 @@ You can find all our official documentation at [clusterrunner.com](https://www.c
 For a quick visual overview, check out the [infographic][1] we presented at the PyCon 2015 poster session:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/box/ClusterRunner/gh-pages/img/clusterrunner_pycon_poster_2015.jpg" width="350px">
+<img src="https://cloud.box.com/shared/static/7a14br3d73in7vb75278090tnni78rag.jpg width="350px">
 </p>
 
 ## Visualize
@@ -40,8 +40,8 @@ We've open-sourced a few of the dashboards we use internally at Box for monitori
 [ClusterRunner-Dashboard](https://github.com/box-labs/ClusterRunner-Dashboard) repo for the code and documentation.
 
 <a href="https://github.com/box-labs/ClusterRunner-Dashboard" target="_blank"><p align="center">
-<img src="https://raw.githubusercontent.com/box-labs/ClusterRunner-Dashboard/master/_docs/clusterrunner.gif" width="400px">
-<img src="https://raw.githubusercontent.com/box-labs/ClusterRunner-Dashboard/master/_docs/clusterrunner_timeline.png" width="400px">
+<img src="https://cloud.box.com/shared/static/kh4gdu7u3chl61o1k5ljtx5d2wbirx9h.gif" width="400px">
+<img src="https://cloud.box.com/shared/static/vy0o8oajkud3pf5e8bw1oiifbhgmw255.png" width="400px">
 </p></a>
 
 ## Contribute
