@@ -28,7 +28,7 @@ You can find all our official documentation at [clusterrunner.com](https://www.c
 For a quick visual overview, check out the [infographic][1] we presented at the PyCon 2015 poster session:
 
 <p align="center">
-<img src="https://cloud.box.com/shared/static/7a14br3d73in7vb75278090tnni78rag.jpg width="350px">
+<img src="https://cloud.box.com/shared/static/7a14br3d73in7vb75278090tnni78rag.jpg" width="350px">
 </p>
 
 ## Visualize
