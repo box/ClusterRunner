@@ -55,7 +55,7 @@ it's easy to get started. Take a look at our open issues to get an idea of where
 
 ## Get Help
 
-We're happy to answer any questions you have around setting up ClusterRunner in your own org. Create an [new issue](https://github.com/box/ClusterRunner/issues/new) on this repo, or email oss@box.com and be sure to include 
+We're happy to answer any questions you have around setting up ClusterRunner in your own org. Create a [new issue](https://github.com/box/ClusterRunner/issues/new) on this repo, or email oss@box.com and be sure to include 
 "ClusterRunner" in the subject.
 
 ## Copyright and License
