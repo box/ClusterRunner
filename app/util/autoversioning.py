@@ -13,8 +13,8 @@ _VERSION_FILE_BACKUP_PATH = os.path.join(os.path.dirname(__file__), 'package_ver
 
 def get_version():
     """
-    Get the version of the application. This method should return the correct version in both the frozen and unfrozen
-    (running from cloned source) cases.
+    Get the version of the application. This method should return the correct version in both the
+    packaged and local (running inside the git repo) cases.
 
     :return: The version of the application
     :rtype: str
@@ -26,11 +26,12 @@ def get_version():
 def _try_rename(src, dst):
     try:
         os.rename(src, dst)
+        return True
     except (FileExistsError, FileNotFoundError):
         # Skip backing up the original package_version.py if a FileExistsError or FileNotFoundError happened.
         # FileExistsError might happen on Windows as NTFS doesn't support writing to a file while the file
         # is opened in python.
-        pass
+        return False
 
 
 def _try_remove(src):
@@ -42,12 +43,14 @@ def _try_remove(src):
 
 def write_package_version_file(package_version_string):
     """
-    Write the specfied version string to package_version.py. This method is intended to be called during the process of
-    freezing a package for release. This in-effect hard codes the version into the frozen package.
+    Write the specified version string to package_version.py. This method is intended to be called
+    during the process of freezing a package for release. This in-effect hard codes the version into
+    the dist package.
 
     This also backs up the original file, which can be restored with another method in this module.
 
-    :param package_version_string: The version to write to the file -- presumably the output of get_version()
+    :param package_version_string: The version to write to the file -- presumably the output of
+                                   get_version()
     :type package_version_string: str
     """
     package_version_file_contents = 'version = "{}"  # DO NOT COMMIT\n'.format(package_version_string)
@@ -58,18 +61,21 @@ def write_package_version_file(package_version_string):
 
 def restore_original_package_version_file():
     """
-    Restore the backed up version of package_version.py. This is just a convenience method to help us remember not to
-    commit changes to the package version file.
+    Restore the backed up version of package_version.py. This is just a convenience method to help
+    us remember not to commit changes to the package version file.
     """
-    _try_rename(_VERSION_FILE_BACKUP_PATH, _VERSION_FILE_PATH)
+    if not _try_rename(_VERSION_FILE_BACKUP_PATH, _VERSION_FILE_PATH):
+        # Ensure the temp file is removed if there was no backup copy.
+        os.remove(_VERSION_FILE_PATH)
 
 
 def _get_frozen_package_version():
     """
-    Return the hard coded version from package_version.py. The package_version module is only populated with the actual
-    version during the freeze process, so this method only returns the correct version if run from a frozen package.
+    Return the hard coded version from package_version.py. The package_version module is only
+    populated with the actual version during the dist process, so this method only returns the
+    correct version if run from the output package.
 
-    :return: The version of the (frozen) application
+    :return: The version of the packaged application
     :rtype: str
     """
 
@@ -84,10 +90,13 @@ def _get_frozen_package_version():
 
 def _calculate_source_version():
     """
-    Calculate the version using a scheme based off of git repo info. Note that since this depends on the git history,
-    this will *not* work from a frozen package (which does not include the git repo data). This will only work in the
-    context of running the application from the cloned git repo.
-    If this is running outside of a git repo, it will handle the CalledProcessError exception and return None.
+    Calculate the version using a scheme based off of git repo info. Note that since this depends on
+    the git history, this will *not* work from a distribution package (which does not include the
+    git repo data). This will only work in the context of running the application from the cloned
+    git repo.
+
+    If this is running outside of a git repo, it will handle the CalledProcessError exception and
+    return None.
 
     :return: The version of the (source) application
     :rtype: str

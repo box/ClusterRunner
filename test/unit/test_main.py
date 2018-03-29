@@ -8,7 +8,7 @@ from app.project_type.project_type import ProjectType
 from app.subcommands.build_subcommand import BuildSubcommand
 from app.util.conf.configuration import Configuration
 from app.util.secret import Secret
-import main
+from app import __main__ as main
 from test.framework.base_unit_test_case import BaseUnitTestCase
 from test.framework.comparators import AnythingOfType
 
@@ -32,8 +32,8 @@ class TestMain(BaseUnitTestCase):
         self.mock_ClusterSlaveApplication = self.patch('app.subcommands.slave_subcommand.ClusterSlaveApplication')
         self.mock_BuildRunner = self.patch('app.subcommands.build_subcommand.BuildRunner')
         self.mock_ServiceRunner = self.patch('app.subcommands.build_subcommand.ServiceRunner')
-        self.mock_ConfigFile = self.patch('main.ConfigFile')
-        self.patch('main.SlaveConfigLoader')
+        self.mock_ConfigFile = self.patch('app.__main__.ConfigFile')
+        self.patch('app.__main__.SlaveConfigLoader')
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
         self.patch('app.subcommands.master_subcommand.analytics.initialize')
         self.patch('argparse._sys.stderr')  # Hack to prevent argparse from printing output during tests.
@@ -41,7 +41,7 @@ class TestMain(BaseUnitTestCase):
 
         # We want the method _start_app_force_kill_countdown mocked out for every test *except* one, so we are patching
         # this method in an uglier way that allows us to unpatch it just for that test.
-        self.start_force_kill_countdown_patcher = patch('main._start_app_force_kill_countdown')
+        self.start_force_kill_countdown_patcher = patch('app.__main__._start_app_force_kill_countdown')
         self.start_force_kill_countdown_mock = self.start_force_kill_countdown_patcher.start()
 
     def test_master_args_correctly_create_cluster_master(self):
@@ -103,7 +103,7 @@ class TestMain(BaseUnitTestCase):
         main._set_secret = Mock(side_effect=secret_setter)
         build_args = ['build', '--master-url', 'smaug:1'] + extra_args
         expected_request_params['job_name'] = None
-        self.patch('main.util.project_type_subclasses_by_name').return_value = {  # mock out project_type subclasses
+        self.patch('app.__main__.util.project_type_subclasses_by_name').return_value = {  # mock out project_type subclasses
             'imaginary': _ImaginaryProjectType,
         }
 
@@ -184,14 +184,14 @@ class TestMain(BaseUnitTestCase):
             main._parse_args(invalid_arg_set)
 
     def test_start_app_force_kill_countdown_is_called_when_app_exits_normally(self):
-        self.patch('main.MasterSubcommand')  # causes subcommand run() method to return immediately
+        self.patch('app.__main__.MasterSubcommand')  # causes subcommand run() method to return immediately
 
         main.main(['master'])
 
         self.start_force_kill_countdown_mock.assert_called_once_with(seconds=AnythingOfType(int))
 
     def test_start_app_force_kill_countdown_is_called_when_app_exits_via_unhandled_exception(self):
-        run_mock = self.patch('main.MasterSubcommand').return_value.run
+        run_mock = self.patch('app.__main__.MasterSubcommand').return_value.run
         run_mock.side_effect = Exception('I am here to trigger teardown handlers!')
 
         with self.assertRaises(SystemExit, msg='UnhandledExceptionHandler should convert Exception to SystemExit.'):
@@ -207,8 +207,8 @@ class TestMain(BaseUnitTestCase):
             os_exit_args = args
             os_exit_called_event.set()
 
-        mock_os = self.patch('main.os')
-        mock_time = self.patch('main.time')
+        mock_os = self.patch('app.__main__.os')
+        mock_time = self.patch('app.__main__.time')
         self.start_force_kill_countdown_patcher.stop()  # unpatch this method so we can test it
         pid_of_self = 12345
         sleep_duration = 15

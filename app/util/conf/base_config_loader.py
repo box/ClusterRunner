@@ -1,6 +1,5 @@
-import errno
-from os.path import dirname, join, realpath, expanduser, isdir, isfile
-from os import chmod, environ, strerror
+from os.path import dirname, join, realpath, expanduser, isdir
+from os import chmod
 import platform
 import sys
 import shutil
@@ -19,19 +18,16 @@ class BaseConfigLoader(object):
 
     def configure_defaults(self, conf):
         """
-        This is the base configuration. All default configuration values belong here. These values may be overridden by
-        other configurations.
+        This is the base configuration. All default configuration values belong here. These values
+        may be overridden by other configurations.
         :type conf: Configuration
         """
-        if getattr(sys, 'frozen', False):
-            root_directory = dirname(sys.executable)  # frozen
-        else:
-            root_directory = dirname(dirname(dirname(dirname(realpath(__file__)))))  # unfrozen
+        root_directory = dirname(dirname(dirname(dirname(realpath(__file__)))))
 
         conf.set('secret', None)  # This must be overridden by conf or the service will not start for security reasons
 
         conf.set('root_directory', root_directory)  # the root directory of the application
-        conf.set('main_executable_path', sys.argv[0])
+        conf.set('main_executable_path', self._main_exec_path())
         conf.set('version', autoversioning.get_version())
 
         # If the user installed ClusterRunner manually, the directories used by the manual install should take
@@ -126,8 +122,6 @@ class BaseConfigLoader(object):
         # Set protocol scheme (by default it is set to 'http')
         if Configuration['https_cert_file'] and Configuration['https_key_file']:
             conf.set('protocol_scheme', 'https')
-            # Workaround to fix the SSL cacerts not found issue if running CR frozen package.
-            self._override_cacerts()
 
     def load_from_config_file(self, config, config_filename):
         """
@@ -137,20 +131,6 @@ class BaseConfigLoader(object):
         self._load_section_from_config_file(config, config_filename, BASE_CONFIG_FILE_SECTION)
         if self.CONFIG_FILE_SECTION:
             self._load_section_from_config_file(config, config_filename, self.CONFIG_FILE_SECTION)
-
-    def _override_cacerts(self):
-        """
-        Override path for requests certs if this is a frozen executable run.
-        SSL cacerts cannot be found when running frozen CR package. Workaround the issue by bundling the cacert.pem
-        file into frozen package and at startup update the environment to point to these cacerts.
-        """
-        if getattr(sys, 'frozen', False):
-            root_directory = dirname(sys.executable)
-            cacert_file = '{}/cacert.pem'.format(root_directory)
-            if isfile(cacert_file):
-                environ['REQUESTS_CA_BUNDLE'] = cacert_file
-            else:
-                raise FileNotFoundError(errno.ENOENT, strerror(errno.ENOENT), cacert_file)
 
     def _get_config_file_whitelisted_keys(self):
         """
@@ -239,6 +219,24 @@ class BaseConfigLoader(object):
             if value.startswith('~'):
                 value = expanduser(value)
             config.set(key, value)
+
+    def _main_exec_path(self):
+        """Detect the exec command when ClusterRunner is started with 'python -m app'."""
+        # argv[0] is the script name (it is operating system dependent whether this is a full
+        # pathname or not). If the command was executed using the -c command line option to the
+        # interpreter, argv[0] is set to the string '-c'. For example:
+        #
+        # Command                   argv[0]
+        # -------                   -------
+        # clusterrunner             clusterrunner
+        # python clusterrunner      clusterrunner
+        # python -m app             /Users/{user}/src/ClusterRunner/app/__main__.py
+        cmd = sys.argv[0]
+        if '__main__.py' in cmd:
+            return [sys.executable, '-m', 'app']
+        # Always append the absolution path to the current python executable (sys.executable) to
+        # ensure all subprocess run with the same desired python version.
+        return [sys.executable, cmd]
 
 
 class InvalidConfigError(Exception):
