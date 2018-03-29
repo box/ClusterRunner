@@ -3,6 +3,7 @@ from queue import Queue
 import sys
 import time
 
+from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 
 from app.common.cluster_service import ClusterService
@@ -55,6 +56,26 @@ class ClusterSlave(ClusterService):
         self._current_build_id = None
         self._build_teardown_coin = None
         self._base_executor_index = None
+
+        self._timeout_threahold = 3
+        self._heartbeat_frequency = 10
+        self.scheduler = None
+        self._heartbeat_job = None
+        print("heartbeat will run every {} seconds".format(self._heartbeat_frequency))
+
+    def configure_heartbeat(self):
+        self.scheduler = BackgroundScheduler()
+        self._heartbeat_job = self.scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
+        return self.scheduler
+
+    def heartbeat(self):
+        state_url = self._master_api.url('slave', self._slave_id, 'heartbeat')
+        try:
+            self._network.post_with_digest(state_url, request_params={'slave': {'heartbeat': True}},
+                                           secret=Secret.get())
+        except (requests.ConnectionError, requests.Timeout):
+            self._logger.warning('Master is not responding to heartbeats')
+            self._heartbeat_job.remove()
 
     def api_representation(self):
         """
