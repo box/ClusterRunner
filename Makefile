@@ -10,6 +10,7 @@ all: lint test
 lint: pylint pep8
 test: test-unit test-integration test-functional
 
+.PHONY: .pre-init
 .pre-init:
 	pip install --upgrade pip
 	@# Constrain setuptools because pylint is not compatible with newer versions.
@@ -56,13 +57,16 @@ test-functional:
 	$(call print_msg, Running functional tests... )
 	nosetests -s -v test/functional
 
-# Use platform flag to build multi-platform pex (requires platform wheels).
-# --platform=macosx-10.12-x86_64 --platform=linux_x86_64 --platform=win64_amd
+# TODO: Use platform flag to build multi-platform pex (requires platform wheels).
+#       --platform=macosx-10.12-x86_64
+#       --platform=linux_x86_64
+#       --platform=win64_amd
 WHEEL_CACHE := $(PWD)/dist/wheels
 PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE)
 
 clean:
-	rm -rf *.egg-info build      # Remove to prevent caching of setup.py and MANIFEST.in
+	@# Remove to prevent caching of setup.py and MANIFEST.in
+	rm -rf *.egg-info build
 	rm -rf $(WHEEL_CACHE) $(BIN)
 
 # INFO: The use of multiple targets (before the :) in the next sections enable
@@ -82,3 +86,16 @@ pex $(BIN): $(WHEEL_CACHE)
 	@# Do not cache the ClusterRunner build.
 	rm -f $(WHEEL_CACHE)/ClusterRunner*
 	./setup.py bdist_pex --bdist-all --pex-args="$(PEX_ARGS)"
+
+RPM_DESCRIPTION   = $(shell python ./setup.py --description   2>/dev/null)
+RPM_LICENSE       = $(shell python ./setup.py --license       2>/dev/null)
+RPM_NAME          = $(shell python ./setup.py --name          2>/dev/null)
+RPM_URL           = $(shell python ./setup.py --url           2>/dev/null)
+RPM_VENDOR        = $(shell python ./setup.py --contact       2>/dev/null)
+RPM_VENDOR_EMAIL  = $(shell python ./setup.py --contact-email 2>/dev/null)
+RPM_VERSION       = $(shell python ./setup.py --version       2>/dev/null)
+
+rpm: $(BIN)
+	@# -s dir   	directory source type
+	@# -t rpm 		rpm output type
+	fpm -s dir -t rpm --name clusterrunner --version 1.0.0 dist/
