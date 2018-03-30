@@ -57,7 +57,8 @@ class ClusterMasterApplication(ClusterApplication):
                         RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown'),
                         RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
                     ]),
-                    RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown')
+                    RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown'),
+                    RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
                 ]),
                 RouteNode(r'eventlog', _EventlogHandler)])]
 
@@ -88,6 +89,7 @@ class ClusterMasterApplication(ClusterApplication):
                     RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
                 ]),
                 RouteNode(r'shutdown', _SlavesShutdownHandler),
+                RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
             ]),
             RouteNode(r'eventlog', _EventlogHandler)]
 
@@ -421,11 +423,15 @@ class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
 
         self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)
 
+
 class _SlavesHeartbeatHandler(_ClusterMasterBaseAPIHandler):
     def get(self):
-        self.write({'message': 'heartbeat API'})
+        response = {
+            'slaves': [slave.api_representation() for slave in self._cluster_master.all_slaves_by_id().values()]
+        }
+        self.write(response)
 
     @authenticated
     def post(self, slave_id):
-        print('Received heartbeat from slave', slave_id)
+        self._cluster_master.receive_heartbeat_from_slave(slave_id)
         self.write({'message': 'heartbeat API POST'})

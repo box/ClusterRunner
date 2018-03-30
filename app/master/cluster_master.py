@@ -1,7 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
+import datetime
 import os
+
 from typing import List
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from app.common.cluster_service import ClusterService
 from app.common.metrics import SlavesCollector
 from app.master.build import Build, MAX_SETUP_FAILURES
@@ -12,9 +15,9 @@ from app.master.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
+from app.util import fs
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
-from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 
@@ -35,6 +38,10 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+
+        self._heartbeat_frequency = 30
+        self._scheduler = None
+        self._heartbeat_job = None
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -54,6 +61,23 @@ class ClusterMaster(ClusterService):
         fs.create_dir(self._master_results_path)
 
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
+
+    def configure_heartbeat(self):
+        self._scheduler = BackgroundScheduler()
+        self._heartbeat_job = self._scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
+        return self._scheduler
+
+    def heartbeat(self):
+        t = datetime.datetime.now()
+        slaves_to_disconnect = []
+        for slave in self._all_slaves_by_url.values():
+            if slave.is_alive() and not slave.is_responsive(t, self._heartbeat_frequency):
+                slaves_to_disconnect.append(slave)
+
+        for slave in slaves_to_disconnect:
+            self._disconnect_slave(slave)
+            self._logger.warning('Slave {} marked offline as it is not sending heartbeats.'.format(
+                slave.id))
 
     def _get_status(self):
         """
@@ -334,3 +358,9 @@ class ClusterMaster(ClusterService):
             raise ItemNotReadyError('Build artifact file is not yet ready. Try again later.')
 
         return archive_file
+
+    def receive_heartbeat_from_slave(self, slave_id):
+        self._thread_pool_executor.submit(self._async_receive_heartbeat_from_slave(int(slave_id)))
+
+    def _async_receive_heartbeat_from_slave(self, slave_id):
+        self.get_slave(slave_id).set_heartbeat(datetime.datetime.now())

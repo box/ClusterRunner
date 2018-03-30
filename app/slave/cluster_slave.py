@@ -58,10 +58,10 @@ class ClusterSlave(ClusterService):
         self._base_executor_index = None
 
         self._timeout_threahold = 3
-        self._heartbeat_frequency = 10
+        self._heartbeat_frequency = 5
         self.scheduler = None
         self._heartbeat_job = None
-        print("heartbeat will run every {} seconds".format(self._heartbeat_frequency))
+        self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_frequency))
 
     def configure_heartbeat(self):
         self.scheduler = BackgroundScheduler()

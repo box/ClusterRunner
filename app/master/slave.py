@@ -26,6 +26,7 @@ class Slave:
         self._num_executors_in_use = Counter()
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
+        self._heartbeat = None
         self._is_alive = True
         self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
@@ -235,6 +236,14 @@ class Slave:
             headers[SessionId.EXPECTED_SESSION_HEADER_KEY] = self._session_id
 
         return headers
+
+    def set_heartbeat(self, time):
+        self._heartbeat = time
+
+    def is_responsive(self, time, heartbeat_frequency):
+        if (time - self._heartbeat).seconds > heartbeat_frequency:
+            return False
+        return True
 
 
 class SlaveError(Exception):

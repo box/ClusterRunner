@@ -159,6 +159,7 @@ class TestClusterSlave(BaseUnitTestCase):
             return _get_success_mock_response()
 
         self.mock_network.post = fake_network_post
+        self.mock_network.post_with_digest = fake_network_post
         self.mock_network.put = fake_network_put
         self.mock_network.put_with_digest = fake_network_put
         return subjob_done_event, teardown_done_event, setup_done_event
@@ -236,6 +237,25 @@ class TestClusterSlave(BaseUnitTestCase):
             slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, atomic_commands=[])
 
         executor.execute_subjob.assert_called_with(1, 2, [], 12)
+
+    @genty_dataset(
+        responsive_master=(True,),
+        unresponsive_master=(False,),
+    )
+    def test_heartbeat_sends_post_to_master(self, is_master_responsive):
+        expected_slave_heartbeat_url = 'http://{}/v1/slave/1/heartbeat'.format(self._FAKE_MASTER_URL)
+        slave = self._create_cluster_slave()
+        slave.connect_to_master(self._FAKE_MASTER_URL)
+        if not is_master_responsive:
+            slave._heartbeat_job = Mock()
+
+            self.mock_network.post_with_digest.side_effect = requests.ConnectionError
+        slave.heartbeat()
+        if is_master_responsive:
+            self.mock_network.post_with_digest.assert_called_once_with(
+                expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
+        else:
+            slave._heartbeat_job.remove.assert_called_once()
 
     def _create_cluster_slave(self, **kwargs):
         """

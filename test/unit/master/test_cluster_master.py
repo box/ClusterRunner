@@ -213,6 +213,38 @@ class TestClusterMaster(BaseUnitTestCase):
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
 
+    def test_async_receive_heartbeat_from_slave_calls_set_heartbeat_for_the_slave(self):
+        master = ClusterMaster()
+        slave_url = "url"
+        slave_id = master.connect_slave(slave_url, 1)
+        slave = Mock()
+        master.get_slave = MagicMock(return_value=slave)
+        master._async_receive_heartbeat_from_slave(slave_id['slave_id'])
+        master.get_slave.assert_called_with(slave_id['slave_id'])
+        self.assertEqual(slave.set_heartbeat.call_count, 1, 'incoming heartbeat sets timestamp for correct slave')
+
+    @genty_dataset (
+        slave_unresponsive=(True,False,),
+        slave_dead=(False,True,),
+        slave_responsive=(True,True,),
+    )
+    def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, slave_responsive):
+        master = ClusterMaster()
+        slave_url = "url"
+        slave = master.connect_slave(slave_url, 1)
+        slave = master.get_slave(int(slave['slave_id']))
+
+        slave.is_alive = MagicMock(return_value=slave_alive)
+        slave.is_responsive = MagicMock(return_value=slave_responsive)
+        master._disconnect_slave = Mock()
+
+        master.heartbeat()
+        if slave_alive and not slave_responsive:
+            master._disconnect_slave.assert_called_once_with(slave)
+        else:
+            self.assertEqual(master._disconnect_slave.call_count, 0,
+                             'master should not disconnect a dead or responsive slave')
+
     def test_handle_result_reported_from_slave_when_build_is_canceled(self):
         build_id = 1
         slave_url = "url"
@@ -390,7 +422,6 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(id_of_last_subjob, expected_last_subjob_id, 'Received the wrong last subjob from request')
         if offset is not None and limit is not None:
             self.assertLessEqual(num_subjobs, self._PAGINATION_MAX_LIMIT, 'Received too many subjobs from request')
-
 
 
     @genty_dataset(

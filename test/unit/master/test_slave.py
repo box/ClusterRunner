@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import Mock, MagicMock, ANY
 
 from app.master.build import Build
@@ -209,6 +210,18 @@ class TestSlave(BaseUnitTestCase):
                          'A correct POST call should be sent to slave to start a subjob.')
         self.assertEqual(post_body, {'atomic_commands': AnythingOfType(list)},
                          'Call to start subjob should contain list of atomic_commands for this subjob.')
+
+    def test_is_responsive_returns_true_if_heartbeat_was_received(self):
+        slave = self._create_slave()
+        t = datetime.datetime.now()
+        slave.set_heartbeat(t)
+        self.assertTrue(slave.is_responsive(t + datetime.timedelta(seconds=5),10))
+
+    def test_is_responsive_returns_false_if_heartbeat_was_not_received(self):
+        slave = self._create_slave()
+        t = datetime.datetime.now()
+        slave.set_heartbeat(t)
+        self.assertFalse(slave.is_responsive(t + datetime.timedelta(seconds=15),10))
 
     def _create_slave(self, **kwargs) -> Slave:
         """
