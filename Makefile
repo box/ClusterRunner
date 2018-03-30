@@ -7,7 +7,7 @@ BIN := dist/clusterrunner
 print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
 
 all: lint test
-lint: pylint pep8
+lint: pep8 pylint
 test: test-unit test-integration test-functional
 
 .PHONY: .pre-init
@@ -30,7 +30,7 @@ pylint:
 
 pep8:
 	$(call print_msg, Running pep8... )
-	pep8 --max-line-length=160 app
+	pep8 --max-line-length=145 app
 
 test-unit:
 	$(call print_msg, Running unit tests... )

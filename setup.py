@@ -6,7 +6,6 @@ from setuptools import find_packages, setup
 from app.util import autoversioning
 
 version = autoversioning.get_version()
-autoversioning.write_package_version_file(version)
 
 # bdist_pex runs in a temp dir, therefore requirements.txt must be added to data_files.
 requirements = [str(r.req) for r in parse_requirements('requirements.txt', session=False)]
@@ -36,5 +35,3 @@ setup(
         'console_scripts': ['{} = app.__main__:main'.format(name)],
     },
 )
-
-autoversioning.restore_original_package_version_file()
