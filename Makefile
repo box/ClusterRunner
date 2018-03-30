@@ -1,7 +1,9 @@
 .PHONY: all lint test init pylint pep8 test-unit test-unit-via-clusterrunner test-functional
 .PHONY: clean wheels pex
 
-BIN := dist/clusterrunner
+DISTDIR := ./dist
+CR_BIN  := $(DISTDIR)/clusterrunner
+CR_CONF := ./conf/default_clusterrunner.conf
 
 # Macro for printing a colored message to stdout
 print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
@@ -48,10 +50,10 @@ test-integration-with-coverage:
 	$(call print_msg, Running unit tests with coverage... )
 	nosetests -v --with-xcoverage --cover-package=app test/integration
 
-test-unit-via-clusterrunner: $(BIN)
+test-unit-via-clusterrunner: $(CR_BIN)
 	$(call print_msg, Running unit tests via ClusterRunner... )
-	python $(BIN) build --job-name Unit
-	python $(BIN) stop
+	python $(CR_BIN) build --job-name Unit
+	python $(CR_BIN) stop
 
 test-functional:
 	$(call print_msg, Running functional tests... )
@@ -61,13 +63,8 @@ test-functional:
 #       --platform=macosx-10.12-x86_64
 #       --platform=linux_x86_64
 #       --platform=win64_amd
-WHEEL_CACHE := $(PWD)/dist/wheels
+WHEEL_CACHE := $(PWD)/$(DISTDIR)/wheels
 PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE)
-
-clean:
-	@# Remove to prevent caching of setup.py and MANIFEST.in
-	rm -rf *.egg-info build
-	rm -rf $(WHEEL_CACHE) $(BIN)
 
 # INFO: The use of multiple targets (before the :) in the next sections enable
 #       a technique for setting some targets to "phony" so they will always
@@ -81,21 +78,49 @@ wheels $(WHEEL_CACHE): requirements.txt
 	mkdir -p $(WHEEL_CACHE)
 	pip wheel -r requirements.txt --wheel-dir $(WHEEL_CACHE)
 
-pex $(BIN): $(WHEEL_CACHE)
+pex $(CR_BIN): $(WHEEL_CACHE)
 	$(call print_msg, Running pex... )
 	@# Do not cache the ClusterRunner build.
-	rm -f $(WHEEL_CACHE)/ClusterRunner*
+	rm -f $(WHEEL_CACHE)/clusterrunner*
 	./setup.py bdist_pex --bdist-all --pex-args="$(PEX_ARGS)"
 
-RPM_DESCRIPTION   = $(shell python ./setup.py --description   2>/dev/null)
-RPM_LICENSE       = $(shell python ./setup.py --license       2>/dev/null)
-RPM_NAME          = $(shell python ./setup.py --name          2>/dev/null)
-RPM_URL           = $(shell python ./setup.py --url           2>/dev/null)
-RPM_VENDOR        = $(shell python ./setup.py --contact       2>/dev/null)
-RPM_VENDOR_EMAIL  = $(shell python ./setup.py --contact-email 2>/dev/null)
-RPM_VERSION       = $(shell python ./setup.py --version       2>/dev/null)
+# RPM package defaults
+RPM_BASE_DIR    := /var/lib/clusterrunner
+RPM_CR_CONF     := $(RPM_BASE_DIR)/clusterrunner.conf
+RPM_DEPENDS     := python34u git
+RPM_USER        := jenkins
+RPM_GROUP       := engineering
+RPM_PREINSTALL  := conf/preinstall.rpm
+# Auto-detect packaging info from python setup.py
+RPM_DESCRIPTION = $(shell python ./setup.py --description  2>/dev/null)
+RPM_LICENSE     = $(shell python ./setup.py --license      2>/dev/null)
+RPM_NAME        = $(shell python ./setup.py --name         2>/dev/null)
+RPM_URL         = $(shell python ./setup.py --url          2>/dev/null)
+RPM_VENDOR      = $(shell python ./setup.py --contact      2>/dev/null)
+RPM_VERSION     = $(shell python ./setup.py --version      2>/dev/null)
+# Collect all package info fields into fpm args
+FPM_INFO_ARGS   = --name $(RPM_NAME) --version $(RPM_VERSION) \
+	--license "$(RPM_LICENSE)" --description "$(RPM_DESCRIPTION)" \
+	--vendor "$(RPM_VENDOR)" --maintainer "$(RPM_VENDOR)" --url $(RPM_URL)
+# Expand all dependencies into fpm args
+FPM_DEPEND_ARGS = $(addprefix --depends , $(RPM_DEPENDS))
 
-rpm: $(BIN)
-	@# -s dir   	directory source type
-	@# -t rpm 		rpm output type
-	fpm -s dir -t rpm --name clusterrunner --version 1.0.0 dist/
+.PHONY: rpm
+rpm: $(CR_BIN)
+	rm -f $(DISTDIR)/*.rpm
+	fpm -s dir -t rpm $(FPM_INFO_ARGS) $(FPM_DEPEND_ARGS) \
+		--package $(DISTDIR) \
+		--config-files $(RPM_CR_CONF) \
+		--rpm-tag "Requires(pre): shadow-utils" \
+		--pre-install $(RPM_PREINSTALL) \
+		--directories $(RPM_BASE_DIR) \
+		--rpm-attr 0600,$(RPM_USER),$(RPM_GROUP):$(RPM_CR_CONF) \
+		--rpm-attr -,$(RPM_USER),$(RPM_GROUP):$(RPM_BASE_DIR) \
+		$(CR_BIN)=/usr/bin/ \
+		$(CR_CONF)=$(RPM_CR_CONF) \
+		conf/clusterrunner-master=/etc/init.d/
+
+clean:
+	@# Remove to prevent caching of setup.py and MANIFEST.in
+	rm -rf *.egg-info build
+	rm -rf $(WHEEL_CACHE) $(CR_BIN)
