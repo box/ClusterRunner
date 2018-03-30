@@ -9,7 +9,8 @@ from prometheus_client.core import GaugeMetricFamily
 http_request_duration_seconds = Histogram(  # pylint: disable=no-value-for-parameter
     'http_request_duration_seconds',
     'Latency of HTTP requests in seconds',
-    ['method', 'endpoint', 'status'])
+    ['method', 'endpoint', 'status'],
+    buckets=(.005, .01, .05, .1, .25, .5, 1.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, float('inf')))
 
 build_state_duration_seconds = Histogram(  # pylint: disable=no-value-for-parameter
     'build_state_duration_seconds',
