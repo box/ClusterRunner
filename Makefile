@@ -64,7 +64,11 @@ test-functional:
 #       --platform=linux_x86_64
 #       --platform=win64_amd
 WHEEL_CACHE := $(PWD)/$(DISTDIR)/wheels
-PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE)
+
+# Pex will source all wheel dependencies from the WHEEL_CACHE. It is necessary
+# to set the Cache TTL to 0 so that pex will accept any matching wheel,
+# regardless of its timestamp.
+PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE) --cache-ttl=0
 
 # INFO: The use of multiple targets (before the :) in the next sections enable
 #       a technique for setting some targets to "phony" so they will always
