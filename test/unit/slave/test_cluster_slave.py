@@ -10,6 +10,7 @@ import requests.models
 
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import ClusterSlave, SlaveState
+from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
 from app.util.single_use_coin import SingleUseCoin
@@ -239,23 +240,32 @@ class TestClusterSlave(BaseUnitTestCase):
         executor.execute_subjob.assert_called_with(1, 2, [], 12)
 
     @genty_dataset(
-        responsive_master=(True,),
-        unresponsive_master=(False,),
+        responsive_master=(True,1,),
+        unresponsive_master=(False,1,),
+        unresponsive_master_retry=(False,2,),
     )
-    def test_heartbeat_sends_post_to_master(self, is_master_responsive):
+    def test_heartbeat_sends_post_to_master(self, is_master_responsive,heartbeat_count_threshold):
         expected_slave_heartbeat_url = 'http://{}/v1/slave/1/heartbeat'.format(self._FAKE_MASTER_URL)
+        Configuration['heartbeat_count_threshold'] = heartbeat_count_threshold
+
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
+        slave._heartbeat_job = Mock()
         if not is_master_responsive:
-            slave._heartbeat_job = Mock()
-
             self.mock_network.post_with_digest.side_effect = requests.ConnectionError
+
         slave.heartbeat()
+
         if is_master_responsive:
             self.mock_network.post_with_digest.assert_called_once_with(
                 expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
         else:
-            slave._heartbeat_job.remove.assert_called_once()
+            if heartbeat_count_threshold == 1:
+                self.assertEqual(slave._heartbeat_job.remove.call_count, 1,
+                                 'heartbeat job is removed when heartbeat count threshold is reached')
+            else:
+                self.assertEqual(slave._heartbeat_job.remove.call_count, 0,
+                                 'heartbeat job is not removed when heartbeat count threshold is not reached')
 
     def _create_cluster_slave(self, **kwargs):
         """

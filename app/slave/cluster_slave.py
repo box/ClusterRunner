@@ -6,6 +6,7 @@ import time
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 
+from app.util.conf.configuration import Configuration
 from app.common.cluster_service import ClusterService
 from app.project_type.project_type import SetupFailureError
 from app.slave.subjob_executor import SubjobExecutor
@@ -57,14 +58,14 @@ class ClusterSlave(ClusterService):
         self._build_teardown_coin = None
         self._base_executor_index = None
 
-        self._timeout_threahold = 3
-        self._heartbeat_frequency = 5
-        self.scheduler = None
+        self._heartbeat_count = 0
+        self._heartbeat_count_threshold = Configuration['heartbeat_count_threshold']
+        self._heartbeat_frequency = Configuration['heartbeat_frequency']
+        self.scheduler = BackgroundScheduler()
         self._heartbeat_job = None
         self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_frequency))
 
     def configure_heartbeat(self):
-        self.scheduler = BackgroundScheduler()
         self._heartbeat_job = self.scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
         return self.scheduler
 
@@ -73,9 +74,12 @@ class ClusterSlave(ClusterService):
         try:
             self._network.post_with_digest(state_url, request_params={'slave': {'heartbeat': True}},
                                            secret=Secret.get())
+            self._heartbeat_count = 0
         except (requests.ConnectionError, requests.Timeout):
-            self._logger.warning('Master is not responding to heartbeats')
-            self._heartbeat_job.remove()
+            self._heartbeat_count += 1
+            if self._heartbeat_count >= self._heartbeat_count_threshold:
+                self._logger.warning('Master is not responding to heartbeats')
+                self._heartbeat_job.remove()
 
     def api_representation(self):
         """

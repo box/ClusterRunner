@@ -1,3 +1,4 @@
+import datetime
 import requests
 
 from app.master.build import Build
@@ -26,7 +27,7 @@ class Slave:
         self._num_executors_in_use = Counter()
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
-        self._heartbeat = None
+        self._heartbeat = datetime.datetime.now()
         self._is_alive = True
         self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)

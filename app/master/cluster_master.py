@@ -39,8 +39,8 @@ class ClusterMaster(ClusterService):
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
 
-        self._heartbeat_frequency = 30
-        self._scheduler = None
+        self._heartbeat_frequency = Configuration['heartbeat_frequency'] * Configuration['heartbeat_count_threshold']
+        self._scheduler = BackgroundScheduler()
         self._heartbeat_job = None
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
@@ -63,7 +63,6 @@ class ClusterMaster(ClusterService):
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
 
     def configure_heartbeat(self):
-        self._scheduler = BackgroundScheduler()
         self._heartbeat_job = self._scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
         return self._scheduler
 
