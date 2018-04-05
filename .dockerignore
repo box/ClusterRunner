@@ -1,0 +1,9 @@
+*.egg-info/
+
+# .git/
+.python-version
+build_results/
+dist/
+test/
+
+**/__pycache__

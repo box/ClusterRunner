@@ -4,6 +4,7 @@
 DISTDIR := ./dist
 CR_BIN  := $(DISTDIR)/clusterrunner
 CR_CONF := ./conf/default_clusterrunner.conf
+CR_UNK_VERSION := 0.0   # Default CR version when git repo is missing.
 
 # Macro for printing a colored message to stdout
 print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
@@ -77,6 +78,7 @@ PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE) --cache-ttl=0
 
 # TODO: Consider using "pip download --platform" when direct downloading of
 #       cross-platform wheels is supported.
+.INTERMEDIATE: $(WHEEL_CACHE)
 wheels $(WHEEL_CACHE): requirements.txt
 	$(call print_msg, Creating wheels cache... )
 	mkdir -p $(WHEEL_CACHE)
@@ -96,21 +98,24 @@ RPM_USER        := jenkins
 RPM_GROUP       := engineering
 RPM_PREINSTALL  := conf/preinstall.rpm
 # Auto-detect packaging info from python setup.py
-RPM_DESCRIPTION = $(shell python ./setup.py --description  2>/dev/null)
-RPM_LICENSE     = $(shell python ./setup.py --license      2>/dev/null)
-RPM_NAME        = $(shell python ./setup.py --name         2>/dev/null)
-RPM_URL         = $(shell python ./setup.py --url          2>/dev/null)
-RPM_VENDOR      = $(shell python ./setup.py --contact      2>/dev/null)
-RPM_VERSION     = $(shell python ./setup.py --version      2>/dev/null)
+RPM_DESCRIPTION = $(shell python3 ./setup.py --description  2>/dev/null)
+RPM_LICENSE     = $(shell python3 ./setup.py --license      2>/dev/null)
+RPM_NAME        = $(shell python3 ./setup.py --name         2>/dev/null)
+RPM_URL         = $(shell python3 ./setup.py --url          2>/dev/null)
+RPM_VENDOR      = $(shell python3 ./setup.py --contact      2>/dev/null)
+RPM_VERSION     = $(shell python3 ./setup.py --version      2>/dev/null)
 # Collect all package info fields into fpm args
-FPM_INFO_ARGS   = --name $(RPM_NAME) --version $(RPM_VERSION) \
+FPM_INFO_ARGS   = --name "$(RPM_NAME)" --version "$(RPM_VERSION)" \
 	--license "$(RPM_LICENSE)" --description "$(RPM_DESCRIPTION)" \
-	--vendor "$(RPM_VENDOR)" --maintainer "$(RPM_VENDOR)" --url $(RPM_URL)
+	--vendor "$(RPM_VENDOR)" --maintainer "$(RPM_VENDOR)" --url "$(RPM_URL)"
 # Expand all dependencies into fpm args
 FPM_DEPEND_ARGS = $(addprefix --depends , $(RPM_DEPENDS))
 
 .PHONY: rpm
 rpm: $(CR_BIN)
+ifeq ($(RPM_VERSION), $(CR_UNK_VERSION))
+	$(error Version cannot be $(CR_UNK_VERSION))
+endif
 	rm -f $(DISTDIR)/*.rpm
 	fpm -s dir -t rpm $(FPM_INFO_ARGS) $(FPM_DEPEND_ARGS) \
 		--package $(DISTDIR) \

@@ -4,7 +4,7 @@ configobj==5.0.6
 fysom==2.1.2
 Logbook==0.7.0
 prometheus_client==0.0.19
-psutil==2.1.2
+psutil==2.2.0
 PyYAML==3.11
 requests==2.3.0
 termcolor==1.1.0
