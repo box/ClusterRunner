@@ -59,8 +59,8 @@ class ClusterSlave(ClusterService):
         self._base_executor_index = None
 
         self._heartbeat_failure_count = 0
-        self._heartbeat_failure_threshold = Configuration['heartbeat_count_threshold']
-        self._heartbeat_interval = Configuration['heartbeat_frequency']
+        self._heartbeat_failure_threshold = Configuration['heartbeat_failure_threshold']
+        self._heartbeat_interval = Configuration['heartbeat_interval']
         self._scheduler = BackgroundScheduler()
         self._heartbeat_job = None
         self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_interval))

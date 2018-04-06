@@ -111,10 +111,6 @@ class BaseConfigLoader(object):
         conf.set('pagination_limit', 20)
         conf.set('pagination_max_limit', 200)
 
-        # Default values for heartbeat configuration
-        conf.set('heartbeat_frequency', 60)
-        conf.set('heartbeat_count_threshold', 3)
-
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the paths which descend from the base_directory
@@ -183,8 +179,9 @@ class BaseConfigLoader(object):
             'default_http_timeout',
             'https_cert_file',
             'https_key_file',
-            'heartbeat_frequency',
-            'heartbeat_count_threshold'
+            'heartbeat_interval',
+            'heartbeat_failure_threshold',
+            'unresponsive_slaves_cleanup_interval',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):

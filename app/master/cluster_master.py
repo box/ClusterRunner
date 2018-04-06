@@ -39,7 +39,7 @@ class ClusterMaster(ClusterService):
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
 
-        self._heartbeat_interval = Configuration['heartbeat_frequency'] * Configuration['heartbeat_count_threshold']
+        self._unresponsive_slaves_cleanup_interval = Configuration['unresponsive_slaves_cleanup_interval']
         self._scheduler = BackgroundScheduler()
         self._heartbeat_job = None
         # The best practice for determining the number of threads to use is
@@ -64,14 +64,14 @@ class ClusterMaster(ClusterService):
 
     def configure_heartbeat(self):
         self._heartbeat_job = self._scheduler.add_job(self._disconnect_unresponsive_slaves, 'interval',
-                                                      seconds=self._heartbeat_interval)
+                                                      seconds=self._unresponsive_slaves_cleanup_interval)
         return self._scheduler
 
     def _disconnect_unresponsive_slaves(self):
         t = datetime.datetime.now()
         slaves_to_disconnect = []
         for slave in self._all_slaves_by_url.values():
-            if slave.is_alive() and not slave.is_responsive(t, self._heartbeat_interval):
+            if slave.is_alive() and not slave.is_responsive(t, self._unresponsive_slaves_cleanup_interval):
                 slaves_to_disconnect.append(slave)
 
         for slave in slaves_to_disconnect:

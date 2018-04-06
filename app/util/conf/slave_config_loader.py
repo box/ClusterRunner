@@ -25,6 +25,10 @@ class SlaveConfigLoader(BaseConfigLoader):
         # centralized hub with a single-threaded server.
         conf.set('default_http_timeout', 120)
 
+        # Default values for heartbeat configuration
+        conf.set('heartbeat_interval', 60)
+        conf.set('heartbeat_failure_threshold', 10)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the slave-specific paths which descend from the

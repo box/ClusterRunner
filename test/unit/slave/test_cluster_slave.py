@@ -11,6 +11,7 @@ import requests.models
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import ClusterSlave, SlaveState
 from app.util.conf.configuration import Configuration
+from app.util.conf.slave_config_loader import SlaveConfigLoader
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
 from app.util.single_use_coin import SingleUseCoin
@@ -27,6 +28,10 @@ class TestClusterSlave(BaseUnitTestCase):
 
     def setUp(self):
         super().setUp()
+
+        SlaveConfigLoader().configure_defaults(Configuration.singleton())
+        SlaveConfigLoader().configure_postload(Configuration.singleton())
+
         self.mock_network = self.patch('app.slave.cluster_slave.Network').return_value
         self.patch('app.util.fs.tar_directories')
 
@@ -244,9 +249,9 @@ class TestClusterSlave(BaseUnitTestCase):
         unresponsive_master=(False,1,),
         unresponsive_master_retry=(False,2,),
     )
-    def test_heartbeat_sends_post_to_master(self, is_master_responsive,heartbeat_count_threshold):
+    def test_heartbeat_sends_post_to_master(self, is_master_responsive, heartbeat_failure_threshold):
         expected_slave_heartbeat_url = 'http://{}/v1/slave/1/heartbeat'.format(self._FAKE_MASTER_URL)
-        Configuration['heartbeat_count_threshold'] = heartbeat_count_threshold
+        Configuration['heartbeat_failure_threshold'] = heartbeat_failure_threshold
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
@@ -260,7 +265,7 @@ class TestClusterSlave(BaseUnitTestCase):
             self.mock_network.post_with_digest.assert_called_once_with(
                 expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
         else:
-            if heartbeat_count_threshold == 1:
+            if heartbeat_failure_threshold == 1:
                 self.assertEqual(slave._heartbeat_job.remove.call_count, 1,
                                  'heartbeat job is removed when heartbeat count threshold is reached')
             else:
