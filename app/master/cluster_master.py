@@ -211,6 +211,9 @@ class ClusterMaster(ClusterService):
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
 
+    def update_slave_last_heartbeat_time(self, slave):
+        slave.update_last_heartbeat_time()
+
     def set_shutdown_mode_on_slaves(self, slave_ids):
         """
         :type slave_ids: list[int]
@@ -358,9 +361,3 @@ class ClusterMaster(ClusterService):
             raise ItemNotReadyError('Build artifact file is not yet ready. Try again later.')
 
         return archive_file
-
-    def receive_heartbeat_from_slave(self, slave_id):
-        self._thread_pool_executor.submit(self._async_receive_heartbeat_from_slave(int(slave_id)))
-
-    def _async_receive_heartbeat_from_slave(self, slave_id):
-        self.get_slave(slave_id).set_last_heartbeat_time()

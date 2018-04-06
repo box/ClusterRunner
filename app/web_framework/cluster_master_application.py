@@ -43,22 +43,21 @@ class ClusterMasterApplication(ClusterApplication):
                             RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                                 RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
                                     RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
-                                        RouteNode(r'console', _AtomConsoleHandler)
-                                    ])
+                                        RouteNode(r'console', _AtomConsoleHandler),
+                                    ]),
                                 ]),
-                                RouteNode(r'result', _SubjobResultHandler)
-                            ])
-                        ])
-                    ])
+                                RouteNode(r'result', _SubjobResultHandler),
+                            ]),
+                        ]),
+                    ]),
                 ]),
                 RouteNode(r'queue', _QueueHandler),
                 RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
                     RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
                         RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown'),
-                        RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
+                        RouteNode(r'heartbeat', _SlavesHeartbeatHandler),
                     ]),
                     RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown'),
-                    RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
                 ]),
                 RouteNode(r'eventlog', _EventlogHandler)])]
 
@@ -74,22 +73,21 @@ class ClusterMasterApplication(ClusterApplication):
                         RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                             RouteNode(r'atoms', _V2AtomsHandler).add_children([
                                 RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
-                                    RouteNode(r'console', _AtomConsoleHandler)
-                                ])
+                                    RouteNode(r'console', _AtomConsoleHandler),
+                                ]),
                             ]),
-                            RouteNode(r'result', _SubjobResultHandler)
-                        ])
-                    ])
-                ])
+                            RouteNode(r'result', _SubjobResultHandler),
+                        ]),
+                    ]),
+                ]),
             ]),
             RouteNode(r'queue', _QueueHandler),
             RouteNode(r'slaves', _SlavesHandler).add_children([
                 RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
                     RouteNode(r'shutdown', _SlaveShutdownHandler),
-                    RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
+                    RouteNode(r'heartbeat', _SlavesHeartbeatHandler),
                 ]),
                 RouteNode(r'shutdown', _SlavesShutdownHandler),
-                RouteNode(r'heartbeat', _SlavesHeartbeatHandler)
             ]),
             RouteNode(r'eventlog', _EventlogHandler)]
 
@@ -390,6 +388,7 @@ class _SlaveHandler(_ClusterMasterBaseAPIHandler):
         new_slave_state = self.decoded_body.get('slave', {}).get('state')
         slave = self._cluster_master.get_slave(int(slave_id))
         self._cluster_master.handle_slave_state_update(slave, new_slave_state)
+        self._cluster_master.update_slave_last_heartbeat_time(slave)
 
         self._write_status({
             'slave': slave.api_representation()
@@ -425,13 +424,7 @@ class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
 
 
 class _SlavesHeartbeatHandler(_ClusterMasterBaseAPIHandler):
-    def get(self):
-        response = {
-            'slaves': [slave.api_representation() for slave in self._cluster_master.all_slaves_by_id().values()]
-        }
-        self.write(response)
-
     @authenticated
     def post(self, slave_id):
-        self._cluster_master.receive_heartbeat_from_slave(slave_id)
-        self.write({'message': 'heartbeat API POST'})
+        slave = self._cluster_master.get_slave(int(slave_id))
+        self._cluster_master.update_slave_last_heartbeat_time(slave)

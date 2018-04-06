@@ -213,15 +213,16 @@ class TestClusterMaster(BaseUnitTestCase):
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
 
-    def test_async_receive_heartbeat_from_slave_calls_set_heartbeat_for_the_slave(self):
+    def test_update_slave_last_heartbeat_time_calls_update_last_heartbeat_time_on_slave(self):
         master = ClusterMaster()
-        slave_url = "url"
-        slave_id = master.connect_slave(slave_url, 1)
-        slave = Mock()
-        master.get_slave = MagicMock(return_value=slave)
-        master._async_receive_heartbeat_from_slave(slave_id['slave_id'])
-        master.get_slave.assert_called_with(slave_id['slave_id'])
-        self.assertEqual(slave.set_last_heartbeat_time.call_count, 1, 'incoming heartbeat sets timestamp for correct slave')
+
+        mock_slave = self.patch('app.master.cluster_master.Slave').return_value
+        # self.patch('app.master.cluster_master.Slave', new=lambda *args: mock_slave)
+        # master.connect_slave('slave_url', 1)
+        master.update_slave_last_heartbeat_time(mock_slave)
+
+        self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, 1,
+                         'last heartbeat time is updated for the target slave')
 
     @genty_dataset (
         slave_unresponsive=(True,False,),
