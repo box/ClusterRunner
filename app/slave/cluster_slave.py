@@ -58,27 +58,28 @@ class ClusterSlave(ClusterService):
         self._build_teardown_coin = None
         self._base_executor_index = None
 
-        self._heartbeat_count = 0
-        self._heartbeat_count_threshold = Configuration['heartbeat_count_threshold']
-        self._heartbeat_frequency = Configuration['heartbeat_frequency']
-        self.scheduler = BackgroundScheduler()
+        self._heartbeat_failure_count = 0
+        self._heartbeat_failure_threshold = Configuration['heartbeat_count_threshold']
+        self._heartbeat_interval = Configuration['heartbeat_frequency']
+        self._scheduler = BackgroundScheduler()
         self._heartbeat_job = None
-        self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_frequency))
+        self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_interval))
 
     def configure_heartbeat(self):
-        self._heartbeat_job = self.scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
-        return self.scheduler
+        self._heartbeat_job = self._scheduler.add_job(self._start_heartbeat, 'interval',
+                                                      seconds=self._heartbeat_interval)
+        return self._scheduler
 
-    def heartbeat(self):
-        state_url = self._master_api.url('slave', self._slave_id, 'heartbeat')
+    def _start_heartbeat(self):
+        heartbeat_url = self._master_api.url('slave', self._slave_id, 'heartbeat')
         try:
-            self._network.post_with_digest(state_url, request_params={'slave': {'heartbeat': True}},
+            self._network.post_with_digest(heartbeat_url, request_params={'slave': {'heartbeat': True}},
                                            secret=Secret.get())
-            self._heartbeat_count = 0
+            self._heartbeat_failure_count = 0
         except (requests.ConnectionError, requests.Timeout):
-            self._heartbeat_count += 1
-            if self._heartbeat_count >= self._heartbeat_count_threshold:
-                self._logger.warning('Master is not responding to heartbeats')
+            self._heartbeat_failure_count += 1
+            if self._heartbeat_failure_count >= self._heartbeat_failure_threshold:
+                self._logger.error('Master is not responding to heartbeats')
                 self._heartbeat_job.remove()
 
     def api_representation(self):

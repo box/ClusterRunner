@@ -254,7 +254,7 @@ class TestClusterSlave(BaseUnitTestCase):
         if not is_master_responsive:
             self.mock_network.post_with_digest.side_effect = requests.ConnectionError
 
-        slave.heartbeat()
+        slave._start_heartbeat()
 
         if is_master_responsive:
             self.mock_network.post_with_digest.assert_called_once_with(

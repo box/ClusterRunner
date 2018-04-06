@@ -221,7 +221,7 @@ class TestClusterMaster(BaseUnitTestCase):
         master.get_slave = MagicMock(return_value=slave)
         master._async_receive_heartbeat_from_slave(slave_id['slave_id'])
         master.get_slave.assert_called_with(slave_id['slave_id'])
-        self.assertEqual(slave.set_heartbeat.call_count, 1, 'incoming heartbeat sets timestamp for correct slave')
+        self.assertEqual(slave.set_last_heartbeat_time.call_count, 1, 'incoming heartbeat sets timestamp for correct slave')
 
     @genty_dataset (
         slave_unresponsive=(True,False,),
@@ -238,7 +238,7 @@ class TestClusterMaster(BaseUnitTestCase):
         slave.is_responsive = MagicMock(return_value=slave_responsive)
         master._disconnect_slave = Mock()
 
-        master.heartbeat()
+        master._disconnect_unresponsive_slaves()
         if slave_alive and not slave_responsive:
             master._disconnect_slave.assert_called_once_with(slave)
         else:

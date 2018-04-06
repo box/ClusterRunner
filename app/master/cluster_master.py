@@ -39,7 +39,7 @@ class ClusterMaster(ClusterService):
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
 
-        self._heartbeat_frequency = Configuration['heartbeat_frequency'] * Configuration['heartbeat_count_threshold']
+        self._heartbeat_interval = Configuration['heartbeat_frequency'] * Configuration['heartbeat_count_threshold']
         self._scheduler = BackgroundScheduler()
         self._heartbeat_job = None
         # The best practice for determining the number of threads to use is
@@ -63,19 +63,20 @@ class ClusterMaster(ClusterService):
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
 
     def configure_heartbeat(self):
-        self._heartbeat_job = self._scheduler.add_job(self.heartbeat, 'interval', seconds=self._heartbeat_frequency)
+        self._heartbeat_job = self._scheduler.add_job(self._disconnect_unresponsive_slaves, 'interval',
+                                                      seconds=self._heartbeat_interval)
         return self._scheduler
 
-    def heartbeat(self):
+    def _disconnect_unresponsive_slaves(self):
         t = datetime.datetime.now()
         slaves_to_disconnect = []
         for slave in self._all_slaves_by_url.values():
-            if slave.is_alive() and not slave.is_responsive(t, self._heartbeat_frequency):
+            if slave.is_alive() and not slave.is_responsive(t, self._heartbeat_interval):
                 slaves_to_disconnect.append(slave)
 
         for slave in slaves_to_disconnect:
             self._disconnect_slave(slave)
-            self._logger.warning('Slave {} marked offline as it is not sending heartbeats.'.format(
+            self._logger.error('Slave {} marked offline as it is not sending heartbeats.'.format(
                 slave.id))
 
     def _get_status(self):
@@ -362,4 +363,4 @@ class ClusterMaster(ClusterService):
         self._thread_pool_executor.submit(self._async_receive_heartbeat_from_slave(int(slave_id)))
 
     def _async_receive_heartbeat_from_slave(self, slave_id):
-        self.get_slave(slave_id).set_heartbeat(datetime.datetime.now())
+        self.get_slave(slave_id).set_last_heartbeat_time()

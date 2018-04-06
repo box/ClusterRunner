@@ -27,7 +27,7 @@ class Slave:
         self._num_executors_in_use = Counter()
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
-        self._heartbeat = datetime.datetime.now()
+        self._last_heartbeat_time = datetime.datetime.now()
         self._is_alive = True
         self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
@@ -238,11 +238,11 @@ class Slave:
 
         return headers
 
-    def set_heartbeat(self, time):
-        self._heartbeat = time
+    def set_last_heartbeat_time(self):
+        self._last_heartbeat_time = datetime.datetime.now()
 
     def is_responsive(self, time, heartbeat_frequency):
-        if (time - self._heartbeat).seconds > heartbeat_frequency:
+        if (time - self._last_heartbeat_time).seconds > heartbeat_frequency:
             return False
         return True
 

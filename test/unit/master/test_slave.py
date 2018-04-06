@@ -214,13 +214,13 @@ class TestSlave(BaseUnitTestCase):
     def test_is_responsive_returns_true_if_heartbeat_was_received(self):
         slave = self._create_slave()
         t = datetime.datetime.now()
-        slave.set_heartbeat(t)
+        slave.set_last_heartbeat_time()
         self.assertTrue(slave.is_responsive(t + datetime.timedelta(seconds=5),10))
 
     def test_is_responsive_returns_false_if_heartbeat_was_not_received(self):
         slave = self._create_slave()
         t = datetime.datetime.now()
-        slave.set_heartbeat(t)
+        slave.set_last_heartbeat_time()
         self.assertFalse(slave.is_responsive(t + datetime.timedelta(seconds=15),10))
 
     def _create_slave(self, **kwargs) -> Slave:
