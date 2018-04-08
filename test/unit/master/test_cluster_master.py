@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from typing import Optional
+from datetime import datetime
+from datetime import timedelta
 
 from genty import genty, genty_dataset
 from hypothesis import given
@@ -225,22 +227,23 @@ class TestClusterMaster(BaseUnitTestCase):
                          'last heartbeat time is updated for the target slave')
 
     @genty_dataset (
-        slave_unresponsive=(True,False,),
-        slave_dead=(False,True,),
-        slave_responsive=(True,True,),
+        slave_unresponsive=(True,1000,),
+        slave_dead=(False,60,),
+        slave_responsive=(True,60,),
     )
-    def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, slave_responsive):
+    def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, seconds_since_last_heartbeat):
         master = ClusterMaster()
         slave_url = "url"
         slave = master.connect_slave(slave_url, 1)
         slave = master.get_slave(int(slave['slave_id']))
+        last_heartbeat_time = datetime.now() - timedelta(seconds=seconds_since_last_heartbeat)
 
         slave.is_alive = MagicMock(return_value=slave_alive)
-        slave.is_responsive = MagicMock(return_value=slave_responsive)
+        slave.get_last_heartbeat_time = MagicMock(return_value=last_heartbeat_time)
         master._disconnect_slave = Mock()
 
         master._disconnect_unresponsive_slaves()
-        if slave_alive and not slave_responsive:
+        if slave_alive and seconds_since_last_heartbeat == 1000:
             master._disconnect_slave.assert_called_once_with(slave)
         else:
             self.assertEqual(master._disconnect_slave.call_count, 0,

@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-import datetime
+from datetime import datetime
 import os
 
 from typing import List
@@ -15,6 +15,7 @@ from app.master.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
+from app.slave.cluster_slave import ClusterSlave
 from app.util import fs
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
@@ -68,16 +69,19 @@ class ClusterMaster(ClusterService):
         return self._scheduler
 
     def _disconnect_unresponsive_slaves(self):
-        t = datetime.datetime.now()
         slaves_to_disconnect = []
         for slave in self._all_slaves_by_url.values():
-            if slave.is_alive() and not slave.is_responsive(t, self._unresponsive_slaves_cleanup_interval):
+            if slave.is_alive() and not self._is_slave_responsive(slave):
                 slaves_to_disconnect.append(slave)
 
         for slave in slaves_to_disconnect:
             self._disconnect_slave(slave)
             self._logger.error('Slave {} marked offline as it is not sending heartbeats.'.format(
                 slave.id))
+
+    def _is_slave_responsive(self, slave: ClusterSlave) -> bool:
+        time_since_last_heartbeat = (datetime.now() - slave.get_last_heartbeat_time()).seconds
+        return time_since_last_heartbeat < self._unresponsive_slaves_cleanup_interval
 
     def _get_status(self):
         """
