@@ -245,9 +245,9 @@ class TestClusterSlave(BaseUnitTestCase):
         executor.execute_subjob.assert_called_with(1, 2, [], 12)
 
     @genty_dataset(
-        responsive_master=(True,1,),
-        unresponsive_master=(False,1,),
-        unresponsive_master_retry=(False,2,),
+        responsive_master=(True, 1),
+        unresponsive_master=(False, 1),
+        unresponsive_master_retry=(False, 2),
     )
     def test_heartbeat_sends_post_to_master(self, is_master_responsive, heartbeat_failure_threshold):
         expected_slave_heartbeat_url = 'http://{}/v1/slave/1/heartbeat'.format(self._FAKE_MASTER_URL)
@@ -255,22 +255,22 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave._heartbeat_job = Mock()
+        slave.kill = Mock()
         if not is_master_responsive:
             self.mock_network.post_with_digest.side_effect = requests.ConnectionError
 
-        slave._start_heartbeat()
+        slave._run_heartbeat()
 
         if is_master_responsive:
             self.mock_network.post_with_digest.assert_called_once_with(
                 expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
         else:
             if heartbeat_failure_threshold == 1:
-                self.assertEqual(slave._heartbeat_job.remove.call_count, 1,
-                                 'heartbeat job is removed when heartbeat count threshold is reached')
+                self.assertEqual(slave.kill.call_count, 1,
+                                 'slave dies when it decides that master is dead')
             else:
-                self.assertEqual(slave._heartbeat_job.remove.call_count, 0,
-                                 'heartbeat job is not removed when heartbeat count threshold is not reached')
+                self.assertEqual(slave.kill.call_count, 0,
+                                 'slave keeps running when heartbeat failure threshold is not reached')
 
     def _create_cluster_slave(self, **kwargs):
         """

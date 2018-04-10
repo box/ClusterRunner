@@ -240,13 +240,13 @@ class TestClusterMaster(BaseUnitTestCase):
 
         slave.is_alive = MagicMock(return_value=slave_alive)
         slave.get_last_heartbeat_time = MagicMock(return_value=last_heartbeat_time)
-        master._disconnect_slave = Mock()
+        slave.mark_dead = Mock()
 
-        master._disconnect_unresponsive_slaves()
+        master._disconnect_non_heartbeating_slaves()
         if slave_alive and seconds_since_last_heartbeat == 1000:
-            master._disconnect_slave.assert_called_once_with(slave)
+            self.assertEqual(slave.mark_dead.call_count, 1, 'master disconnects unresponsive thread')
         else:
-            self.assertEqual(master._disconnect_slave.call_count, 0,
+            self.assertEqual(slave.mark_dead.call_count, 0,
                              'master should not disconnect a dead or responsive slave')
 
     def test_handle_result_reported_from_slave_when_build_is_canceled(self):

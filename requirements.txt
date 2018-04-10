@@ -3,7 +3,6 @@
 # Downgrade the setuptools version to workaround the issue replacing the setuptools dependency
 # IOError METADATA no such file. Check https://github.com/pypa/setuptools/issues/951 for more details.
 setuptools==33.1.1
-apscheduler==3.5.1
 configobj==5.0.6
 fysom==2.1.2
 Logbook==0.7.0

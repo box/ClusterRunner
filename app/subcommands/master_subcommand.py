@@ -31,9 +31,6 @@ class MasterSubcommand(ServiceSubcommand):
 
         cluster_master = ClusterMaster()
 
-        # Create a new background scheduler for heartbeat
-        scheduler = cluster_master.configure_heartbeat()
-
         application = ClusterMasterApplication(cluster_master)
 
         ioloop = self._start_application(application, port)
@@ -45,7 +42,10 @@ class MasterSubcommand(ServiceSubcommand):
         log_startup = functools.partial(self._logger.info, 'Master service is running on {}:{}.'.format(hostname, port))
         ioloop.add_callback(log_startup)
 
-        scheduler.start()
+        # start heartbeat tracker once ioloop starts
+        start_master_heartbeat_tracker = functools.partial(cluster_master.start_heartbeat_tracker_thread)
+        ioloop.add_callback(start_master_heartbeat_tracker)
+
         ioloop.start()  # this call blocks until the server is stopped
         ioloop.close(all_fds=True)  # all_fds=True is necessary here to make sure connections don't hang
         self._logger.notice('Master server was stopped.')

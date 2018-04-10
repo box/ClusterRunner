@@ -41,9 +41,6 @@ class SlaveSubcommand(ServiceSubcommand):
             host=Configuration['hostname'],
         )
 
-        # Create a new background scheduler for heartbeat
-        scheduler = cluster_slave.configure_heartbeat()
-
         application = ClusterSlaveApplication(cluster_slave)
 
         ioloop = self._start_application(application, port)
@@ -54,7 +51,10 @@ class SlaveSubcommand(ServiceSubcommand):
         connect_slave_to_master = functools.partial(cluster_slave.connect_to_master, master_url=master_url)
         ioloop.add_callback(connect_slave_to_master)
 
-        scheduler.start()  # start heartbeat schedular
+        # start sending heartbeat after connecting to master
+        start_slave_heartbeat = functools.partial(cluster_slave.start_heartbeat_thread)
+        ioloop.add_callback(start_slave_heartbeat)
+
         ioloop.start()  # this call blocks until the server is stopped
         ioloop.close(all_fds=True)  # all_fds=True is necessary here to make sure connections don't hang
         self._logger.notice('Slave server was stopped.')
