@@ -17,8 +17,7 @@ RUN make dist/clusterrunner
 FROM cdrx/fpm-centos:7
 
 WORKDIR /root
-RUN yum install epel-release -y && yum install git python34 python34-pip -y
 COPY . .
 COPY --from=stage1 /ClusterRunner/dist/clusterrunner ./dist/
-RUN ./setup.py --version
+COPY --from=stage1 /ClusterRunner/clusterrunner.egg-info/PKG-INFO ./clusterrunner.egg-info/
 RUN make rpm
