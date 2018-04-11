@@ -93,7 +93,7 @@ class FunctionalTestCluster(object):
         self._start_master_process(**extra_conf_vals)
         return self.master_api_client
 
-    def start_slaves(self, num_slaves, num_executors_per_slave=1, start_port=None):
+    def start_slaves(self, num_slaves, num_executors_per_slave=1, start_port=None, **extra_conf_vals):
         """
         Start slave services for this cluster.
 
@@ -107,7 +107,7 @@ class FunctionalTestCluster(object):
         :return: A list of API client objects through which API calls to each slave can be made
         :rtype: list[ClusterSlaveAPIClient]
         """
-        new_slaves = self._start_slave_processes(num_slaves, num_executors_per_slave, start_port)
+        new_slaves = self._start_slave_processes(num_slaves, num_executors_per_slave, start_port, **extra_conf_vals)
         return [ClusterSlaveAPIClient(base_api_url=slave.url) for slave in new_slaves]
 
     def start_slave(self, **kwargs):
@@ -175,7 +175,7 @@ class FunctionalTestCluster(object):
         if not master_is_ready:
             raise TestClusterTimeoutError('Master service did not start up before timeout.')
 
-    def _start_slave_processes(self, num_slaves, num_executors_per_slave, start_port=None):
+    def _start_slave_processes(self, num_slaves, num_executors_per_slave, start_port=None, **extra_conf_vals):
         """
         Start the slave processes on localhost.
 
@@ -206,7 +206,8 @@ class FunctionalTestCluster(object):
             self._slave_eventlog_names.append(slave_eventlog)
             slave_base_app_dir = tempfile.TemporaryDirectory()
             self._slaves_app_base_dirs.append(slave_base_app_dir)
-            slave_config_file_path = self._create_test_config_file(slave_base_app_dir.name)
+
+            slave_config_file_path = self._create_test_config_file(slave_base_app_dir.name, **extra_conf_vals)
 
             slave_cmd = [
                 sys.executable,
@@ -334,6 +335,18 @@ class FunctionalTestCluster(object):
         services.extend(self.kill_slaves())
         services = [service for service in services if service is not None]  # remove `None` values from list
         return services
+
+    def block_until_n_slaves_marked_dead_in_master(self, num_slaves, timeout):
+        def are_n_slaves_marked_dead_in_master(n):
+            slaves_marked_dead = [slave for slave in self.master_api_client.get_slaves().values()
+                                  if isinstance(slave, list) and not slave[0].get('is_alive')]
+            return len(slaves_marked_dead) == n
+
+        def are_slaves_marked_dead_in_master():
+            are_n_slaves_marked_dead_in_master(num_slaves)
+
+        slaves_marked_dead_within_timeout = poll.wait_for(are_slaves_marked_dead_in_master, timeout_seconds=timeout)
+        return slaves_marked_dead_within_timeout
 
     def block_until_n_slaves_dead(self, num_slaves, timeout):
 
