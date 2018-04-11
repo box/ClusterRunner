@@ -1,7 +1,7 @@
 *.egg-info/
 
-# .git/
 .python-version
+Dockerfile
 build_results/
 dist/
 test/

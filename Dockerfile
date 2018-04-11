@@ -14,7 +14,7 @@ COPY . .
 RUN make dist/clusterrunner
 
 # STAGE 2: CentOS 7 base w/ fpm to package pex into an rpm.
-FROM cdrx/fpm-centos:7
+FROM cdrx/fpm-centos@sha256:dbe8a72de806f420b1547493a0d7fef58facd3786e81614c13fa9270e8b24d1a
 
 WORKDIR /root
 COPY . .
