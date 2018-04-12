@@ -15,7 +15,7 @@ def get_version():
     :return: The version of the application
     :rtype: str
     """
-    return _calculate_source_version() or _get_frozen_package_version() or '0.0'
+    return _calculate_source_version() or _get_frozen_package_version() or '0.0.0'
 
 
 def _get_frozen_package_version():
@@ -88,7 +88,7 @@ def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
 
     :type commit_hash: str
     :rtype: bool
-    :raises CalledProcessError: if git not a git repo or is a shallow clone
+    :raises CalledProcessError: if there is no local git repo or is a shallow clone
     """
     master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
     first_parent_chain = _execute_local_git_command(
