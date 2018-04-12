@@ -7,7 +7,7 @@ CR_CONF  := ./conf/default_clusterrunner.conf
 CR_UNK_VERSION := 0.0   # Default CR version when git repo is missing.
 
 EGG_INFO_DIR := ./clusterrunner.egg-info
-PKG_INFO := $(EGG_INFO_DIR)/PKG-INFO
+PKG_INFO     := $(EGG_INFO_DIR)/PKG-INFO
 
 # Macro for printing a colored message to stdout
 print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
@@ -98,6 +98,7 @@ pex $(CR_BIN): $(WHEEL_CACHE)
 	./setup.py bdist_pex --bdist-all --pex-args="$(PEX_ARGS)"
 
 $(PKG_INFO):
+	$(call print_msg, Creating Python egg-info data... )
 	./setup.py egg_info
 
 # RPM package defaults
@@ -124,8 +125,8 @@ FPM_DEPEND_ARGS = $(addprefix --depends , $(RPM_DEPENDS))
 
 .PHONY: rpm
 rpm: $(CR_BIN) $(PKG_INFO)
+	$(call print_msg, Creating ClusterRunner RPM... )
 	$(if $(filter $(RPM_VERSION), $(CR_UNK_VERSION)), $(error version cannot be $(CR_UNK_VERSION)))
-	rm -f $(DIST_DIR)/*.rpm
 	fpm -s dir -t rpm $(FPM_INFO_ARGS) $(FPM_DEPEND_ARGS) \
 		--package $(DIST_DIR) \
 		--config-files $(RPM_CR_CONF) \
@@ -138,7 +139,20 @@ rpm: $(CR_BIN) $(PKG_INFO)
 		$(CR_CONF)=$(RPM_CR_CONF) \
 		conf/clusterrunner-master=/etc/init.d/
 
+.PHONY: docker-rpm
+docker-rpm: TAG=productivity/clusterrunner
+docker-rpm:
+	$(call print_msg, Running ClusterRunner Docker RPM builder... )
+	mkdir -p $(DIST_DIR)
+	docker build -t $(TAG) -f Dockerfile .
+	@# Docker cp does not support globing, so detect the path to the RPM file.
+	$(eval RPM_PATH := $(shell docker run $(TAG) /bin/bash -c "ls /root/$(DIST_DIR)/*.rpm"))
+	$(eval CONTAINER_ID := $(shell docker ps -alq))
+	docker cp $(CONTAINER_ID):$(RPM_PATH) dist/
+	docker stop $(CONTAINER_ID) > /dev/null
+
 clean:
+	$(call print_msg, Removing intermediate build files... )
 	@# Remove to prevent caching of setup.py and MANIFEST.in
 	rm -rf $(EGG_INFO_DIR) build
 	rm -rf $(WHEEL_CACHE) $(CR_BIN)
