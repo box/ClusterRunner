@@ -140,9 +140,9 @@ rpm: $(CR_BIN) $(PKG_INFO)
 		conf/clusterrunner-master=/etc/init.d/
 
 .PHONY: docker-rpm
-docker-rpm: TAG=productivity/clusterrunner
 docker-rpm:
 	$(call print_msg, Running ClusterRunner Docker RPM builder... )
+	$(eval TAG := productivity/clusterrunner)
 	mkdir -p $(DIST_DIR)
 	docker build -t $(TAG) -f Dockerfile .
 	@# Docker cp does not support globing, so detect the path to the RPM file.
