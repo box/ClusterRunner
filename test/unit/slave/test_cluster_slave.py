@@ -33,6 +33,7 @@ class TestClusterSlave(BaseUnitTestCase):
         SlaveConfigLoader().configure_postload(Configuration.singleton())
 
         self.mock_network = self.patch('app.slave.cluster_slave.Network').return_value
+        self._mock_sys = self.patch('app.slave.cluster_slave.sys')
         self.patch('app.util.fs.tar_directories')
 
     @genty_dataset(
@@ -255,7 +256,6 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
-        slave.kill = Mock()
         if not is_master_responsive:
             self.mock_network.post_with_digest.side_effect = requests.ConnectionError
 
@@ -266,10 +266,10 @@ class TestClusterSlave(BaseUnitTestCase):
                 expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
         else:
             if heartbeat_failure_threshold == 1:
-                self.assertEqual(slave.kill.call_count, 1,
+                self.assertEqual(self._mock_sys.exit.call_count, 1,
                                  'slave dies when it decides that master is dead')
             else:
-                self.assertEqual(slave.kill.call_count, 0,
+                self.assertEqual(self._mock_sys.exit.call_count, 0,
                                  'slave keeps running when heartbeat failure threshold is not reached')
 
     def _create_cluster_slave(self, **kwargs):

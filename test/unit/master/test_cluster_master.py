@@ -1,8 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from threading import Event
 from typing import Optional
-from datetime import datetime
-from datetime import timedelta
 
 from genty import genty, genty_dataset
 from hypothesis import given
@@ -35,6 +34,11 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
+
+        # mock datetime class inside cluster master
+        self._mock_current_datetime = datetime(2018,4,1)
+        self._mock_datetime = self.patch('app.master.cluster_master.datetime')
+        self._mock_datetime.now.return_value = self._mock_current_datetime
 
         # Two threads are ran everytime we start up the ClusterMaster. We redirect the calls to
         # `ThreadPoolExecutor.submit` through a mock proxy so we can capture events.
@@ -219,8 +223,6 @@ class TestClusterMaster(BaseUnitTestCase):
         master = ClusterMaster()
 
         mock_slave = self.patch('app.master.cluster_master.Slave').return_value
-        # self.patch('app.master.cluster_master.Slave', new=lambda *args: mock_slave)
-        # master.connect_slave('slave_url', 1)
         master.update_slave_last_heartbeat_time(mock_slave)
 
         self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, 1,
@@ -232,21 +234,21 @@ class TestClusterMaster(BaseUnitTestCase):
         slave_responsive=(True,60,),
     )
     def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, seconds_since_last_heartbeat):
+        last_heartbeat_time = self._mock_current_datetime - timedelta(seconds=seconds_since_last_heartbeat)
         master = ClusterMaster()
-        slave_url = "url"
-        slave = master.connect_slave(slave_url, 1)
-        slave = master.get_slave(int(slave['slave_id']))
-        last_heartbeat_time = datetime.now() - timedelta(seconds=seconds_since_last_heartbeat)
 
-        slave.is_alive = MagicMock(return_value=slave_alive)
-        slave.get_last_heartbeat_time = MagicMock(return_value=last_heartbeat_time)
-        slave.mark_dead = Mock()
+        mock_slave = Mock()
+        self.patch('app.master.cluster_master.Slave', new=lambda *args: mock_slave)
+        master.connect_slave('slave_url', 1)
+
+        mock_slave.is_alive.return_value = slave_alive
+        mock_slave.get_last_heartbeat_time.return_value = last_heartbeat_time
 
         master._disconnect_non_heartbeating_slaves()
         if slave_alive and seconds_since_last_heartbeat == 1000:
-            self.assertEqual(slave.mark_dead.call_count, 1, 'master disconnects unresponsive thread')
+            self.assertEqual(mock_slave.mark_dead.call_count, 1, 'master disconnects unresponsive slave')
         else:
-            self.assertEqual(slave.mark_dead.call_count, 0,
+            self.assertEqual(mock_slave.mark_dead.call_count, 0,
                              'master should not disconnect a dead or responsive slave')
 
     def test_handle_result_reported_from_slave_when_build_is_canceled(self):
