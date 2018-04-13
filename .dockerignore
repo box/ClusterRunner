@@ -1,9 +1,18 @@
-*.egg-info/
+# It is normal to exclude the .git/ repo, however ClusterRunner uses it for version calculation
+# so it must be included with the Docker image.
+# .git/
 
+# virtualenv
 .python-version
-Dockerfile
+
+# test/build
+**/__pycache__/
+*.egg-info/
+.hypothesis/
 build_results/
 dist/
-test/
 
-**/__pycache__
+# sources
+Dockerfile
+test/
+windows/

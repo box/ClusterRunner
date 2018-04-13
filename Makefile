@@ -154,5 +154,5 @@ docker-rpm:
 clean:
 	$(call print_msg, Removing intermediate build files... )
 	@# Remove to prevent caching of setup.py and MANIFEST.in
-	rm -rf $(EGG_INFO_DIR) build
+	rm -rf $(EGG_INFO_DIR) build/ .hypothesis/
 	rm -rf $(WHEEL_CACHE) $(CR_BIN)
