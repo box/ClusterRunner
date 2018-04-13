@@ -146,10 +146,10 @@ docker-rpm:
 	mkdir -p $(DIST_DIR)
 	docker build -t $(TAG) -f Dockerfile .
 	@# Docker cp does not support globing, so detect the path to the RPM file.
-	$(eval RPM_PATH := $(shell docker run $(TAG) /bin/bash -c "ls /root/$(DIST_DIR)/*.rpm"))
+	$(eval RPM_PATH := $(shell docker run $(TAG) sh -c "ls /root/$(DIST_DIR)/*.rpm"))
+	@# Docker "run" must be called before the next steps.
 	$(eval CONTAINER_ID := $(shell docker ps -alq))
 	docker cp $(CONTAINER_ID):$(RPM_PATH) dist/
-	docker stop $(CONTAINER_ID) > /dev/null
 
 clean:
 	$(call print_msg, Removing intermediate build files... )
