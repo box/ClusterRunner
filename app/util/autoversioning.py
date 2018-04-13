@@ -1,90 +1,32 @@
+import functools
 import os
 import subprocess
 
-from app.util import fs
-
-
 _MAJOR_MINOR_VERSION = '0.5'
 
-_calculated_version = None  # We will cache the calculated version so that it can't change during execution.
-_VERSION_FILE_PATH = os.path.join(os.path.dirname(__file__), 'package_version.py')
-_VERSION_FILE_BACKUP_PATH = os.path.join(os.path.dirname(__file__), 'package_version.py.bak')
 
-
+@functools.lru_cache(maxsize=1)
 def get_version():
     """
     Get the version of the application. This method should return the correct version in both the
-    packaged and local (running inside the git repo) cases.
+    packaged and local (running inside the git repo) cases. A valid version string must be returned
+    to prevent execution and/or build errors. Version detection will fail in shallow-cloned repo.
 
     :return: The version of the application
     :rtype: str
     """
-
-    return _get_frozen_package_version() or _calculate_source_version() or '0.0.0'
-
-
-def _try_rename(src, dst):
-    try:
-        os.rename(src, dst)
-        return True
-    except (FileExistsError, FileNotFoundError):
-        # Skip backing up the original package_version.py if a FileExistsError or FileNotFoundError happened.
-        # FileExistsError might happen on Windows as NTFS doesn't support writing to a file while the file
-        # is opened in python.
-        return False
-
-
-def _try_remove(src):
-    try:
-        os.remove(src)
-    except OSError:
-        pass
-
-
-def write_package_version_file(package_version_string):
-    """
-    Write the specified version string to package_version.py. This method is intended to be called
-    during the process of freezing a package for release. This in-effect hard codes the version into
-    the dist package.
-
-    This also backs up the original file, which can be restored with another method in this module.
-
-    :param package_version_string: The version to write to the file -- presumably the output of
-                                   get_version()
-    :type package_version_string: str
-    """
-    package_version_file_contents = 'version = "{}"  # DO NOT COMMIT\n'.format(package_version_string)
-
-    _try_rename(_VERSION_FILE_PATH, _VERSION_FILE_BACKUP_PATH)  # Backup the original file.
-    fs.write_file(package_version_file_contents, _VERSION_FILE_PATH)
-
-
-def restore_original_package_version_file():
-    """
-    Restore the backed up version of package_version.py. This is just a convenience method to help
-    us remember not to commit changes to the package version file.
-    """
-    if not _try_rename(_VERSION_FILE_BACKUP_PATH, _VERSION_FILE_PATH):
-        # Ensure the temp file is removed if there was no backup copy.
-        os.remove(_VERSION_FILE_PATH)
+    return _calculate_source_version() or _get_frozen_package_version() or '0.0.0'
 
 
 def _get_frozen_package_version():
     """
-    Return the hard coded version from package_version.py. The package_version module is only
-    populated with the actual version during the dist process, so this method only returns the
-    correct version if run from the output package.
-
-    :return: The version of the packaged application
+    :return: the installed version from pkg_resources.
     :rtype: str
     """
-
-    # only import package_version when needed as on Windows once imported, the actual package_version.py can't be
-    # edited anymore
     try:
-        from app.util import package_version
-        return package_version.version
-    except ImportError:
+        import pkg_resources
+        return pkg_resources.get_distribution('clusterrunner').version  # pylint: disable=no-member
+    except pkg_resources.DistributionNotFound:
         return None
 
 
@@ -101,20 +43,16 @@ def _calculate_source_version():
     :return: The version of the (source) application
     :rtype: str
     """
-    global _calculated_version
-    if _calculated_version is None:
-        try:
-            head_commit_hash = _get_commit_hash_from_revision_param('HEAD')
-            head_commit_is_on_trunk = _is_commit_hash_in_masters_first_parent_chain(head_commit_hash)
+    try:
+        head_commit_hash = _get_commit_hash_from_revision_param('HEAD')
+        head_commit_is_on_trunk = _is_commit_hash_in_masters_first_parent_chain(head_commit_hash)
 
-            commit_count = _get_repo_commit_count()
-            hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
-            mod_extension = '' if not _repo_has_uncommited_changes() else '-mod'
-            _calculated_version = '{}.{}{}{}'.format(_MAJOR_MINOR_VERSION, commit_count, hash_extension, mod_extension)
-        except subprocess.CalledProcessError:
-            _calculated_version = None
-
-    return _calculated_version
+        commit_count = _get_repo_commit_count()
+        hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
+        mod_extension = '' if not _repo_has_uncommited_changes() else '-mod'
+        return '{}.{}{}{}'.format(_MAJOR_MINOR_VERSION, commit_count, hash_extension, mod_extension)
+    except subprocess.CalledProcessError:
+        return None
 
 
 def _get_repo_commit_count():
@@ -144,11 +82,13 @@ def _repo_has_uncommited_changes():
 
 def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
     """
-    Check if the current HEAD is in the first-parent chain of origin/master. The first-parent chain of origin/master
-    consists of all the "trunk" commits. All other commits are either on merged branches or haven't been merged at all.
+    Check if the current HEAD is in the first-parent chain of origin/master. The first-parent chain
+    of origin/master consists of all the "trunk" commits. All other commits are either on merged
+    branches or haven't been merged at all.
 
     :type commit_hash: str
     :rtype: bool
+    :raises CalledProcessError: if there is no local git repo or is a shallow clone
     """
     master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
     first_parent_chain = _execute_local_git_command(
@@ -184,19 +124,3 @@ def _execute_local_git_command(*args):
         stderr=subprocess.DEVNULL,
     )
     return command_output.decode()
-
-
-def _print_and_hardcode_version():
-    """
-    Print the version number and write the package version file. This is useful when packaging
-    ClusterRunner (e.g., building an RPM).
-    """
-    # Remove the "package_version.py" file so that autoversioning always calculates version.
-    _try_remove(_VERSION_FILE_PATH)
-    version = get_version()
-    write_package_version_file(version)
-    print(version)
-
-
-if __name__ == '__main__':
-    _print_and_hardcode_version()
