@@ -51,7 +51,7 @@ def _calculate_source_version():
         hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
         mod_extension = '' if not _repo_has_uncommited_changes() else '-mod'
         return '{}.{}{}{}'.format(_MAJOR_MINOR_VERSION, commit_count, hash_extension, mod_extension)
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return None
 
 
@@ -104,6 +104,7 @@ def _get_commit_hash_from_revision_param(revision_param):
 
     :type revision_param: str
     :rtype: str
+    :raises FileNotFoundError: if git command is not available.
     """
     return _execute_local_git_command('rev-parse', '--verify', revision_param).strip()
 
@@ -117,6 +118,7 @@ def _execute_local_git_command(*args):
     :type args: tuple
     :return: The output of the git command
     :rtype: str
+    :raises FileNotFoundError: if git command is not available.
     """
     command_output = subprocess.check_output(
         ['git'] + list(args),

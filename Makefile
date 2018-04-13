@@ -1,12 +1,20 @@
 .PHONY: all lint test init pylint pep8 test-unit test-unit-via-clusterrunner test-functional
 .PHONY: clean wheels pex
 
-DISTDIR := ./dist
-CR_BIN  := $(DISTDIR)/clusterrunner
-CR_CONF := ./conf/default_clusterrunner.conf
+DIST_DIR := ./dist
+CR_BIN   := $(DIST_DIR)/clusterrunner
+CR_CONF  := ./conf/default_clusterrunner.conf
+CR_UNK_VERSION := 0.0.0   # Default CR version used when git repo is missing.
+
+EGG_INFO_DIR := ./clusterrunner.egg-info
+PKG_INFO     := $(EGG_INFO_DIR)/PKG-INFO
 
 # Macro for printing a colored message to stdout
 print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
+
+# Macro for extracting key values from PKG-INFO.
+# IMPORTANT: $(PKG_INFO) must be a dependency of any targets that use this macro.
+pkg_info = $(strip $(shell egrep -i "^$(1): " $(PKG_INFO) | sed 's/[^:]*://'))
 
 all: lint test
 lint: pep8 pylint
@@ -63,8 +71,12 @@ test-functional:
 #       --platform=macosx-10.12-x86_64
 #       --platform=linux_x86_64
 #       --platform=win64_amd
-WHEEL_CACHE := $(PWD)/$(DISTDIR)/wheels
-PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE)
+WHEEL_CACHE := $(PWD)/$(DIST_DIR)/wheels
+
+# Pex will source all wheel dependencies from the WHEEL_CACHE. It is necessary
+# to set the Cache TTL to 0 so that pex will accept any matching wheel,
+# regardless of its timestamp.
+PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE) --cache-ttl=0
 
 # INFO: The use of multiple targets (before the :) in the next sections enable
 #       a technique for setting some targets to "phony" so they will always
@@ -73,6 +85,7 @@ PEX_ARGS    := -v --no-pypi --cache-dir=$(WHEEL_CACHE)
 
 # TODO: Consider using "pip download --platform" when direct downloading of
 #       cross-platform wheels is supported.
+.INTERMEDIATE: $(WHEEL_CACHE)
 wheels $(WHEEL_CACHE): requirements.txt
 	$(call print_msg, Creating wheels cache... )
 	mkdir -p $(WHEEL_CACHE)
@@ -84,6 +97,10 @@ pex $(CR_BIN): $(WHEEL_CACHE)
 	rm -f $(WHEEL_CACHE)/clusterrunner*
 	./setup.py bdist_pex --bdist-all --pex-args="$(PEX_ARGS)"
 
+$(PKG_INFO):
+	$(call print_msg, Creating Python egg-info data... )
+	./setup.py egg_info
+
 # RPM package defaults
 RPM_BASE_DIR    := /var/lib/clusterrunner
 RPM_CR_CONF     := $(RPM_BASE_DIR)/clusterrunner.conf
@@ -91,25 +108,27 @@ RPM_DEPENDS     := python34u git
 RPM_USER        := jenkins
 RPM_GROUP       := engineering
 RPM_PREINSTALL  := conf/preinstall.rpm
-# Auto-detect packaging info from python setup.py
-RPM_DESCRIPTION = $(shell python ./setup.py --description  2>/dev/null)
-RPM_LICENSE     = $(shell python ./setup.py --license      2>/dev/null)
-RPM_NAME        = $(shell python ./setup.py --name         2>/dev/null)
-RPM_URL         = $(shell python ./setup.py --url          2>/dev/null)
-RPM_VENDOR      = $(shell python ./setup.py --contact      2>/dev/null)
-RPM_VERSION     = $(shell python ./setup.py --version      2>/dev/null)
+
+# Auto-detect packaging info from PKG-INFO
+RPM_DESCRIPTION = $(call pkg_info,summary)
+RPM_LICENSE     = $(call pkg_info,license)
+RPM_NAME        = $(call pkg_info,name)
+RPM_URL         = $(call pkg_info,home-page)
+RPM_VENDOR      = $(call pkg_info,author)
+RPM_VERSION     = $(call pkg_info,version)
 # Collect all package info fields into fpm args
-FPM_INFO_ARGS   = --name $(RPM_NAME) --version $(RPM_VERSION) \
+FPM_INFO_ARGS   = --name "$(RPM_NAME)" --version "$(RPM_VERSION)" \
 	--license "$(RPM_LICENSE)" --description "$(RPM_DESCRIPTION)" \
-	--vendor "$(RPM_VENDOR)" --maintainer "$(RPM_VENDOR)" --url $(RPM_URL)
+	--vendor "$(RPM_VENDOR)" --maintainer "$(RPM_VENDOR)" --url "$(RPM_URL)"
 # Expand all dependencies into fpm args
 FPM_DEPEND_ARGS = $(addprefix --depends , $(RPM_DEPENDS))
 
 .PHONY: rpm
-rpm: $(CR_BIN)
-	rm -f $(DISTDIR)/*.rpm
+rpm: $(CR_BIN) $(PKG_INFO)
+	$(call print_msg, Creating ClusterRunner RPM... )
+	$(if $(filter $(RPM_VERSION), $(CR_UNK_VERSION)), $(error version cannot be $(CR_UNK_VERSION)))
 	fpm -s dir -t rpm $(FPM_INFO_ARGS) $(FPM_DEPEND_ARGS) \
-		--package $(DISTDIR) \
+		--package $(DIST_DIR) \
 		--config-files $(RPM_CR_CONF) \
 		--rpm-tag "Requires(pre): shadow-utils" \
 		--pre-install $(RPM_PREINSTALL) \
@@ -120,7 +139,20 @@ rpm: $(CR_BIN)
 		$(CR_CONF)=$(RPM_CR_CONF) \
 		conf/clusterrunner-master=/etc/init.d/
 
+.PHONY: docker-rpm
+docker-rpm:
+	$(call print_msg, Running ClusterRunner Docker RPM builder... )
+	$(eval TAG := productivity/clusterrunner)
+	mkdir -p $(DIST_DIR)
+	docker build -t $(TAG) -f Dockerfile .
+	@# Docker cp does not support globing, so detect the path to the RPM file.
+	$(eval RPM_PATH := $(shell docker run $(TAG) sh -c "ls /root/$(DIST_DIR)/*.rpm"))
+	@# Docker "run" must be called before the next steps.
+	$(eval CONTAINER_ID := $(shell docker ps -alq))
+	docker cp $(CONTAINER_ID):$(RPM_PATH) dist/
+
 clean:
+	$(call print_msg, Removing intermediate build files... )
 	@# Remove to prevent caching of setup.py and MANIFEST.in
-	rm -rf *.egg-info build
+	rm -rf $(EGG_INFO_DIR) build/ .hypothesis/
 	rm -rf $(WHEEL_CACHE) $(CR_BIN)
