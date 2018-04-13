@@ -4,7 +4,7 @@
 DIST_DIR := ./dist
 CR_BIN   := $(DIST_DIR)/clusterrunner
 CR_CONF  := ./conf/default_clusterrunner.conf
-CR_UNK_VERSION := 0.0   # Default CR version when git repo is missing.
+CR_UNK_VERSION := 0.0.0   # Default CR version used when git repo is missing.
 
 EGG_INFO_DIR := ./clusterrunner.egg-info
 PKG_INFO     := $(EGG_INFO_DIR)/PKG-INFO
