@@ -107,7 +107,9 @@ RPM_CR_CONF     := $(RPM_BASE_DIR)/clusterrunner.conf
 RPM_DEPENDS     := python34u git
 RPM_USER        := jenkins
 RPM_GROUP       := engineering
-RPM_PREINSTALL  := conf/preinstall.rpm
+RPM_PRE_INSTALL    := conf/pre-install.sh
+RPM_POST_INSTALL   := conf/post-install.sh
+RPM_PRE_UNINSTALL  := conf/pre-uninstall.sh
 
 # Auto-detect packaging info from PKG-INFO
 RPM_DESCRIPTION = $(call pkg_info,summary)
@@ -131,7 +133,9 @@ rpm: $(CR_BIN) $(PKG_INFO)
 		--package $(DIST_DIR) \
 		--config-files $(RPM_CR_CONF) \
 		--rpm-tag "Requires(pre): shadow-utils" \
-		--pre-install $(RPM_PREINSTALL) \
+		--before-install $(RPM_PRE_INSTALL) \
+		--after-install $(RPM_POST_INSTALL) \
+		--before-remove $(RPM_PRE_UNINSTALL) \
 		--directories $(RPM_BASE_DIR) \
 		--rpm-attr 0600,$(RPM_USER),$(RPM_GROUP):$(RPM_CR_CONF) \
 		--rpm-attr -,$(RPM_USER),$(RPM_GROUP):$(RPM_BASE_DIR) \

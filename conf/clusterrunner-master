@@ -3,7 +3,7 @@
 # Provides:
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
-# Default-Start:
+# Default-Start:     -
 # Default-Stop:      0 1 6
 # Short-Description: ClusterRunner init script
 # Description:       Enable clusterrunner service provided by daemon.
