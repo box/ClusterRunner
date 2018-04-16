@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
+from threading import Lock
 from typing import List
 
 from app.common.cluster_service import ClusterService
@@ -17,6 +18,7 @@ from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReady
 from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
+from app.util.singleton import Singleton
 
 
 class ClusterMaster(ClusterService):
@@ -29,7 +31,7 @@ class ClusterMaster(ClusterService):
     def __init__(self):
         self._logger = get_logger(__name__)
         self._master_results_path = Configuration['results_directory']
-        self._all_slaves_by_url = {}
+        self._slave_registry = SlaveRegistry.singleton()
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
@@ -53,7 +55,7 @@ class ClusterMaster(ClusterService):
             fs.async_delete(self._master_results_path)
         fs.create_dir(self._master_results_path)
 
-        SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
+        SlavesCollector.register_slaves_metrics_collector(lambda: self._slave_registry.get_all_slaves_by_id().values())
 
     def _get_status(self):
         """
@@ -68,7 +70,8 @@ class ClusterMaster(ClusterService):
         Gets a dict representing this resource which can be returned in an API response.
         :rtype: dict [str, mixed]
         """
-        slaves_representation = [slave.api_representation() for slave in self.all_slaves_by_id().values()]
+        slaves_representation = [slave.api_representation() for slave in
+                                 self._slave_registry.get_all_slaves_by_id().values()]
         return {
             'status': self._get_status(),
             'slaves': slaves_representation,
@@ -91,41 +94,6 @@ class ClusterMaster(ClusterService):
         """
         return [build for build in self.get_builds() if not build.is_finished]
 
-    def all_slaves_by_id(self):
-        """
-        Retrieve all connected slaves
-        :rtype: dict [int, Slave]
-        """
-        slaves_by_slave_id = {}
-        for slave in self._all_slaves_by_url.values():
-            slaves_by_slave_id[slave.id] = slave
-        return slaves_by_slave_id
-
-    def get_slave(self, slave_id=None, slave_url=None):
-        """
-        Get the instance of given slave by either the slave's id or url. Only one of slave_id or slave_url should be
-        specified.
-
-        :param slave_id: The id of the slave to return
-        :type slave_id: int
-        :param slave_url: The url of the slave to return
-        :type slave_url: str
-        :return: The instance of the slave
-        :rtype: Slave
-        """
-        if (slave_id is None) == (slave_url is None):
-            raise ValueError('Only one of slave_id or slave_url should be specified to get_slave().')
-
-        if slave_id is not None:
-            for slave in self._all_slaves_by_url.values():
-                if slave.id == slave_id:
-                    return slave
-        else:
-            if slave_url in self._all_slaves_by_url:
-                return self._all_slaves_by_url[slave_url]
-
-        raise ItemNotFoundError('Requested slave ({}) does not exist.'.format(slave_id))
-
     def connect_slave(self, slave_url, num_executors, slave_session_id=None):
         """
         Connect a slave to this master.
@@ -139,11 +107,10 @@ class ClusterMaster(ClusterService):
         # todo: Validate arg types for this and other methods called via API.
         # If a slave had previously been connected, and is now being reconnected, the cleanest way to resolve this
         # bookkeeping is for the master to forget about the previous slave instance and start with a fresh instance.
-        if slave_url in self._all_slaves_by_url:
-            old_slave = self._all_slaves_by_url.get(slave_url)
+        try:
+            old_slave = self._slave_registry.get_slave(slave_url=slave_url)
             self._logger.warning('Slave requested to connect to master, even though previously connected as {}. ' +
                                  'Removing existing slave instance from the master\'s bookkeeping.', old_slave)
-
             # If a slave has requested to reconnect, we have to assume that whatever build the dead slave was
             # working on no longer has valid results.
             if old_slave.current_build_id is not None:
@@ -157,9 +124,10 @@ class ClusterMaster(ClusterService):
                 except ItemNotFoundError:
                     self._logger.info('Failed to find build {} that was running on {}', old_slave.current_build_id,
                                       old_slave)
-
+        except ItemNotFoundError:
+            pass
         slave = Slave(slave_url, num_executors, slave_session_id)
-        self._all_slaves_by_url[slave_url] = slave
+        self._slave_registry.add_slave(slave)
         self._slave_allocator.add_idle_slave(slave)
         self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
                           slave_url, num_executors, slave.id)
@@ -192,7 +160,7 @@ class ClusterMaster(ClusterService):
         :type slave_ids: list[int]
         """
         # Find all the slaves first so if an invalid slave_id is specified, we 404 before shutting any of them down.
-        slaves = [self.get_slave(slave_id) for slave_id in slave_ids]
+        slaves = [self._slave_registry.get_slave(slave_id=slave_id) for slave_id in slave_ids]
         for slave in slaves:
             self.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
 
@@ -296,7 +264,7 @@ class ClusterMaster(ClusterService):
         """
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
         build = BuildStore.get(int(build_id))
-        slave = self._all_slaves_by_url[slave_url]
+        slave = self._slave_registry.get_slave(slave_url=slave_url)
         try:
             build.complete_subjob(subjob_id, payload)
         finally:
@@ -334,3 +302,69 @@ class ClusterMaster(ClusterService):
             raise ItemNotReadyError('Build artifact file is not yet ready. Try again later.')
 
         return archive_file
+
+
+class SlaveRegistry(Singleton):
+    """
+    SlaveRegistry class is a singleton class which stores and maintains list of connected slaves.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.all_slaves_by_url = {}
+        self.all_slaves_by_id = {}
+        self._slave_dict_lock = Lock()
+
+    def add_slave(self, slave):
+        """
+        Add slave in SlaveRegistry.
+
+        :type slave: Slave
+        """
+        with self._slave_dict_lock:
+            self.all_slaves_by_url[slave.url] = slave
+            self.all_slaves_by_id[slave.id] = slave
+
+    def remove_slave(self, slave):
+        """
+        Remove slave from the both url and id dictionary.
+
+        :type slave: Slave
+        """
+        with self._slave_dict_lock:
+            registered_slave_by_url = self.all_slaves_by_url.get(slave.url)
+            if registered_slave_by_url and registered_slave_by_url is slave:
+                del self.all_slaves_by_url[slave.url]
+                del self.all_slaves_by_id[slave.id]
+
+    def get_slave(self, slave_id=None, slave_url=None):
+        """
+        Look for a slave in the registry and if not found raise "ItemNotFoundError" exception.
+
+        :param slave_id: The id of the slave to return
+        :type slave_id: int
+        :param slave_url: The url of the slave to return
+        :type slave_url: str
+        :return: The instance of the slave
+        :rtype: Slave | None
+        """
+        if (slave_id is None) == (slave_url is None):
+            raise ValueError('Only one of slave_id or slave_url should be specified to get_slave().')
+
+        if slave_id is not None:
+            if slave_id in self.all_slaves_by_id:
+                return self.all_slaves_by_id[slave_id]
+        else:
+            if slave_url in self.all_slaves_by_url:
+                return self.all_slaves_by_url[slave_url]
+        if slave_id is not None:
+            error_msg = 'Requested slave (slave_id={}) does not exist.'.format(slave_id)
+        else:
+            error_msg = 'Requested slave (slave_url={}) does not exist.'.format(slave_url)
+        raise ItemNotFoundError(error_msg)
+
+    def get_all_slaves_by_id(self):
+        return self.all_slaves_by_id
+
+    def get_all_slaves_by_url(self):
+        return self.all_slaves_by_url

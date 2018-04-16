@@ -11,7 +11,8 @@ from app.master.atom import Atom
 from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_store import BuildStore
-from app.master.cluster_master import ClusterMaster
+from app.master.cluster_master import ClusterMaster, SlaveRegistry
+from app.master.slave import Slave
 from app.master.subjob import Subjob
 from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
@@ -49,61 +50,28 @@ class TestClusterMaster(BaseUnitTestCase):
         super().tearDown()
         self.thread_pool_executor.shutdown()
 
-    @genty_dataset(
-        slave_id_specified=({'slave_id': 400},),
-        slave_url_specified=({'slave_url': 'michelangelo.turtles.gov'},),
-    )
-    def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-        master.connect_slave('leonardo.turtles.gov', 10)
-        master.connect_slave('donatello.turtles.gov', 10)
-
-        with self.assertRaises(ItemNotFoundError):
-            master.get_slave(**get_slave_kwargs)
-
-    @genty_dataset(
-        both_arguments_specified=({'slave_id': 1, 'slave_url': 'raphael.turtles.gov'},),
-        neither_argument_specified=({},),
-    )
-    def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-
-        with self.assertRaises(ValueError):
-            master.get_slave(**get_slave_kwargs)
-
-    def test_get_slave_returns_expected_value_given_valid_arguments(self):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-        master.connect_slave('leonardo.turtles.gov', 10)
-        master.connect_slave('donatello.turtles.gov', 10)
-
-        actual_slave_by_id = master.get_slave(slave_id=2)
-        actual_slave_by_url = master.get_slave(slave_url='leonardo.turtles.gov')
-
-        self.assertEqual(2, actual_slave_by_id.id, 'Retrieved slave should have the same id as requested.')
-        self.assertEqual('leonardo.turtles.gov', actual_slave_by_url.url,
-                         'Retrieved slave should have the same url as requested.')
-
     def test_connect_slave_adds_new_slave_if_slave_never_connected_before(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
 
         master.connect_slave('never-before-seen.turtles.gov', 10)
 
-        self.assertEqual(1, len(master.all_slaves_by_id()), 'Exactly one slave should be registered with the master.')
-        self.assertIsNotNone(master.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly one slave should be registered with the master.')
+        self.assertIsNotNone(slave_registry.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
                              'Registered slave does not have the expected url.')
 
     def test_connect_slave_with_existing_dead_slave_creates_new_alive_instance(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
+
         master.connect_slave('existing-slave.turtles.gov', 10)
-        existing_slave = master.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
+        existing_slave = slave_registry.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
         existing_slave.set_is_alive(False)
         existing_slave_id = existing_slave.id
 
         connect_response = master.connect_slave('existing-slave.turtles.gov', 10)
-        new_slave = master._all_slaves_by_url.get('existing-slave.turtles.gov')
+        new_slave = slave_registry.get_slave(slave_url='existing-slave.turtles.gov')
 
         self.assertNotEqual(str(existing_slave_id), connect_response['slave_id'],
                             'The re-connected slave should have generated a new slave id.')
@@ -114,10 +82,12 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_connect_slave_with_existing_slave_running_build_cancels_build(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
+
         master.connect_slave('running-slave.turtles.gov', 10)
         build_mock = MagicMock(spec_set=Build)
         BuildStore._all_builds_by_id[1] = build_mock
-        existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
+        existing_slave = slave_registry.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
         existing_slave.current_build_id = 1
 
         master.connect_slave('running-slave.turtles.gov', 10)
@@ -154,9 +124,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_disconnected_state_should_mark_slave_as_dead(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, num_executors=10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         self.assertTrue(slave.is_alive())
 
         master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
@@ -165,9 +136,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_disconnected_state_should_reset_slave_current_build_id(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, num_executors=10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         slave.current_build_id = 4
 
         master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
@@ -176,11 +148,12 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_setup_completed_state_should_tell_build_to_begin_subjob_execution(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         fake_build = MagicMock(spec_set=Build)
         master.get_build = MagicMock(return_value=fake_build)
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         mock_scheduler = self.mock_scheduler_pool.get(fake_build)
         scheduler_begin_event = Event()
         mock_scheduler.begin_subjob_executions_on_slave.side_effect = lambda **_: scheduler_begin_event.set()
@@ -195,9 +168,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         slave.set_shutdown_mode = Mock()
 
         master.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
@@ -206,9 +180,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_nonexistent_state_should_raise_bad_request_error(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
 
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
@@ -225,8 +200,9 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch_object(build, '_mark_subjob_complete')
 
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         BuildStore._all_builds_by_id[build_id] = build
-        master._all_slaves_by_url[slave_url] = Mock()
+        slave_registry.all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(build)
 
         master.handle_result_reported_from_slave(slave_url, build_id, 1)
@@ -243,8 +219,9 @@ class TestClusterMaster(BaseUnitTestCase):
         mock_build.complete_subjob.side_effect = [RuntimeError('Write failed')]
 
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         BuildStore._all_builds_by_id[mock_build.build_id()] = mock_build
-        master._all_slaves_by_url[slave_url] = Mock()
+        slave_registry.all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(mock_build)
 
         with self.assertRaisesRegex(RuntimeError, 'Write failed'):
@@ -463,3 +440,82 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(id_of_last_atom, expected_last_atom_id, 'Received the wrong last atom from request')
         if offset is not None and limit is not None:
             self.assertLessEqual(num_atoms, self._PAGINATION_MAX_LIMIT, 'Received too many atoms from request')
+
+
+@genty
+class TestSlaveRegistry(BaseUnitTestCase):
+    @genty_dataset(
+        slave_id_specified=({'slave_id': 400},),
+        slave_url_specified=({'slave_url': 'michelangelo.turtles.gov'},),
+    )
+    def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
+        SlaveRegistry.reset_singleton()
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        with self.assertRaises(ItemNotFoundError):
+            slave_registry.get_slave(**get_slave_kwargs)
+
+    @genty_dataset(
+        both_arguments_specified=({'slave_id': 1, 'slave_url': 'raphael.turtles.gov'},),
+        neither_argument_specified=({},),
+    )
+    def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
+        SlaveRegistry.reset_singleton()
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+
+        with self.assertRaises(ValueError):
+            slave_registry.get_slave(**get_slave_kwargs)
+
+    def test_get_slave_returns_valid_slave(self):
+        SlaveRegistry.reset_singleton()
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEquals(slave_registry.get_slave(slave_url=slave1.url), slave1,
+                          'Get slave with url should return valid slave.')
+        self.assertEquals(slave_registry.get_slave(slave_id=slave2.id), slave2,
+                          'Get slave with id should return valid slave.')
+
+    def test_add_slave_adds_slave_in_both_dicts(self):
+        SlaveRegistry.reset_singleton()
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly two slaves should be in the all_slaves_by_id dict.')
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly two slaves should be in the all_slaves_by_url dict.')
+
+    def test_remove_slave_removes_slave_from_both_dicts(self):
+        SlaveRegistry.reset_singleton()
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly two slaves should be in the all_slaves_by_id dict.')
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly two slaves should be in the all_slaves_by_url dict.')
+
+        slave_registry.remove_slave(slave1)
+
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly one slave should be in the all_slaves_by_id dict after removing one slave.')
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly one slave should be in the all_slaves_by_url dict after removing one slave.')
+
+
