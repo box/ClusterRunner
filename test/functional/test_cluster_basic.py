@@ -7,6 +7,7 @@ from genty import genty, genty_dataset
 
 from app.common.build_artifact import BuildArtifact
 from app.master.build import BuildStatus
+from app.master.slave import SlaveRegistry
 from test.framework.functional.base_functional_test_case import BaseFunctionalTestCase
 from test.framework.functional.fs_item import Directory, File
 from test.functional.job_configs import BASIC_FAILING_JOB, BASIC_JOB, FAILING_SETUP_JOB, JOB_WITH_SETUP_AND_TEARDOWN
@@ -72,6 +73,7 @@ class TestClusterBasic(BaseFunctionalTestCase):
             build_id=build_id, expected_build_artifact_contents=expected_artifact_contents)
 
     def test_slave_reconnection_does_not_take_down_master(self):
+        SlaveRegistry.reset_singleton()
         test_config = JOB_WITH_SETUP_AND_TEARDOWN
         job_config = yaml.safe_load(test_config.config[os.name])['JobWithSetupAndTeardown']
         master = self.cluster.start_master()

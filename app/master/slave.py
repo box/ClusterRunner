@@ -1,13 +1,16 @@
 from datetime import datetime
+from threading import Lock
 import requests
 
 from app.master.build import Build
 from app.master.subjob import Subjob
 from app.util import analytics, log
 from app.util.counter import Counter
+from app.util.exceptions import ItemNotFoundError
 from app.util.network import Network, RequestFailedError
 from app.util.secret import Secret
 from app.util.session_id import SessionId
+from app.util.singleton import Singleton
 from app.util.url_builder import UrlBuilder
 
 
@@ -62,6 +65,7 @@ class Slave:
 
         if self._is_in_shutdown_mode:
             self.kill()
+            self._remove_slave_from_registry()
             raise SlaveMarkedForShutdownError
 
     def setup(self, build: Build, executor_start_index: int) -> bool:
@@ -188,11 +192,13 @@ class Slave:
     def set_shutdown_mode(self):
         """
         Mark this slave as being in shutdown mode.  Slaves in shutdown mode will not get new subjobs and will be
-        killed when they finish teardown, or killed immediately if they are not processing a build.
+        killed and removed from slave registry when they finish teardown, or
+        killed and removed from slave registry immediately if they are not processing a build.
         """
         self._is_in_shutdown_mode = True
         if self.current_build_id is None:
             self.kill()
+            self._remove_slave_from_registry()
 
     def is_shutdown(self):
         """
@@ -243,6 +249,77 @@ class Slave:
 
     def get_last_heartbeat_time(self) -> datetime:
         return self._last_heartbeat_time
+
+    def _remove_slave_from_registry(self):
+        """
+        Remove shutdown-ed slave from SlaveRegistry.
+        """
+        self._logger.info('Removing slave (url={}; id={}) from Slave Registry.'.format(self.url, self.id))
+        SlaveRegistry.singleton().remove_slave(slave_url=self.url)
+
+
+class SlaveRegistry(Singleton):
+    """
+    SlaveRegistry class is a singleton class which stores and maintains list of connected slaves.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._all_slaves_by_url = {}  # type: Dict[str, Slave]
+        self._all_slaves_by_id = {}  # type: Dict[str, Slave]
+        self._slave_dict_lock = Lock()
+
+    def add_slave(self, slave: Slave):
+        """
+        Add slave in SlaveRegistry.
+        """
+        with self._slave_dict_lock:
+            self._all_slaves_by_url[slave.url] = slave
+            self._all_slaves_by_id[slave.id] = slave
+
+    def remove_slave(self, slave: Slave=None, slave_url: str=None):
+        """
+        Remove slave from the both url and id dictionary.
+        """
+        if (slave is None) == (slave_url is None):
+            raise ValueError('Only one of slave or slave_url should be specified to remove_slave().')
+
+        with self._slave_dict_lock:
+            try:
+                if slave is None:
+                    slave = self.get_slave(slave_url=slave_url)
+                del self._all_slaves_by_url[slave.url]
+                del self._all_slaves_by_id[slave.id]
+            except (ItemNotFoundError, KeyError):
+                # Ignore if slave does not exists in SlaveRegistry
+                pass
+
+    def get_slave(self, slave_id: int=None, slave_url: str=None) -> Slave:
+        """
+        Look for a slave in the registry and if not found raise "ItemNotFoundError" exception.
+
+        :raises ItemNotFoundError when slave does not exists in Registry.
+        """
+        if (slave_id is None) == (slave_url is None):
+            raise ValueError('Only one of slave_id or slave_url should be specified to get_slave().')
+
+        if slave_id is not None:
+            if slave_id in self._all_slaves_by_id:
+                return self._all_slaves_by_id[slave_id]
+        else:
+            if slave_url in self._all_slaves_by_url:
+                return self._all_slaves_by_url[slave_url]
+        if slave_id is not None:
+            error_msg = 'Requested slave (slave_id={}) does not exist.'.format(slave_id)
+        else:
+            error_msg = 'Requested slave (slave_url={}) does not exist.'.format(slave_url)
+        raise ItemNotFoundError(error_msg)
+
+    def get_all_slaves_by_id(self):
+        return self._all_slaves_by_id
+
+    def get_all_slaves_by_url(self):
+        return self._all_slaves_by_url
 
 
 class SlaveError(Exception):
