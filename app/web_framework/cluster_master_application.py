@@ -5,6 +5,7 @@ import urllib.parse
 import tornado.web
 import prometheus_client
 
+from app.master.cluster_master import SlaveRegistry
 from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -28,6 +29,7 @@ class ClusterMasterApplication(ClusterApplication):
         default_params = {
             'cluster_master': cluster_master,
         }
+        self._slave_registry = SlaveRegistry.singleton()
         # The routes are described using a tree structure.  This is a better representation of a path than a flat list
         #  of strings and allows us to inspect children/parents of a node to generate 'child routes'
         api_v1 = [
@@ -174,7 +176,7 @@ class _SubjobHandler(_ClusterMasterBaseAPIHandler):
 class _SubjobResultHandler(_ClusterMasterBaseAPIHandler):
     def post(self, build_id, subjob_id):
         slave_url = self.decoded_body.get('slave')
-        slave = self._cluster_master.get_slave(slave_url=slave_url)
+        slave = SlaveRegistry.singleton().get_slave(slave_url=slave_url)
         file_payload = self.request.files.get('file')
         if not file_payload:
             raise RuntimeError('Result file not provided')
@@ -367,15 +369,16 @@ class _SlavesHandler(_ClusterMasterBaseAPIHandler):
         self._write_status(response, status_code=201)
 
     def get(self):
+
         response = {
-            'slaves': [slave.api_representation() for slave in self._cluster_master.all_slaves_by_id().values()]
+            'slaves': [slave.api_representation() for slave in SlaveRegistry.singleton().get_all_slaves_by_id().values()]
         }
         self.write(response)
 
 
 class _SlaveHandler(_ClusterMasterBaseAPIHandler):
     def get(self, slave_id):
-        slave = self._cluster_master.get_slave(int(slave_id))
+        slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
         response = {
             'slave': slave.api_representation()
         }
@@ -384,7 +387,7 @@ class _SlaveHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def put(self, slave_id):
         new_slave_state = self.decoded_body.get('slave', {}).get('state')
-        slave = self._cluster_master.get_slave(int(slave_id))
+        slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
         self._cluster_master.handle_slave_state_update(slave, new_slave_state)
 
         self._write_status({
@@ -414,7 +417,7 @@ class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self):
         shutdown_all = self.decoded_body.get('shutdown_all')
-        slaves_to_shutdown = self._cluster_master.all_slaves_by_id().keys() if shutdown_all else\
+        slaves_to_shutdown = SlaveRegistry.singleton().get_all_slaves_by_id().keys() if shutdown_all else\
             [int(slave_id) for slave_id in self.decoded_body.get('slaves')]
 
         self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)
