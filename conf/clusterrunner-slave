@@ -6,11 +6,11 @@
 # Default-Start:     -
 # Default-Stop:      0 1 6
 # Short-Description: ClusterRunner init script
-# Description:       Enable clusterrunner "master" service provided by daemon.
+# Description:       Enable clusterrunner "slave" service provided by daemon.
 ### END INIT INFO
 
 dir="/var/lib/clusterrunner"
-cmd="nohup clusterrunner master"
+cmd="nohup clusterrunner slave"
 user="jenkins"
 
 name=`basename $0`

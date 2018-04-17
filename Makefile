@@ -141,7 +141,8 @@ rpm: $(CR_BIN) $(PKG_INFO)
 		--rpm-attr -,$(RPM_USER),$(RPM_GROUP):$(RPM_BASE_DIR) \
 		$(CR_BIN)=/usr/bin/ \
 		$(CR_CONF)=$(RPM_CR_CONF) \
-		conf/clusterrunner-master=/etc/init.d/
+		conf/clusterrunner-master=/etc/init.d/ \
+		conf/clusterrunner-slave=/etc/init.d/
 
 .PHONY: docker-rpm
 docker-rpm:
