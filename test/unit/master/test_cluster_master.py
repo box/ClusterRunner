@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from threading import Event
 from typing import Optional
 
@@ -33,6 +34,11 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch('os.makedirs')
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
+
+        # mock datetime class inside cluster master
+        self._mock_current_datetime = datetime(2018,4,1)
+        self._mock_datetime = self.patch('app.master.cluster_master.datetime')
+        self._mock_datetime.now.return_value = self._mock_current_datetime
 
         # Two threads are ran everytime we start up the ClusterMaster. We redirect the calls to
         # `ThreadPoolExecutor.submit` through a mock proxy so we can capture events.
@@ -213,6 +219,38 @@ class TestClusterMaster(BaseUnitTestCase):
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
 
+    def test_update_slave_last_heartbeat_time_calls_update_last_heartbeat_time_on_slave(self):
+        master = ClusterMaster()
+
+        mock_slave = self.patch('app.master.cluster_master.Slave').return_value
+        master.update_slave_last_heartbeat_time(mock_slave)
+
+        self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, 1,
+                         'last heartbeat time is updated for the target slave')
+
+    @genty_dataset (
+        slave_unresponsive=(True,1000,),
+        slave_dead=(False,60,),
+        slave_responsive=(True,60,),
+    )
+    def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, seconds_since_last_heartbeat):
+        last_heartbeat_time = self._mock_current_datetime - timedelta(seconds=seconds_since_last_heartbeat)
+        master = ClusterMaster()
+
+        mock_slave = Mock()
+        self.patch('app.master.cluster_master.Slave', new=lambda *args: mock_slave)
+        master.connect_slave('slave_url', 1)
+
+        mock_slave.is_alive.return_value = slave_alive
+        mock_slave.get_last_heartbeat_time.return_value = last_heartbeat_time
+
+        master._disconnect_non_heartbeating_slaves()
+        if slave_alive and seconds_since_last_heartbeat == 1000:
+            self.assertEqual(mock_slave.mark_dead.call_count, 1, 'master disconnects unresponsive slave')
+        else:
+            self.assertEqual(mock_slave.mark_dead.call_count, 0,
+                             'master should not disconnect a dead or responsive slave')
+
     def test_handle_result_reported_from_slave_when_build_is_canceled(self):
         build_id = 1
         slave_url = "url"
@@ -390,7 +428,6 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(id_of_last_subjob, expected_last_subjob_id, 'Received the wrong last subjob from request')
         if offset is not None and limit is not None:
             self.assertLessEqual(num_subjobs, self._PAGINATION_MAX_LIMIT, 'Received too many subjobs from request')
-
 
 
     @genty_dataset(

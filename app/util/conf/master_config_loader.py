@@ -19,6 +19,9 @@ class MasterConfigLoader(BaseConfigLoader):
         conf.set('eventlog_filename', 'eventlog_master.log')
         conf.set('shallow_clones', False)
 
+        # Default values for heartbeat configuration
+        conf.set('unresponsive_slaves_cleanup_interval', 600)
+
     def configure_postload(self, conf):
         """
         After the clusterrunner.conf file has been loaded, generate the master-specific paths which descend from the

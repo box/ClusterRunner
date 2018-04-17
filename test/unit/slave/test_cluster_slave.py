@@ -10,6 +10,8 @@ import requests.models
 
 from app.project_type.project_type import SetupFailureError
 from app.slave.cluster_slave import ClusterSlave, SlaveState
+from app.util.conf.configuration import Configuration
+from app.util.conf.slave_config_loader import SlaveConfigLoader
 from app.util.exceptions import BadRequestError
 from app.util.safe_thread import SafeThread
 from app.util.single_use_coin import SingleUseCoin
@@ -26,7 +28,12 @@ class TestClusterSlave(BaseUnitTestCase):
 
     def setUp(self):
         super().setUp()
+
+        SlaveConfigLoader().configure_defaults(Configuration.singleton())
+        SlaveConfigLoader().configure_postload(Configuration.singleton())
+
         self.mock_network = self.patch('app.slave.cluster_slave.Network').return_value
+        self._mock_sys = self.patch('app.slave.cluster_slave.sys')
         self.patch('app.util.fs.tar_directories')
 
     @genty_dataset(
@@ -159,6 +166,7 @@ class TestClusterSlave(BaseUnitTestCase):
             return _get_success_mock_response()
 
         self.mock_network.post = fake_network_post
+        self.mock_network.post_with_digest = fake_network_post
         self.mock_network.put = fake_network_put
         self.mock_network.put_with_digest = fake_network_put
         return subjob_done_event, teardown_done_event, setup_done_event
@@ -236,6 +244,33 @@ class TestClusterSlave(BaseUnitTestCase):
             slave._execute_subjob(build_id=1, subjob_id=2, executor=executor, atomic_commands=[])
 
         executor.execute_subjob.assert_called_with(1, 2, [], 12)
+
+    @genty_dataset(
+        responsive_master=(True, 1),
+        unresponsive_master=(False, 1),
+        unresponsive_master_retry=(False, 2),
+    )
+    def test_heartbeat_sends_post_to_master(self, is_master_responsive, heartbeat_failure_threshold):
+        expected_slave_heartbeat_url = 'http://{}/v1/slave/1/heartbeat'.format(self._FAKE_MASTER_URL)
+        Configuration['heartbeat_failure_threshold'] = heartbeat_failure_threshold
+
+        slave = self._create_cluster_slave()
+        slave.connect_to_master(self._FAKE_MASTER_URL)
+        if not is_master_responsive:
+            self.mock_network.post_with_digest.side_effect = requests.ConnectionError
+
+        slave._run_heartbeat()
+
+        if is_master_responsive:
+            self.mock_network.post_with_digest.assert_called_once_with(
+                expected_slave_heartbeat_url,request_params={'slave': {'heartbeat': True}}, secret=ANY)
+        else:
+            if heartbeat_failure_threshold == 1:
+                self.assertEqual(self._mock_sys.exit.call_count, 1,
+                                 'slave dies when it decides that master is dead')
+            else:
+                self.assertEqual(self._mock_sys.exit.call_count, 0,
+                                 'slave keeps running when heartbeat failure threshold is not reached')
 
     def _create_cluster_slave(self, **kwargs):
         """

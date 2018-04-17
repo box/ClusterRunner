@@ -1,5 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 import os
+import sched
+from threading import Thread
 from typing import List
 
 from app.common.cluster_service import ClusterService
@@ -12,9 +15,10 @@ from app.master.build_store import BuildStore
 from app.master.slave import Slave
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
+from app.slave.cluster_slave import ClusterSlave
+from app.util import fs
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
-from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 
@@ -35,6 +39,7 @@ class ClusterMaster(ClusterService):
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -53,7 +58,36 @@ class ClusterMaster(ClusterService):
             fs.async_delete(self._master_results_path)
         fs.create_dir(self._master_results_path)
 
+        # Configure heartbeat tracking
+        self._unresponsive_slaves_cleanup_interval = Configuration['unresponsive_slaves_cleanup_interval']
+        self._hb_scheduler = sched.scheduler()
+
         SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
+
+    def start_heartbeat_tracker_thread(self):
+        self._logger.info('Heartbeat tracker will run every {} seconds'.format(
+            self._unresponsive_slaves_cleanup_interval))
+        Thread(target=self._start_heartbeat_tracker, name='HeartbeatTrackerThread', daemon=True).start()
+
+    def _start_heartbeat_tracker(self):
+        self._hb_scheduler.enter(0, 0, self._disconnect_non_heartbeating_slaves)
+        self._hb_scheduler.run()
+
+    def _disconnect_non_heartbeating_slaves(self):
+        slaves_to_disconnect = [slave for slave in self._all_slaves_by_url.values()
+                                if slave.is_alive() and not self._is_slave_responsive(slave)]
+
+        for slave in slaves_to_disconnect:
+            self._disconnect_slave(slave)
+            self._logger.error('Slave {} marked offline as it is not sending heartbeats.'.format(
+                slave.id))
+
+        self._hb_scheduler.enter(self._unresponsive_slaves_cleanup_interval, 0,
+                                 self._disconnect_non_heartbeating_slaves)
+
+    def _is_slave_responsive(self, slave: ClusterSlave) -> bool:
+        time_since_last_heartbeat = (datetime.now() - slave.get_last_heartbeat_time()).seconds
+        return time_since_last_heartbeat < self._unresponsive_slaves_cleanup_interval
 
     def _get_status(self):
         """
@@ -186,6 +220,9 @@ class ClusterMaster(ClusterService):
 
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
+
+    def update_slave_last_heartbeat_time(self, slave):
+        slave.update_last_heartbeat_time()
 
     def set_shutdown_mode_on_slaves(self, slave_ids):
         """

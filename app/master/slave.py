@@ -1,3 +1,4 @@
+from datetime import datetime
 import requests
 
 from app.master.build import Build
@@ -26,6 +27,7 @@ class Slave:
         self._num_executors_in_use = Counter()
         self._network = Network(min_connection_poolsize=num_executors)
         self.current_build_id = None
+        self._last_heartbeat_time = datetime.now()
         self._is_alive = True
         self._is_in_shutdown_mode = False
         self._slave_api = UrlBuilder(slave_url, self.API_VERSION)
@@ -235,6 +237,12 @@ class Slave:
             headers[SessionId.EXPECTED_SESSION_HEADER_KEY] = self._session_id
 
         return headers
+
+    def update_last_heartbeat_time(self):
+        self._last_heartbeat_time = datetime.now()
+
+    def get_last_heartbeat_time(self) -> datetime:
+        return self._last_heartbeat_time
 
 
 class SlaveError(Exception):

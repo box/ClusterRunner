@@ -1,6 +1,7 @@
 from enum import Enum
 from queue import Queue
 import sys
+import sched
 import time
 
 import requests
@@ -9,6 +10,7 @@ from app.common.cluster_service import ClusterService
 from app.project_type.project_type import SetupFailureError
 from app.slave.subjob_executor import SubjobExecutor
 from app.util import analytics, log, util
+from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError
 from app.util.network import Network
 from app.util.safe_thread import SafeThread
@@ -55,6 +57,41 @@ class ClusterSlave(ClusterService):
         self._current_build_id = None
         self._build_teardown_coin = None
         self._base_executor_index = None
+
+        # Configure heartbeat
+        self._heartbeat_failure_count = 0
+        self._heartbeat_failure_threshold = Configuration['heartbeat_failure_threshold']
+        self._heartbeat_interval = Configuration['heartbeat_interval']
+        self._hb_scheduler = sched.scheduler()
+
+    def start_heartbeat_thread(self):
+        self._logger.info('Heartbeat will run every {} seconds'.format(self._heartbeat_interval))
+        SafeThread(target=self._start_heartbeat, name='HeartbeatThread', daemon=True).start()
+
+    def _start_heartbeat(self):
+        self._hb_scheduler.enter(0, 0, self._run_heartbeat)
+        self._hb_scheduler.run()
+
+    def _run_heartbeat(self):
+        try:
+            self._send_heartbeat_to_master()
+            self._heartbeat_failure_count = 0
+        except (requests.ConnectionError, requests.Timeout):
+            self._heartbeat_failure_count += 1
+            if self._heartbeat_failure_count >= self._heartbeat_failure_threshold:
+                self._logger.error('Master is not responding to heartbeats')
+
+                # TODO: Right now the slave simply dies when it does not hear back from master. The next step would
+                # be to try to reconnect to master at this point. In future the heartbeat and connect_to_master
+                # methods can combined into one. This combined method will behave differently based on current state.
+                self.kill()
+
+        self._hb_scheduler.enter(self._heartbeat_interval, 0, self._run_heartbeat)
+
+    def _send_heartbeat_to_master(self):
+        heartbeat_url = self._master_api.url('slave', self._slave_id, 'heartbeat')
+        self._network.post_with_digest(heartbeat_url, request_params={'slave': {'heartbeat': True}},
+                                       secret=Secret.get())
 
     def api_representation(self):
         """

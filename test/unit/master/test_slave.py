@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import Mock, MagicMock, ANY
 
 from app.master.build import Build
@@ -19,6 +20,11 @@ class TestSlave(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.mock_network = self.patch('app.master.slave.Network').return_value
+
+        # mock datetime
+        self._mock_current_datetime = datetime(2018,4,1)
+        self._mock_datetime = self.patch('app.master.slave.datetime')
+        self._mock_datetime.now.return_value = self._mock_current_datetime
 
     def test_disconnect_command_is_sent_during_teardown_when_slave_is_still_connected(self):
         slave = self._create_slave()
@@ -209,6 +215,20 @@ class TestSlave(BaseUnitTestCase):
                          'A correct POST call should be sent to slave to start a subjob.')
         self.assertEqual(post_body, {'atomic_commands': AnythingOfType(list)},
                          'Call to start subjob should contain list of atomic_commands for this subjob.')
+
+    def test_get_last_heartbeat_time_returns_last_heartbeat_time(self):
+        slave = self._create_slave()
+
+        self.assertEqual(slave.get_last_heartbeat_time(), self._mock_current_datetime,
+                         'last heartbeat time set in the constructor')
+
+    def test_update_last_heartbeat_time_updates_last_heartbeat_time(self):
+            slave = self._create_slave()
+            mock_updated_datetime = datetime(2018,4,20)
+            self._mock_datetime.now.return_value = mock_updated_datetime
+            slave.update_last_heartbeat_time()
+
+            self.assertEqual(slave.get_last_heartbeat_time(), mock_updated_datetime, 'last heartbeat time is updated')
 
     def _create_slave(self, **kwargs) -> Slave:
         """
