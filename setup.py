@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-from pip.req import parse_requirements
+try:
+    from pip.req import parse_requirements  # pip 9.x
+except ImportError:
+    from pip._internal.req import parse_requirements  # pip 10.x
 from setuptools import find_packages, setup
 
 from app.util import autoversioning
