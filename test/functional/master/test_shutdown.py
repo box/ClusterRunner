@@ -8,7 +8,7 @@ from test.functional.job_configs import JOB_WITH_SETUP_AND_TEARDOWN
 
 class TestShutdown(BaseFunctionalTestCase):
 
-    def test_shutdown_all_slaves_should_kill_all_slaves(self):
+    def test_shutdown_all_slaves_should_kill_and_remove_all_slaves(self):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
 
@@ -16,15 +16,12 @@ class TestShutdown(BaseFunctionalTestCase):
 
         slaves_response = master.get_slaves()
         slaves = slaves_response['slaves']
-        living_slaves = [slave for slave in slaves if slave['is_alive']]
-        dead_slaves = [slave for slave in slaves if not slave['is_alive']]
 
-        self.assertEqual(0, len(living_slaves))
-        self.assertEqual(2, len(dead_slaves))
+        self.assertEqual(0, len(slaves))
 
         self.cluster.block_until_n_slaves_dead(2, 10)
 
-    def test_shutdown_one_slave_should_leave_one_slave_alive(self):
+    def test_shutdown_one_slave_should_leave_one_slave_alive_and_remove_shutdowned_slave(self):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
 
@@ -33,14 +30,13 @@ class TestShutdown(BaseFunctionalTestCase):
         slaves_response = master.get_slaves()
         slaves = slaves_response['slaves']
         living_slaves = [slave for slave in slaves if slave['is_alive']]
-        dead_slaves = [slave for slave in slaves if not slave['is_alive']]
 
         self.assertEqual(1, len(living_slaves))
-        self.assertEqual(1, len(dead_slaves))
+        self.assertEqual(1, len(slaves))
 
         self.cluster.block_until_n_slaves_dead(1, 10)
 
-    def test_shutdown_all_slaves_while_build_is_running_should_finish_build_then_kill_slaves(self):
+    def test_shutdown_all_slaves_while_build_is_running_should_finish_build_then_kill_and_remove_slaves(self):
         master = self.cluster.start_master()
         self.cluster.start_slaves(2)
 
@@ -64,7 +60,6 @@ class TestShutdown(BaseFunctionalTestCase):
         slaves_response = master.get_slaves()
         slaves = slaves_response['slaves']
         living_slaves = [slave for slave in slaves if slave['is_alive']]
-        dead_slaves = [slave for slave in slaves if not slave['is_alive']]
 
         self.assertEqual(1, len(living_slaves))
-        self.assertEqual(1, len(dead_slaves))
+        self.assertEqual(1, len(slaves))
