@@ -14,5 +14,6 @@ dist/
 
 # sources
 Dockerfile
+Jenkinsfile
 test/
 windows/
