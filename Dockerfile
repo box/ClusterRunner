@@ -4,7 +4,6 @@
 
 # STAGE 1: Official PEP 513 Python Manylinux (RHEL5) base with Python 3.4 enabled to create
 #          linux_x86_64 pex.
-#          NOTE: To update image run: "docker pull quay.io/pypa/manylinux1_x86_64:latest"
 FROM quay.io/pypa/manylinux1_x86_64:latest AS stage1
 ENV PATH="/opt/python/cp34-cp34m/bin:${PATH}"
 
@@ -17,7 +16,6 @@ COPY . .
 RUN make dist/clusterrunner
 
 # STAGE 2: CentOS 7 base w/ fpm to package pex into an rpm.
-#          NOTE: To update image run: "docker pull cdrx/fpm-centos:7"
 FROM cdrx/fpm-centos:7 AS stage2
 WORKDIR /root
 COPY . .
