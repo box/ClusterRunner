@@ -30,7 +30,6 @@ setup(
     # Data files are packaged into the wheel using the following defines.
     data_files=[
         ('', ['requirements.txt']),
-        ('bin', ['bin/git_askpass.sh', 'bin/git_ssh.sh']),
         ('conf', ['conf/default_clusterrunner.conf']),
     ],
     install_requires=requirements,
