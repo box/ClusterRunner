@@ -185,7 +185,8 @@ docker-rpm:
 	@# the final "docker cp" command.
 	DOCKER_RPM_PATH=$$(docker run $(DOCKER_TAG) sh -c "ls /root/$(DIST_DIR)/*.rpm") && \
 	CONTAINER_ID=$$(docker ps -alq) && \
-	docker cp $$CONTAINER_ID:$$DOCKER_RPM_PATH $(DIST_DIR)
+	docker cp $$CONTAINER_ID:$$DOCKER_RPM_PATH $(DIST_DIR) && \
+	docker rm $$CONTAINER_ID
 
 # RPM_PATH is set as a target dependency to potentially warn users in the event
 # that the RPM file does not exist. It is added as a convenience to the user.
@@ -204,7 +205,7 @@ release: $(PY_PKG_INFO) $$($$RPM_PATH)
 # environment.
 .PHONY: docker-release
 docker-release: docker-rpm
-	docker run -e ARTIFACTORY=$(ARTIFACTORY) $(DOCKER_TAG) /usr/bin/make release
+	docker run --rm -e ARTIFACTORY=$(ARTIFACTORY) $(DOCKER_TAG) /usr/bin/make release
 
 clean:
 	$(call print_msg, Removing intermediate build files... )
