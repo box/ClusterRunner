@@ -83,7 +83,7 @@ class BaseConfigLoader(object):
         conf.set('cors_allowed_origins_regex', None)
 
         # Helper executables
-        bin_dir = join(root_directory, 'bin')
+        bin_dir = join(base_directory, 'bin')
         conf.set('git_askpass_exe', join(bin_dir, 'git_askpass.sh'))
         conf.set('git_ssh_exe', join(bin_dir, 'git_ssh.sh'))
 
