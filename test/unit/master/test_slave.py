@@ -1,10 +1,13 @@
+from datetime import datetime
+from genty import genty, genty_dataset
 from unittest.mock import Mock, MagicMock, ANY
 
 from app.master.build import Build
 from app.master.build_request import BuildRequest
-from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave, SlaveError
+from app.master.slave import DeadSlaveError, SlaveMarkedForShutdownError, Slave, SlaveError, SlaveRegistry
 from app.master.subjob import Subjob
 from app.util import network
+from app.util.exceptions import ItemNotFoundError
 from app.util.secret import Secret
 from app.util.session_id import SessionId
 from test.framework.base_unit_test_case import BaseUnitTestCase
@@ -19,6 +22,11 @@ class TestSlave(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
         self.mock_network = self.patch('app.master.slave.Network').return_value
+
+        # mock datetime
+        self._mock_current_datetime = datetime(2018,4,1)
+        self._mock_datetime = self.patch('app.master.slave.datetime')
+        self._mock_datetime.now.return_value = self._mock_current_datetime
 
     def test_disconnect_command_is_sent_during_teardown_when_slave_is_still_connected(self):
         slave = self._create_slave()
@@ -210,6 +218,20 @@ class TestSlave(BaseUnitTestCase):
         self.assertEqual(post_body, {'atomic_commands': AnythingOfType(list)},
                          'Call to start subjob should contain list of atomic_commands for this subjob.')
 
+    def test_get_last_heartbeat_time_returns_last_heartbeat_time(self):
+        slave = self._create_slave()
+
+        self.assertEqual(slave.get_last_heartbeat_time(), self._mock_current_datetime,
+                         'last heartbeat time set in the constructor')
+
+    def test_update_last_heartbeat_time_updates_last_heartbeat_time(self):
+            slave = self._create_slave()
+            mock_updated_datetime = datetime(2018,4,20)
+            self._mock_datetime.now.return_value = mock_updated_datetime
+            slave.update_last_heartbeat_time()
+
+            self.assertEqual(slave.get_last_heartbeat_time(), mock_updated_datetime, 'last heartbeat time is updated')
+
     def _create_slave(self, **kwargs) -> Slave:
         """
         Create a slave for testing.
@@ -230,3 +252,109 @@ class TestSlave(BaseUnitTestCase):
             job_config=job_config or Mock(),
             atoms=atoms or [Mock()],
         )
+
+
+@genty
+class TestSlaveRegistry(BaseUnitTestCase):
+    def setUp(self):
+        super().setUp()
+        SlaveRegistry.reset_singleton()
+
+    @genty_dataset(
+        slave_id_specified=({'slave_id': 400},),
+        slave_url_specified=({'slave_url': 'michelangelo.turtles.gov'},),
+    )
+    def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        with self.assertRaises(ItemNotFoundError):
+            slave_registry.get_slave(**get_slave_kwargs)
+
+    @genty_dataset(
+        both_arguments_specified=({'slave_id': 1, 'slave_url': 'raphael.turtles.gov'},),
+        neither_argument_specified=({},),
+    )
+    def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+
+        with self.assertRaises(ValueError):
+            slave_registry.get_slave(**get_slave_kwargs)
+
+    def test_get_slave_returns_valid_slave(self):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEquals(slave_registry.get_slave(slave_url=slave1.url), slave1,
+                          'Get slave with url should return valid slave.')
+        self.assertEquals(slave_registry.get_slave(slave_id=slave2.id), slave2,
+                          'Get slave with id should return valid slave.')
+
+    def test_add_slave_adds_slave_in_both_dicts(self):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly two slaves should be in the all_slaves_by_id dict.')
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly two slaves should be in the all_slaves_by_url dict.')
+
+    def test_remove_slave_by_slave_instance_removes_slave_from_both_dicts(self):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly two slaves should be in the all_slaves_by_id dict.')
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly two slaves should be in the all_slaves_by_url dict.')
+
+        slave_registry.remove_slave(slave=slave1)
+
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly one slave should be in the all_slaves_by_id dict after removing one slave.')
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly one slave should be in the all_slaves_by_url dict after removing one slave.')
+
+    def test_remove_slave_by_slave_url_removes_slave_from_both_dicts(self):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave2 = Slave('leonardo.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+        slave_registry.add_slave(slave2)
+
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly two slaves should be in the all_slaves_by_id dict.')
+        self.assertEqual(2, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly two slaves should be in the all_slaves_by_url dict.')
+
+        slave_registry.remove_slave(slave_url=slave1.url)
+
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly one slave should be in the all_slaves_by_id dict after removing one slave.')
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_url()),
+                         'Exactly one slave should be in the all_slaves_by_url dict after removing one slave.')
+
+    def test_remove_slave_raises_exception_on_invalid_arguments(self):
+        slave_registry = SlaveRegistry.singleton()
+        slave1 = Slave('raphael.turtles.gov', 1)
+        slave_registry.add_slave(slave1)
+
+        with self.assertRaises(ValueError):
+            # Both arguments specified
+            slave_registry.remove_slave(slave=slave1, slave_url=slave1.url)
+            # No arguments specified
+            slave_registry.remove_slave(slave=None, slave_url=None)

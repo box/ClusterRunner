@@ -159,6 +159,9 @@ class BaseConfigLoader(object):
             'default_http_timeout',
             'https_cert_file',
             'https_key_file',
+            'heartbeat_interval',
+            'heartbeat_failure_threshold',
+            'unresponsive_slaves_cleanup_interval',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):

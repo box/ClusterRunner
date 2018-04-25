@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from threading import Event
 from typing import Optional
 
@@ -12,6 +13,7 @@ from app.master.build import Build
 from app.master.build_request import BuildRequest
 from app.master.build_store import BuildStore
 from app.master.cluster_master import ClusterMaster
+from app.master.slave import Slave, SlaveRegistry
 from app.master.subjob import Subjob
 from app.slave.cluster_slave import SlaveState
 from app.util.conf.configuration import Configuration
@@ -34,12 +36,19 @@ class TestClusterMaster(BaseUnitTestCase):
         self.mock_slave_allocator = self.patch('app.master.cluster_master.SlaveAllocator').return_value
         self.mock_scheduler_pool = self.patch('app.master.cluster_master.BuildSchedulerPool').return_value
 
+        # mock datetime class inside cluster master
+        self._mock_current_datetime = datetime(2018,4,1)
+        self._mock_datetime = self.patch('app.master.cluster_master.datetime')
+        self._mock_datetime.now.return_value = self._mock_current_datetime
+
         # Two threads are ran everytime we start up the ClusterMaster. We redirect the calls to
         # `ThreadPoolExecutor.submit` through a mock proxy so we can capture events.
         self.thread_pool_executor = ThreadPoolExecutor(max_workers=2)
         self._thread_pool_executor_cls = self.patch('app.master.cluster_master.ThreadPoolExecutor')
         self._thread_pool_executor_cls.return_value.submit.side_effect = \
             self.thread_pool_executor.submit
+
+        SlaveRegistry.reset_singleton()
 
         Configuration['pagination_offset'] = self._PAGINATION_OFFSET
         Configuration['pagination_limit'] = self._PAGINATION_LIMIT
@@ -49,61 +58,28 @@ class TestClusterMaster(BaseUnitTestCase):
         super().tearDown()
         self.thread_pool_executor.shutdown()
 
-    @genty_dataset(
-        slave_id_specified=({'slave_id': 400},),
-        slave_url_specified=({'slave_url': 'michelangelo.turtles.gov'},),
-    )
-    def test_get_slave_raises_exception_on_slave_not_found(self, get_slave_kwargs):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-        master.connect_slave('leonardo.turtles.gov', 10)
-        master.connect_slave('donatello.turtles.gov', 10)
-
-        with self.assertRaises(ItemNotFoundError):
-            master.get_slave(**get_slave_kwargs)
-
-    @genty_dataset(
-        both_arguments_specified=({'slave_id': 1, 'slave_url': 'raphael.turtles.gov'},),
-        neither_argument_specified=({},),
-    )
-    def test_get_slave_raises_exception_on_invalid_arguments(self, get_slave_kwargs):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-
-        with self.assertRaises(ValueError):
-            master.get_slave(**get_slave_kwargs)
-
-    def test_get_slave_returns_expected_value_given_valid_arguments(self):
-        master = ClusterMaster()
-        master.connect_slave('raphael.turtles.gov', 10)
-        master.connect_slave('leonardo.turtles.gov', 10)
-        master.connect_slave('donatello.turtles.gov', 10)
-
-        actual_slave_by_id = master.get_slave(slave_id=2)
-        actual_slave_by_url = master.get_slave(slave_url='leonardo.turtles.gov')
-
-        self.assertEqual(2, actual_slave_by_id.id, 'Retrieved slave should have the same id as requested.')
-        self.assertEqual('leonardo.turtles.gov', actual_slave_by_url.url,
-                         'Retrieved slave should have the same url as requested.')
-
     def test_connect_slave_adds_new_slave_if_slave_never_connected_before(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
 
         master.connect_slave('never-before-seen.turtles.gov', 10)
 
-        self.assertEqual(1, len(master.all_slaves_by_id()), 'Exactly one slave should be registered with the master.')
-        self.assertIsNotNone(master.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
+        self.assertEqual(1, len(slave_registry.get_all_slaves_by_id()),
+                         'Exactly one slave should be registered with the master.')
+        self.assertIsNotNone(slave_registry.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
                              'Registered slave does not have the expected url.')
 
     def test_connect_slave_with_existing_dead_slave_creates_new_alive_instance(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
+
         master.connect_slave('existing-slave.turtles.gov', 10)
-        existing_slave = master.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
+        existing_slave = slave_registry.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
         existing_slave.set_is_alive(False)
         existing_slave_id = existing_slave.id
 
         connect_response = master.connect_slave('existing-slave.turtles.gov', 10)
-        new_slave = master._all_slaves_by_url.get('existing-slave.turtles.gov')
+        new_slave = slave_registry.get_slave(slave_url='existing-slave.turtles.gov')
 
         self.assertNotEqual(str(existing_slave_id), connect_response['slave_id'],
                             'The re-connected slave should have generated a new slave id.')
@@ -114,10 +90,12 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_connect_slave_with_existing_slave_running_build_cancels_build(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
+
         master.connect_slave('running-slave.turtles.gov', 10)
         build_mock = MagicMock(spec_set=Build)
         BuildStore._all_builds_by_id[1] = build_mock
-        existing_slave = master.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
+        existing_slave = slave_registry.get_slave(slave_id=None, slave_url='running-slave.turtles.gov')
         existing_slave.current_build_id = 1
 
         master.connect_slave('running-slave.turtles.gov', 10)
@@ -154,9 +132,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_disconnected_state_should_mark_slave_as_dead(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, num_executors=10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         self.assertTrue(slave.is_alive())
 
         master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
@@ -165,9 +144,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_disconnected_state_should_reset_slave_current_build_id(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, num_executors=10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         slave.current_build_id = 4
 
         master.handle_slave_state_update(slave, SlaveState.DISCONNECTED)
@@ -176,11 +156,12 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_setup_completed_state_should_tell_build_to_begin_subjob_execution(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         fake_build = MagicMock(spec_set=Build)
         master.get_build = MagicMock(return_value=fake_build)
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         mock_scheduler = self.mock_scheduler_pool.get(fake_build)
         scheduler_begin_event = Event()
         mock_scheduler.begin_subjob_executions_on_slave.side_effect = lambda **_: scheduler_begin_event.set()
@@ -195,9 +176,10 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_shutdown_should_call_slave_set_shutdown_mode(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
         slave.set_shutdown_mode = Mock()
 
         master.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
@@ -206,12 +188,45 @@ class TestClusterMaster(BaseUnitTestCase):
 
     def test_updating_slave_to_nonexistent_state_should_raise_bad_request_error(self):
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         slave_url = 'raphael.turtles.gov'
         master.connect_slave(slave_url, 10)
-        slave = master.get_slave(slave_url=slave_url)
+        slave = slave_registry.get_slave(slave_url=slave_url)
 
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
+
+    def test_update_slave_last_heartbeat_time_calls_update_last_heartbeat_time_on_slave(self):
+        master = ClusterMaster()
+
+        mock_slave = self.patch('app.master.cluster_master.Slave').return_value
+        master.update_slave_last_heartbeat_time(mock_slave)
+
+        self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, 1,
+                         'last heartbeat time is updated for the target slave')
+
+    @genty_dataset (
+        slave_unresponsive=(True,1000,),
+        slave_dead=(False,60,),
+        slave_responsive=(True,60,),
+    )
+    def test_heartbeat_disconnects_unresponsive_slave(self, slave_alive, seconds_since_last_heartbeat):
+        last_heartbeat_time = self._mock_current_datetime - timedelta(seconds=seconds_since_last_heartbeat)
+        master = ClusterMaster()
+
+        mock_slave = Mock()
+        self.patch('app.master.cluster_master.Slave', new=lambda *args: mock_slave)
+        master.connect_slave('slave_url', 1)
+
+        mock_slave.is_alive.return_value = slave_alive
+        mock_slave.get_last_heartbeat_time.return_value = last_heartbeat_time
+
+        master._disconnect_non_heartbeating_slaves()
+        if slave_alive and seconds_since_last_heartbeat == 1000:
+            self.assertEqual(mock_slave.mark_dead.call_count, 1, 'master disconnects unresponsive slave')
+        else:
+            self.assertEqual(mock_slave.mark_dead.call_count, 0,
+                             'master should not disconnect a dead or responsive slave')
 
     def test_handle_result_reported_from_slave_when_build_is_canceled(self):
         build_id = 1
@@ -225,8 +240,9 @@ class TestClusterMaster(BaseUnitTestCase):
         self.patch_object(build, '_mark_subjob_complete')
 
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         BuildStore._all_builds_by_id[build_id] = build
-        master._all_slaves_by_url[slave_url] = Mock()
+        slave_registry._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(build)
 
         master.handle_result_reported_from_slave(slave_url, build_id, 1)
@@ -243,8 +259,9 @@ class TestClusterMaster(BaseUnitTestCase):
         mock_build.complete_subjob.side_effect = [RuntimeError('Write failed')]
 
         master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
         BuildStore._all_builds_by_id[mock_build.build_id()] = mock_build
-        master._all_slaves_by_url[slave_url] = Mock()
+        slave_registry._all_slaves_by_url[slave_url] = Mock()
         mock_scheduler = self.mock_scheduler_pool.get(mock_build)
 
         with self.assertRaisesRegex(RuntimeError, 'Write failed'):
@@ -390,7 +407,6 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertEqual(id_of_last_subjob, expected_last_subjob_id, 'Received the wrong last subjob from request')
         if offset is not None and limit is not None:
             self.assertLessEqual(num_subjobs, self._PAGINATION_MAX_LIMIT, 'Received too many subjobs from request')
-
 
 
     @genty_dataset(

@@ -5,6 +5,7 @@ import urllib.parse
 import tornado.web
 import prometheus_client
 
+from app.master.slave import SlaveRegistry
 from app.util import analytics
 from app.util import log
 from app.util.conf.configuration import Configuration
@@ -43,20 +44,21 @@ class ClusterMasterApplication(ClusterApplication):
                             RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                                 RouteNode(r'atom', _AtomsHandler, 'atoms').add_children([
                                     RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
-                                        RouteNode(r'console', _AtomConsoleHandler)
-                                    ])
+                                        RouteNode(r'console', _AtomConsoleHandler),
+                                    ]),
                                 ]),
-                                RouteNode(r'result', _SubjobResultHandler)
-                            ])
-                        ])
-                    ])
+                                RouteNode(r'result', _SubjobResultHandler),
+                            ]),
+                        ]),
+                    ]),
                 ]),
                 RouteNode(r'queue', _QueueHandler),
                 RouteNode(r'slave', _SlavesHandler, 'slaves').add_children([
                     RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
-                        RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown')
+                        RouteNode(r'shutdown', _SlaveShutdownHandler, 'shutdown'),
+                        RouteNode(r'heartbeat', _SlavesHeartbeatHandler),
                     ]),
-                    RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown')
+                    RouteNode(r'shutdown', _SlavesShutdownHandler, 'shutdown'),
                 ]),
                 RouteNode(r'eventlog', _EventlogHandler)])]
 
@@ -72,20 +74,21 @@ class ClusterMasterApplication(ClusterApplication):
                         RouteNode(r'(\d+)', _SubjobHandler, 'subjob').add_children([
                             RouteNode(r'atoms', _V2AtomsHandler).add_children([
                                 RouteNode(r'(\d+)', _AtomHandler, 'atom').add_children([
-                                    RouteNode(r'console', _AtomConsoleHandler)
-                                ])
+                                    RouteNode(r'console', _AtomConsoleHandler),
+                                ]),
                             ]),
-                            RouteNode(r'result', _SubjobResultHandler)
-                        ])
-                    ])
-                ])
+                            RouteNode(r'result', _SubjobResultHandler),
+                        ]),
+                    ]),
+                ]),
             ]),
             RouteNode(r'queue', _QueueHandler),
             RouteNode(r'slaves', _SlavesHandler).add_children([
                 RouteNode(r'(\d+)', _SlaveHandler, 'slave').add_children([
-                    RouteNode(r'shutdown', _SlaveShutdownHandler)
+                    RouteNode(r'shutdown', _SlaveShutdownHandler),
+                    RouteNode(r'heartbeat', _SlavesHeartbeatHandler),
                 ]),
-                RouteNode(r'shutdown', _SlavesShutdownHandler)
+                RouteNode(r'shutdown', _SlavesShutdownHandler),
             ]),
             RouteNode(r'eventlog', _EventlogHandler)]
 
@@ -174,7 +177,7 @@ class _SubjobHandler(_ClusterMasterBaseAPIHandler):
 class _SubjobResultHandler(_ClusterMasterBaseAPIHandler):
     def post(self, build_id, subjob_id):
         slave_url = self.decoded_body.get('slave')
-        slave = self._cluster_master.get_slave(slave_url=slave_url)
+        slave = SlaveRegistry.singleton().get_slave(slave_url=slave_url)
         file_payload = self.request.files.get('file')
         if not file_payload:
             raise RuntimeError('Result file not provided')
@@ -367,15 +370,16 @@ class _SlavesHandler(_ClusterMasterBaseAPIHandler):
         self._write_status(response, status_code=201)
 
     def get(self):
+
         response = {
-            'slaves': [slave.api_representation() for slave in self._cluster_master.all_slaves_by_id().values()]
+            'slaves': [slave.api_representation() for slave in SlaveRegistry.singleton().get_all_slaves_by_id().values()]
         }
         self.write(response)
 
 
 class _SlaveHandler(_ClusterMasterBaseAPIHandler):
     def get(self, slave_id):
-        slave = self._cluster_master.get_slave(int(slave_id))
+        slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
         response = {
             'slave': slave.api_representation()
         }
@@ -384,8 +388,9 @@ class _SlaveHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def put(self, slave_id):
         new_slave_state = self.decoded_body.get('slave', {}).get('state')
-        slave = self._cluster_master.get_slave(int(slave_id))
+        slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
         self._cluster_master.handle_slave_state_update(slave, new_slave_state)
+        self._cluster_master.update_slave_last_heartbeat_time(slave)
 
         self._write_status({
             'slave': slave.api_representation()
@@ -414,7 +419,16 @@ class _SlavesShutdownHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self):
         shutdown_all = self.decoded_body.get('shutdown_all')
-        slaves_to_shutdown = self._cluster_master.all_slaves_by_id().keys() if shutdown_all else\
-            [int(slave_id) for slave_id in self.decoded_body.get('slaves')]
+        if shutdown_all:
+            slaves_to_shutdown = SlaveRegistry.singleton().get_all_slaves_by_id().keys()
+        else:
+            slaves_to_shutdown = [int(slave_id) for slave_id in self.decoded_body.get('slaves')]
 
         self._cluster_master.set_shutdown_mode_on_slaves(slaves_to_shutdown)
+
+
+class _SlavesHeartbeatHandler(_ClusterMasterBaseAPIHandler):
+    @authenticated
+    def post(self, slave_id):
+        slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
+        self._cluster_master.update_slave_last_heartbeat_time(slave)

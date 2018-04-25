@@ -1,5 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 import os
+import sched
+from threading import Thread
 from typing import List
 
 from app.common.cluster_service import ClusterService
@@ -9,12 +12,13 @@ from app.master.build_request import BuildRequest
 from app.master.build_request_handler import BuildRequestHandler
 from app.master.build_scheduler_pool import BuildSchedulerPool
 from app.master.build_store import BuildStore
-from app.master.slave import Slave
+from app.master.slave import Slave, SlaveRegistry
 from app.master.slave_allocator import SlaveAllocator
 from app.slave.cluster_slave import SlaveState
+from app.slave.cluster_slave import ClusterSlave
+from app.util import fs
 from app.util.conf.configuration import Configuration
 from app.util.exceptions import BadRequestError, ItemNotFoundError, ItemNotReadyError
-from app.util import fs
 from app.util.log import get_logger
 from app.util.pagination import get_paginated_indices
 
@@ -29,12 +33,13 @@ class ClusterMaster(ClusterService):
     def __init__(self):
         self._logger = get_logger(__name__)
         self._master_results_path = Configuration['results_directory']
-        self._all_slaves_by_url = {}
+        self._slave_registry = SlaveRegistry.singleton()
         self._scheduler_pool = BuildSchedulerPool()
         self._build_request_handler = BuildRequestHandler(self._scheduler_pool)
         self._build_request_handler.start()
         self._slave_allocator = SlaveAllocator(self._scheduler_pool)
         self._slave_allocator.start()
+
         # The best practice for determining the number of threads to use is
         # the number of threads per core multiplied by the number of physical
         # cores. So for example, with 10 cores, 2 sockets and 2 per core, the
@@ -53,7 +58,36 @@ class ClusterMaster(ClusterService):
             fs.async_delete(self._master_results_path)
         fs.create_dir(self._master_results_path)
 
-        SlavesCollector.register_slaves_metrics_collector(lambda: self.all_slaves_by_id().values())
+        # Configure heartbeat tracking
+        self._unresponsive_slaves_cleanup_interval = Configuration['unresponsive_slaves_cleanup_interval']
+        self._hb_scheduler = sched.scheduler()
+
+        SlavesCollector.register_slaves_metrics_collector(lambda: self._slave_registry.get_all_slaves_by_id().values())
+
+    def start_heartbeat_tracker_thread(self):
+        self._logger.info('Heartbeat tracker will run every {} seconds'.format(
+            self._unresponsive_slaves_cleanup_interval))
+        Thread(target=self._start_heartbeat_tracker, name='HeartbeatTrackerThread', daemon=True).start()
+
+    def _start_heartbeat_tracker(self):
+        self._hb_scheduler.enter(0, 0, self._disconnect_non_heartbeating_slaves)
+        self._hb_scheduler.run()
+
+    def _disconnect_non_heartbeating_slaves(self):
+        slaves_to_disconnect = [slave for slave in self._slave_registry.get_all_slaves_by_url().values()
+                                if slave.is_alive() and not self._is_slave_responsive(slave)]
+
+        for slave in slaves_to_disconnect:
+            self._disconnect_slave(slave)
+            self._logger.error('Slave {} marked offline as it is not sending heartbeats.'.format(
+                slave.id))
+
+        self._hb_scheduler.enter(self._unresponsive_slaves_cleanup_interval, 0,
+                                 self._disconnect_non_heartbeating_slaves)
+
+    def _is_slave_responsive(self, slave: ClusterSlave) -> bool:
+        time_since_last_heartbeat = (datetime.now() - slave.get_last_heartbeat_time()).seconds
+        return time_since_last_heartbeat < self._unresponsive_slaves_cleanup_interval
 
     def _get_status(self):
         """
@@ -68,7 +102,8 @@ class ClusterMaster(ClusterService):
         Gets a dict representing this resource which can be returned in an API response.
         :rtype: dict [str, mixed]
         """
-        slaves_representation = [slave.api_representation() for slave in self.all_slaves_by_id().values()]
+        slaves_representation = [slave.api_representation() for slave in
+                                 self._slave_registry.get_all_slaves_by_id().values()]
         return {
             'status': self._get_status(),
             'slaves': slaves_representation,
@@ -91,41 +126,6 @@ class ClusterMaster(ClusterService):
         """
         return [build for build in self.get_builds() if not build.is_finished]
 
-    def all_slaves_by_id(self):
-        """
-        Retrieve all connected slaves
-        :rtype: dict [int, Slave]
-        """
-        slaves_by_slave_id = {}
-        for slave in self._all_slaves_by_url.values():
-            slaves_by_slave_id[slave.id] = slave
-        return slaves_by_slave_id
-
-    def get_slave(self, slave_id=None, slave_url=None):
-        """
-        Get the instance of given slave by either the slave's id or url. Only one of slave_id or slave_url should be
-        specified.
-
-        :param slave_id: The id of the slave to return
-        :type slave_id: int
-        :param slave_url: The url of the slave to return
-        :type slave_url: str
-        :return: The instance of the slave
-        :rtype: Slave
-        """
-        if (slave_id is None) == (slave_url is None):
-            raise ValueError('Only one of slave_id or slave_url should be specified to get_slave().')
-
-        if slave_id is not None:
-            for slave in self._all_slaves_by_url.values():
-                if slave.id == slave_id:
-                    return slave
-        else:
-            if slave_url in self._all_slaves_by_url:
-                return self._all_slaves_by_url[slave_url]
-
-        raise ItemNotFoundError('Requested slave ({}) does not exist.'.format(slave_id))
-
     def connect_slave(self, slave_url, num_executors, slave_session_id=None):
         """
         Connect a slave to this master.
@@ -139,11 +139,13 @@ class ClusterMaster(ClusterService):
         # todo: Validate arg types for this and other methods called via API.
         # If a slave had previously been connected, and is now being reconnected, the cleanest way to resolve this
         # bookkeeping is for the master to forget about the previous slave instance and start with a fresh instance.
-        if slave_url in self._all_slaves_by_url:
-            old_slave = self._all_slaves_by_url.get(slave_url)
+        try:
+            old_slave = self._slave_registry.get_slave(slave_url=slave_url)
+        except ItemNotFoundError:
+            pass
+        else:
             self._logger.warning('Slave requested to connect to master, even though previously connected as {}. ' +
                                  'Removing existing slave instance from the master\'s bookkeeping.', old_slave)
-
             # If a slave has requested to reconnect, we have to assume that whatever build the dead slave was
             # working on no longer has valid results.
             if old_slave.current_build_id is not None:
@@ -159,7 +161,7 @@ class ClusterMaster(ClusterService):
                                       old_slave)
 
         slave = Slave(slave_url, num_executors, slave_session_id)
-        self._all_slaves_by_url[slave_url] = slave
+        self._slave_registry.add_slave(slave)
         self._slave_allocator.add_idle_slave(slave)
         self._logger.info('Slave on {} connected to master with {} executors. (id: {})',
                           slave_url, num_executors, slave.id)
@@ -187,12 +189,15 @@ class ClusterMaster(ClusterService):
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
 
+    def update_slave_last_heartbeat_time(self, slave):
+        slave.update_last_heartbeat_time()
+
     def set_shutdown_mode_on_slaves(self, slave_ids):
         """
         :type slave_ids: list[int]
         """
         # Find all the slaves first so if an invalid slave_id is specified, we 404 before shutting any of them down.
-        slaves = [self.get_slave(slave_id) for slave_id in slave_ids]
+        slaves = [self._slave_registry.get_slave(slave_id=slave_id) for slave_id in slave_ids]
         for slave in slaves:
             self.handle_slave_state_update(slave, SlaveState.SHUTDOWN)
 
@@ -296,7 +301,7 @@ class ClusterMaster(ClusterService):
         """
         self._logger.info('Results received from {} for subjob. (Build {}, Subjob {})', slave_url, build_id, subjob_id)
         build = BuildStore.get(int(build_id))
-        slave = self._all_slaves_by_url[slave_url]
+        slave = self._slave_registry.get_slave(slave_url=slave_url)
         try:
             build.complete_subjob(subjob_id, payload)
         finally:
