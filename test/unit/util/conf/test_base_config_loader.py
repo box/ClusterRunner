@@ -7,7 +7,7 @@ from test.framework.base_unit_test_case import BaseUnitTestCase
 
 class _FakeConfigLoader(BaseConfigLoader):
     def _get_config_file_whitelisted_keys(self):
-        return ['some_bool', 'some_int', 'some_list', 'some_str']
+        return ['some_bool', 'some_int', 'some_list', 'some_str', 'some_none']
 
     def configure_defaults(self, conf):
         super().configure_defaults(conf)
@@ -15,6 +15,7 @@ class _FakeConfigLoader(BaseConfigLoader):
         conf.set('some_int', 1776)
         conf.set('some_list', ['red', 'white', 'blue'])
         conf.set('some_str', 'America!')
+        conf.set('some_none', 'not None')
         conf.set('some_nonwhitelisted_key', 1492)
 
 
@@ -26,6 +27,7 @@ class TestBaseConfigLoader(BaseUnitTestCase):
         int_type=('some_int', '1999', 1999),
         list_type=('some_list', ['a', 'b', 'c'], ['a', 'b', 'c']),
         str_type=('some_str', 'OneTwoThree', 'OneTwoThree'),
+        none_type=('some_none', 'None', None),
     )
     def test_all_datatypes_can_be_overridden_by_value_in_file(self, key, parsed_val, expected_stored_conf_val):
         mock_config_file = self.patch('app.util.conf.base_config_loader.ConfigFile').return_value

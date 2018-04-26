@@ -189,7 +189,7 @@ class BaseConfigLoader(object):
         for key in clusterrunner_config:
             if key not in whitelisted_file_keys:
                 raise InvalidConfigError('The config file contains an invalid key: {}'.format(key))
-            value = clusterrunner_config[key]
+            value = None if clusterrunner_config[key] == 'None' else clusterrunner_config[key]
 
             self._cast_and_set(key, value, config)
 
@@ -217,9 +217,9 @@ class BaseConfigLoader(object):
                 value = [value]
             config.set(key, value)
 
-        else:  # Could be str or NoneType, we assume it should be a str
+        else:  # Could be str or NoneType
             # Hacky: If the value starts with ~, we assume it's a path that needs to be expanded
-            if value.startswith('~'):
+            if value is not None and value.startswith('~'):
                 value = expanduser(value)
             config.set(key, value)
 
