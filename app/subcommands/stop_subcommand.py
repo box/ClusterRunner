@@ -11,7 +11,7 @@ from app.util.conf.configuration import Configuration
 class StopSubcommand(Subcommand):
 
     # The commands that can be used to identify a clusterrunner process (for accurate killing).
-    _command_whitelist_keywords = ['clusterrunner', 'main.py master', 'main.py slave']
+    _command_whitelist_keywords = ['clusterrunner', 'app master', 'app slave']
     # The number of seconds to wait between performing a SIGTERM and a SIGKILL
     SIGTERM_SIGKILL_GRACE_PERIOD_SEC = 2
 

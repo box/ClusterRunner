@@ -42,7 +42,7 @@ class FunctionalTestCluster(object):
         self._next_slave_port = self._SLAVE_START_PORT
 
         self._clusterrunner_repo_dir = dirname(dirname(dirname(dirname(realpath(__file__)))))
-        self._app_executable = join(self._clusterrunner_repo_dir, 'main.py')
+        self._app_executable = [sys.executable, '-m', 'app']
 
         self._master_app_base_dir = None
         self._slaves_app_base_dirs = []
@@ -144,9 +144,7 @@ class FunctionalTestCluster(object):
         self._master_app_base_dir = tempfile.TemporaryDirectory()
         master_config_file_path = self._create_test_config_file(self._master_app_base_dir.name, **extra_conf_vals)
         master_hostname = 'localhost'
-        master_cmd = [
-            sys.executable,
-            self._app_executable,
+        master_cmd = self._app_executable + [
             'master',
             '--port', str(self._MASTER_PORT),
             '--eventlog-file', self._master_eventlog_name,
@@ -209,9 +207,7 @@ class FunctionalTestCluster(object):
 
             slave_config_file_path = self._create_test_config_file(slave_base_app_dir.name, **extra_conf_vals)
 
-            slave_cmd = [
-                sys.executable,
-                self._app_executable,
+            slave_cmd = self._app_executable + [
                 'slave',
                 '--port', str(slave_port),
                 '--num-executors', str(num_executors_per_slave),

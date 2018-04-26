@@ -19,7 +19,7 @@ class TestDeploySubcommand(BaseUnitTestCase):
     def test_binaries_tar_raises_exception_if_running_from_source(self):
         deploy_subcommand = DeploySubcommand()
         with self.assertRaisesRegex(SystemExit, '1'):
-            deploy_subcommand._binaries_tar('python main.py deploy', '~/.clusterrunner/dist')
+            deploy_subcommand._binaries_tar('python -m app deploy', '~/.clusterrunner/dist')
 
     def test_binaries_doesnt_raise_exception_if_running_from_bin(self):
         self.patch('os.path.isfile').return_value = True

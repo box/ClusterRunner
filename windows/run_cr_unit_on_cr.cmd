@@ -1,2 +1,2 @@
-python main.py build --job-name UnitOnWindows
-python main.py stop
+python -m app build --job-name UnitOnWindows
+python -m app stop

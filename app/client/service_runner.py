@@ -35,7 +35,7 @@ class ServiceRunner(object):
         self._logger.info('Running master on {}'.format(self._master_url))
         if self.is_master_up():
             return
-        cmd = [self._main_executable, 'master', '--port', self._port(self._master_url)]
+        cmd = self._main_executable + ['master', '--port', self._port(self._master_url)]
 
         self._run_service(cmd, self._master_url)
 
@@ -55,7 +55,7 @@ class ServiceRunner(object):
         :return:
         """
         self._logger.info('Running slave')
-        cmd = [self._main_executable, 'slave', '--master-url', self._master_url]
+        cmd = self._main_executable + ['slave', '--master-url', self._master_url]
         if port is not None:
             cmd.extend(['--port', str(port)])
 
@@ -85,7 +85,7 @@ class ServiceRunner(object):
             raise Exception('Master service did not become idle before timeout.')
 
     def kill(self):
-        self._run_service([self._main_executable, 'stop'])
+        self._run_service(self._main_executable + ['stop'])
 
     def _run_service(self, cmd, service_url=None):
         """

@@ -22,7 +22,7 @@ class TestServiceRunner(BaseUnitTestCase):
         except ServiceRunError:
             pass
 
-        self.assertEqual(call([ANY, 'master', '--port', '1'], stdout=ANY), self.mock_Popen.call_args)
+        self.assertEqual(call([ANY, ANY, 'master', '--port', '1'], stdout=ANY), self.mock_Popen.call_args)
 
     def test_run_master_does_not_invoke_popen_if_resp_is_ok(self):
         mock_network = self.mock_Network.return_value

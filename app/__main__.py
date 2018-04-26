@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+import os
 import random
 import string
-
-import os
 import sys
 import threading
 import time
@@ -17,9 +16,9 @@ from app.subcommands.slave_subcommand import SlaveSubcommand
 from app.subcommands.stop_subcommand import StopSubcommand
 from app.util import app_info, autoversioning, log, util
 from app.util.argument_parsing import ClusterRunnerArgumentParser, ClusterRunnerHelpFormatter
-from app.util.conf.configuration import Configuration
-from app.util.conf.base_config_loader import BaseConfigLoader, BASE_CONFIG_FILE_SECTION
+from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION, BaseConfigLoader
 from app.util.conf.config_file import ConfigFile
+from app.util.conf.configuration import Configuration
 from app.util.conf.deploy_config_loader import DeployConfigLoader
 from app.util.conf.master_config_loader import MasterConfigLoader
 from app.util.conf.slave_config_loader import SlaveConfigLoader
@@ -86,17 +85,19 @@ def _parse_args(args):
         'deploy', help='Deploy clusterrunner to master and slaves.', formatter_class=ClusterRunnerHelpFormatter)
     deploy_parser.add_argument(
         '-m', '--master', type=str,
-        help='The master host url (no port) to deploy the master on. This will be read from conf if unspecified, ' +
-             'and defaults to localhost.')
+        help=('The master host url (no port) to deploy the master on. This will be read from conf '
+              'if unspecified, and defaults to localhost.'))
     deploy_parser.add_argument(
-        '--master-port', type=int, help='The port on which the master service will run. ' +
-                                        'This will be read from conf if unspecified, and defaults to 43000.')
+        '--master-port', type=int,
+        help=('The port on which the master service will run. '
+              'This will be read from conf if unspecified, and defaults to 43000.'))
     deploy_parser.add_argument(
         '-s', '--slaves', type=str, nargs='+',
         help='The space separated list of host urls (without ports) to be deployed as slaves.')
     deploy_parser.add_argument(
-        '--slave-port', type=int, help='The port on which all of the slave services will run. ' +
-                                       'This will be read from conf if unspecified, and defaults to 43001.')
+        '--slave-port', type=int,
+        help=('The port on which all of the slave services will run. '
+              'This will be read from conf if unspecified, and defaults to 43001.'))
     deploy_parser.add_argument(
         '-n', '--num-executors', type=int, help='The number of executors to use per slave, defaults to 30.')
     deploy_parser.set_defaults(subcommand_class=DeploySubcommand)
@@ -122,11 +123,10 @@ def _parse_args(args):
     _add_project_type_subparsers(build_parser)
     build_parser.set_defaults(subcommand_class=BuildSubcommand)
 
-
     shutdown_parser = subparsers.add_parser(
         'shutdown',
-        help='Put slaves in shutdown mode so they can be terminated safely. Slaves in shutdown mode will finish any ' +
-             'subjobs they are currently executing, then die.',
+        help=('Put slaves in shutdown mode so they can be terminated safely. Slaves in shutdown '
+              'mode will finish any subjobs they are currently executing, then die.'),
         formatter_class=ClusterRunnerHelpFormatter
     )
     shutdown_parser.add_argument(
@@ -269,13 +269,13 @@ def _start_app_force_kill_countdown(seconds):
         logger.error('ClusterRunner did not exit within {} seconds. App debug info:\n\n{}.',
                      seconds, app_info.get_app_info_string())
         logger.critical('ClusterRunner seems to be hanging unexpectedly. Hard killing the process. Farewell!')
-        os._exit(1)
+        os._exit(1)  # pylint: disable=protected-access
 
     # Execute on a daemon thread so that the countdown itself will not prevent the app from exiting naturally.
     threading.Thread(target=log_app_debug_info_and_force_kill_after_delay, name='SuicideThread', daemon=True).start()
 
 
-def main(args):
+def main(args=None):
     """
     This is the single entry point of the ClusterRunner application. This function feeds the command line parameters as
     keyword args directly into the run() method of the appropriate Subcommand subclass.
@@ -300,4 +300,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

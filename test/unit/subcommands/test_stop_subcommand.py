@@ -112,14 +112,14 @@ class TestStopSubcommand(BaseUnitTestCase):
     def _setup_processes(self, master_cmdline=None, slave_cmdline=None):
         master_process = self._create_mock_process(
             self._fake_master_pid,
-            cmdline=master_cmdline if master_cmdline else ['python', 'main.py', 'master'],
+            cmdline=master_cmdline if master_cmdline else ['python', '-m', 'app', 'master'],
         )
 
         slave_child_process = self._create_mock_process(3333)
         slave_process = self._create_mock_process(
             self._fake_slave_pid,
             child_processes=[slave_child_process],
-            cmdline=slave_cmdline if slave_cmdline else ['python', 'main.py', 'slave'],
+            cmdline=slave_cmdline if slave_cmdline else ['python', '-m', 'app', 'slave'],
         )
 
         self._mock_psutil_process.side_effect = [
