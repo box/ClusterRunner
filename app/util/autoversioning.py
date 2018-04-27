@@ -71,13 +71,10 @@ def _repo_has_uncommited_changes():
     :return: Whether or not the repo has uncommited changes to tracked files
     :rtype: bool
     """
-    has_uncommited_changes = False
-    try:
-        _execute_local_git_command('diff-index', '--quiet', 'HEAD')
-    except subprocess.CalledProcessError:  # CalledProcessError is raised if command exits with non-zero exit code
-        has_uncommited_changes = True
-
-    return has_uncommited_changes
+    # Null output from "status" indicates no changes.
+    if _execute_local_git_command('status', '--porcelain'):
+        return True
+    return False
 
 
 def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
