@@ -11,9 +11,3 @@
 .hypothesis/
 build_results/
 dist/
-
-# sources
-Dockerfile
-Jenkinsfile
-test/
-windows/
