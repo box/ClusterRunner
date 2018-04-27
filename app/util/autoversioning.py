@@ -26,7 +26,7 @@ def _get_frozen_package_version():
     try:
         import pkg_resources
         return pkg_resources.get_distribution('clusterrunner').version  # pylint: disable=no-member
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         return None
 
 
@@ -71,10 +71,8 @@ def _repo_has_uncommited_changes():
     :return: Whether or not the repo has uncommited changes to tracked files
     :rtype: bool
     """
-    # Null output from "status" indicates no changes.
-    if _execute_local_git_command('status', '--porcelain'):
-        return True
-    return False
+    # Any output from "status" indicates changes.
+    return bool(_execute_local_git_command('status', '--porcelain'))
 
 
 def _is_commit_hash_in_masters_first_parent_chain(commit_hash):

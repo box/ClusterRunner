@@ -52,7 +52,7 @@ class TestAutoversioning(BaseUnitTestCase):
         self.assertEqual(actual_version, expected_version)
 
     def _mock_git_commands_output(self, commit_is_on_trunk=True, index_has_changed_files=False):
-        diff_index_side_effect = subprocess.CalledProcessError(1, 'fake') if index_has_changed_files else b'\n'
+        status_side_effect = 'M app/util/autoversioning.py'.encode() if index_has_changed_files else b''
         current_head_commit = b'commit1\n' if commit_is_on_trunk else b'commit2\n'
 
         current_origin_master_commit = b'commit3\n'
@@ -61,7 +61,7 @@ class TestAutoversioning(BaseUnitTestCase):
             ('rev-list', 'HEAD'): all_commits,
             ('rev-list', '--first-parent', 'commit1^..commit3'): b'commit1\ncommit3\n',  # commit2 is not a trunk commit
             ('rev-list', '--first-parent', 'commit2^..commit3'): b'commit1\n',
-            ('diff-index', '--quiet', 'HEAD'): diff_index_side_effect,
+            ('status', '--porcelain'): status_side_effect,
             ('rev-parse', '--verify', 'HEAD'): current_head_commit,
             ('rev-parse', '--verify', 'origin/master'): current_origin_master_commit,
         }
