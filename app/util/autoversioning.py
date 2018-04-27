@@ -26,7 +26,7 @@ def _get_frozen_package_version():
     try:
         import pkg_resources
         return pkg_resources.get_distribution('clusterrunner').version  # pylint: disable=no-member
-    except pkg_resources.DistributionNotFound:
+    except Exception:
         return None
 
 
@@ -89,6 +89,7 @@ def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
     :type commit_hash: str
     :rtype: bool
     :raises CalledProcessError: if there is no local git repo or is a shallow clone
+    :raises FileNotFoundError: if git command is not available.
     """
     master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
     first_parent_chain = _execute_local_git_command(
