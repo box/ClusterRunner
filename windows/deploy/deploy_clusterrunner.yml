@@ -33,34 +33,34 @@
     - name: Copy clusterrunner.conf
       win_copy: src=files/clusterrunner.conf dest={{home}}\.clusterrunner\clusterrunner.conf
 
-- name: Start ClusterRunner Master
-  hosts: master
+- name: Start ClusterRunner Manager
+  hosts: manager
   tags:
     - start
-    - start_master
+    - start_manager
 
   tasks:
-    - name: Start ClusterRunner Master
-      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe master"
+    - name: Start ClusterRunner Manager
+      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe manager"
     - pause: seconds=5
 
-- name: Connect ClusterRunner Slaves
-  hosts: slaves
+- name: Connect ClusterRunner Workers
+  hosts: workers
   tags:
     - start
-    - connect_slave
+    - connect_worker
 
   tasks:
-    - name: Connect ClusterRunner slaves
-      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe slave -m {{master}}:43000 -e 10"
+    - name: Connect ClusterRunner workers
+      script: files/run_process_nohup.ps1 "{{home}}\.clusterrunner\dist\clusterrunner.exe worker -m {{manager}}:43000 -e 10"
 
 - name: Check connection
-  hosts: slaves
+  hosts: workers
   tags:
     - check
 
   tasks:
-    - name: Check all slaves are connected
-      local_action: shell curl http://{{master}}:43000/v1/slave
+    - name: Check all workers are connected
+      local_action: shell curl http://{{manager}}:43000/v1/worker
       register: curl_output
       failed_when: "'{{inventory_hostname}}' not in curl_output.stdout"

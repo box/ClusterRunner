@@ -5,11 +5,11 @@ import os
 from unittest import TestCase
 from unittest.mock import MagicMock, NonCallableMock, patch
 
-from app.master.build import Build
-from app.master.slave import Slave
+from app.manager.build import Build
+from app.manager.worker import Worker
 from app.util import analytics, log
 from app.util.conf.configuration import Configuration
-from app.util.conf.master_config_loader import MasterConfigLoader
+from app.util.conf.manager_config_loader import ManagerConfigLoader
 from app.util.counter import Counter
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
@@ -51,12 +51,12 @@ class BaseUnitTestCase(TestCase):
         # handlers that must execute on the main thread.
         UnhandledExceptionHandler.singleton()
 
-        MasterConfigLoader().configure_defaults(Configuration.singleton())
-        MasterConfigLoader().configure_postload(Configuration.singleton())
-        self.patch('app.util.conf.master_config_loader.MasterConfigLoader.load_from_config_file')
+        ManagerConfigLoader().configure_defaults(Configuration.singleton())
+        ManagerConfigLoader().configure_postload(Configuration.singleton())
+        self.patch('app.util.conf.manager_config_loader.ManagerConfigLoader.load_from_config_file')
 
         # Reset counters
-        Slave._slave_id_counter = Counter()
+        Worker._worker_id_counter = Counter()
         Build._build_id_counter = Counter()
         analytics._event_id_generator = Counter()
 

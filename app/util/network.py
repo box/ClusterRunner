@@ -127,7 +127,7 @@ class Network(object):
         :param data: The request body data -- passed through to requests lib but may be mutated first
         :type data: dict|str|bytes|None
         :param should_encode_body: If True we json-encode the actual data inside a new dict, which is then sent with
-            the request. This should be True for all Master<->Slave API calls but we can set this False to skip this
+            the request. This should be True for all Manager<->Worker API calls but we can set this False to skip this
             extra encoding step if necessary.
         :type should_encode_body: bool
         :param error_on_failure: If true, raise an error when the response is not in the 200s

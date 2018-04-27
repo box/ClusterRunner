@@ -46,42 +46,42 @@ class ErrorType(str, Enum):
         return self.value
 
 
-class SlavesCollector:
+class WorkersCollector:
     """
-    Prometheus collector to collect the total number of alive/dead/idle slaves connected to the master.
+    Prometheus collector to collect the total number of alive/dead/idle workers connected to the manager.
     collect() is called once each time prometheus scrapes the /metrics endpoint. This class ensures that
-    1. The list of slaves only gets iterated through once per scrape
-    2. A single slave is is not double counted in 2 states
+    1. The list of workers only gets iterated through once per scrape
+    2. A single worker is is not double counted in 2 states
     """
 
-    _slaves_collector_is_registered = False
+    _workers_collector_is_registered = False
 
-    def __init__(self, get_slaves: Callable[[], List['app.master.slave.Slave']]):
-        self._get_slaves = get_slaves
+    def __init__(self, get_workers: Callable[[], List['app.manager.worker.Worker']]):
+        self._get_workers = get_workers
 
     def collect(self) -> Iterator[GaugeMetricFamily]:
         active, idle, dead = 0, 0, 0
-        for slave in self._get_slaves():
-            if slave.is_alive(use_cached=True) and slave.current_build_id is not None:
+        for worker in self._get_workers():
+            if worker.is_alive(use_cached=True) and worker.current_build_id is not None:
                 active += 1
-            elif slave.is_alive(use_cached=True) and slave.current_build_id is None:
+            elif worker.is_alive(use_cached=True) and worker.current_build_id is None:
                 idle += 1
-            elif not slave.is_alive(use_cached=True) and not slave.is_shutdown():
-                # Slave is not alive and was not deliberately put in shutdown mode. Count it as dead.
+            elif not worker.is_alive(use_cached=True) and not worker.is_shutdown():
+                # Worker is not alive and was not deliberately put in shutdown mode. Count it as dead.
                 dead += 1
             else:
-                # If not slave.is_alive() and slave.is_shutdown() = True then we have deliberately
-                # and gracefully killed the slave. We do not want to categorize such a slave as 'dead'
+                # If not worker.is_alive() and worker.is_shutdown() = True then we have deliberately
+                # and gracefully killed the worker. We do not want to categorize such a worker as 'dead'
                 pass
 
-        slaves_gauge = GaugeMetricFamily('slaves', 'Total number of slaves', labels=['state'])
-        slaves_gauge.add_metric(['active'], active)
-        slaves_gauge.add_metric(['idle'], idle)
-        slaves_gauge.add_metric(['dead'], dead)
-        yield slaves_gauge
+        workers_gauge = GaugeMetricFamily('workers', 'Total number of workers', labels=['state'])
+        workers_gauge.add_metric(['active'], active)
+        workers_gauge.add_metric(['idle'], idle)
+        workers_gauge.add_metric(['dead'], dead)
+        yield workers_gauge
 
     @classmethod
-    def register_slaves_metrics_collector(cls, get_slaves: Callable[[], List['app.master.slave.Slave']]):
-        if not cls._slaves_collector_is_registered:
-            REGISTRY.register(SlavesCollector(get_slaves))
-            cls._slaves_collector_is_registered = True
+    def register_workers_metrics_collector(cls, get_workers: Callable[[], List['app.manager.worker.Worker']]):
+        if not cls._workers_collector_is_registered:
+            REGISTRY.register(WorkersCollector(get_workers))
+            cls._workers_collector_is_registered = True

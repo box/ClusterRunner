@@ -12,14 +12,14 @@ from app.util.secret import Secret
 
 class BuildSubcommand(Subcommand):
 
-    def run(self, log_level, master_url, remote_file=None, build_type=None, **request_params):
+    def run(self, log_level, manager_url, remote_file=None, build_type=None, **request_params):
         """
         Execute a build and wait for it to complete.
 
         :param log_level: the log level at which to do application logging (or None for default log level)
         :type log_level: str | None
-        :param master_url: the url (specified by the user) of the master to which we should send the build
-        :type master_url: str | None
+        :param manager_url: the url (specified by the user) of the manager to which we should send the build
+        :type manager_url: str | None
         :param remote_file: a list of remote files where each element contains the output file name and the resource URL
         :type remote_file: list[list[str]] | None
         :param build_type: the build type of the request to be sent (e.g., "git", "directory"). If not specified
@@ -35,40 +35,40 @@ class BuildSubcommand(Subcommand):
         if remote_file:
             request_params['remote_files'] = {name: url for name, url in remote_file}
 
-        operational_master_url = master_url or '{}:{}'.format(Configuration['hostname'], Configuration['port'])
+        operational_manager_url = manager_url or '{}:{}'.format(Configuration['hostname'], Configuration['port'])
 
-        # If running a single master, single slave--both on localhost--we need to launch services locally.
-        if master_url is None and Network.are_hosts_same(Configuration['master_hostname'], 'localhost') \
-                and len(Configuration['slaves']) == 1 \
-                and Network.are_hosts_same(Configuration['slaves'][0], 'localhost'):
-            self._start_local_services_if_needed(operational_master_url)
+        # If running a single manager, single worker--both on localhost--we need to launch services locally.
+        if manager_url is None and Network.are_hosts_same(Configuration['manager_hostname'], 'localhost') \
+                and len(Configuration['workers']) == 1 \
+                and Network.are_hosts_same(Configuration['workers'][0], 'localhost'):
+            self._start_local_services_if_needed(operational_manager_url)
 
         if request_params['type'] == 'directory':
             request_params['project_directory'] = request_params.get('project_directory') or os.getcwd()
 
-        runner = BuildRunner(master_url=operational_master_url, request_params=request_params, secret=Secret.get())
+        runner = BuildRunner(manager_url=operational_manager_url, request_params=request_params, secret=Secret.get())
 
         if not runner.run():
             sys.exit(1)
 
-    def _start_local_services_if_needed(self, master_url):
+    def _start_local_services_if_needed(self, manager_url):
         """
         In the case that:
 
-        - the master url is localhost
-        - the slaves list is just localhost
+        - the manager url is localhost
+        - the workers list is just localhost
 
-        Start a master and slave service instance locally, if the master is not already running.
+        Start a manager and worker service instance locally, if the manager is not already running.
 
-        :param master_url: service url (with port number)
-        :type master_url: str
+        :param manager_url: service url (with port number)
+        :type manager_url: str
         """
-        service_runner = ServiceRunner(master_url)
-        if service_runner.is_master_up():
+        service_runner = ServiceRunner(manager_url)
+        if service_runner.is_manager_up():
             return
         try:
-            service_runner.run_master()
-            service_runner.run_slave()
+            service_runner.run_manager()
+            service_runner.run_worker()
         except ServiceRunError as ex:
             self._logger.error(str(ex))
             sys.exit(1)

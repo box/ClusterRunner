@@ -35,7 +35,7 @@ For a quick visual overview, check out the [infographic][1] we presented at the 
 
 ClusterRunner currently has no built-in UI, but its extensive API allows you to create detailed dashboards so you
 can monitor your cluster and see what it's doing.
- 
+
 We've open-sourced a few of the dashboards we use internally at Box for monitoring our own clusters. Check out the
 [ClusterRunner-Dashboard](https://github.com/box-labs/ClusterRunner-Dashboard) repo for the code and documentation.
 
@@ -55,7 +55,7 @@ it's easy to get started. Take a look at our open issues to get an idea of where
 
 ## Get Help
 
-We're happy to answer any questions you have around setting up ClusterRunner in your own org. Create a [new issue](https://github.com/box/ClusterRunner/issues/new) on this repo, or email oss@box.com and be sure to include 
+We're happy to answer any questions you have around setting up ClusterRunner in your own org. Create a [new issue](https://github.com/box/ClusterRunner/issues/new) on this repo, or email oss@box.com and be sure to include
 "ClusterRunner" in the subject.
 
 ## Copyright and License

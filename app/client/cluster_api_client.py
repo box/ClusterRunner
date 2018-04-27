@@ -2,7 +2,7 @@ from urllib import parse
 
 from typing import Any, Callable, Dict, List, Optional
 
-from app.master.build import BuildStatus
+from app.manager.build import BuildStatus
 from app.util.conf.configuration import Configuration
 from app.util import log, poll
 from app.util.network import Network
@@ -12,7 +12,7 @@ from app.util.url_builder import UrlBuilder
 
 class ClusterAPIClient(object):
     """
-    This is the base class for REST API wrappers around the master and slave services.
+    This is the base class for REST API wrappers around the manager and worker services.
     """
     def __init__(self, base_api_url):
         """
@@ -35,14 +35,14 @@ class ClusterAPIClient(object):
         return url
 
 
-class ClusterMasterAPIClient(ClusterAPIClient):
+class ClusterManagerAPIClient(ClusterAPIClient):
     """
-    This is a light wrapper client around the ClusterMaster REST API.
+    This is a light wrapper client around the ClusterManager REST API.
     """
     # TODO: Refactor BuildRunner to use this class.
     def post_new_build(self, request_params):
         """
-        Send a post request to the master to start a new build with the specified parameters.
+        Send a post request to the manager to start a new build with the specified parameters.
 
         :param request_params: The build parameters to send in the post body
         :type request_params: dict
@@ -60,7 +60,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
 
     def get_build_artifacts(self, build_id):
         """
-        Make a GET call to the master to get artifact for a build.
+        Make a GET call to the manager to get artifact for a build.
         :param build_id: The id of the build we want to get the artifact of
         :type build_id: int
         :return: tuple of (the artifact tarball, status code)
@@ -72,7 +72,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
 
     def cancel_build(self, build_id):
         """
-        PUT a request to the master to cancel a build.
+        PUT a request to the manager to cancel a build.
         :param build_id: The id of the build we want to cancel
         :type build_id: int
         :return: The API response
@@ -89,7 +89,7 @@ class ClusterMasterAPIClient(ClusterAPIClient):
 
     def get_build_status(self, build_id):
         """
-        Send a get request to the master to get the status of the specified build.
+        Send a get request to the manager to get the status of the specified build.
 
         :param build_id: The id of the build whose status to get
         :type build_id: int
@@ -198,74 +198,74 @@ class ClusterMasterAPIClient(ClusterAPIClient):
 
         return poll.wait_for(build_has_specified_status, timeout_seconds=timeout)
 
-    def get_slaves(self):
+    def get_workers(self):
         """
-        Return a dictionary of slaves connected to the master.
+        Return a dictionary of workers connected to the manager.
         :rtype: dict
         """
-        slave_url = self._api.url('slave')
-        response = self._network.get(slave_url)
+        worker_url = self._api.url('worker')
+        response = self._network.get(worker_url)
         return response.json()
 
-    def connect_slave(self, slave_url: str, num_executors: int=10) -> int:
+    def connect_worker(self, worker_url: str, num_executors: int=10) -> int:
         """
-        Connect a slave to the master. This is mostly useful for testing since real slave services
-        make this call to the master on startup.
-        :param slave_url: The hostname and port of the slave, e.g., 'localhost:43001'
-        :param num_executors: The number of executors for the slave
-        :return: The new slave id
+        Connect a worker to the manager. This is mostly useful for testing since real worker services
+        make this call to the manager on startup.
+        :param worker_url: The hostname and port of the worker, e.g., 'localhost:43001'
+        :param num_executors: The number of executors for the worker
+        :return: The new worker id
         """
         data = {
-            'slave': slave_url,
+            'worker': worker_url,
             'num_executors': num_executors,
         }
-        create_slave_url = self._api.url('slave')
-        response_data = self._network.post(create_slave_url, data=data).json()
-        slave_id = int(response_data['slave_id'])
-        return slave_id
+        create_worker_url = self._api.url('worker')
+        response_data = self._network.post(create_worker_url, data=data).json()
+        worker_id = int(response_data['worker_id'])
+        return worker_id
 
-    def get_slave_status(self, slave_id: int) -> dict:
+    def get_worker_status(self, worker_id: int) -> dict:
         """
-        Send a get request to the master to get the status of the specified slave.
-        :param slave_id: The id of the slave
+        Send a get request to the manager to get the status of the specified worker.
+        :param worker_id: The id of the worker
         :return: The API response data
         """
-        slave_status_url = self._api.url('slave', slave_id)
-        response_data = self._network.get(slave_status_url).json()
-        return response_data['slave']
+        worker_status_url = self._api.url('worker', worker_id)
+        response_data = self._network.get(worker_status_url).json()
+        return response_data['worker']
 
-    def block_until_slave_offline(self, slave_id: int, timeout: int=None) -> bool:
+    def block_until_worker_offline(self, worker_id: int, timeout: int=None) -> bool:
         """
         Poll the build status endpoint until the build is no longer queued.
-        :param slave_id: The id of the slave to wait for
+        :param worker_id: The id of the worker to wait for
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
-        :return: Whether the slave went offline during the timeout
+        :return: Whether the worker went offline during the timeout
         """
-        def is_slave_offline():
-            slave_data = self.get_slave_status(slave_id)
-            return not slave_data['is_alive']
+        def is_worker_offline():
+            worker_data = self.get_worker_status(worker_id)
+            return not worker_data['is_alive']
 
-        return poll.wait_for(is_slave_offline, timeout_seconds=timeout)
+        return poll.wait_for(is_worker_offline, timeout_seconds=timeout)
 
-    def graceful_shutdown_slaves_by_id(self, slave_ids):
+    def graceful_shutdown_workers_by_id(self, worker_ids):
         """
-        :type slave_ids: list[int]
+        :type worker_ids: list[int]
         :rtype: requests.Response
         """
-        return self._graceful_shutdown_slaves({'slaves': slave_ids})
+        return self._graceful_shutdown_workers({'workers': worker_ids})
 
-    def graceful_shutdown_all_slaves(self):
+    def graceful_shutdown_all_workers(self):
         """
         :rtype: request.Response
         """
-        return self._graceful_shutdown_slaves({'shutdown_all': True})
+        return self._graceful_shutdown_workers({'shutdown_all': True})
 
-    def _graceful_shutdown_slaves(self, body):
+    def _graceful_shutdown_workers(self, body):
         """
         :type body: dict
         :rtype: requests.Response
         """
-        shutdown_url = self._api.url('slave', 'shutdown')
+        shutdown_url = self._api.url('worker', 'shutdown')
         response = self._network.post_with_digest(
             shutdown_url,
             body,
@@ -288,39 +288,39 @@ class ClusterMasterAPIClient(ClusterAPIClient):
         return self._network.get(console_url).json()
 
 
-class ClusterSlaveAPIClient(ClusterAPIClient):
+class ClusterWorkerAPIClient(ClusterAPIClient):
     """
-    This is a light wrapper client around the ClusterSlave REST API.
+    This is a light wrapper client around the ClusterWorker REST API.
     """
-    # TODO: Move the API call logic from slave.py into this class.
+    # TODO: Move the API call logic from worker.py into this class.
     def block_until_idle(self, timeout=None) -> bool:
         """
-        Poll the slave executor endpoint until all executors are idle.
+        Poll the worker executor endpoint until all executors are idle.
 
         :param timeout: The maximum number of seconds to wait until giving up, or None for no timeout
         :type timeout: int | None
-        :return: Whether the slave became idle during the timeout
+        :return: Whether the worker became idle during the timeout
         """
 
-        return poll.wait_for(self.is_slave_idle, timeout_seconds=timeout)
+        return poll.wait_for(self.is_worker_idle, timeout_seconds=timeout)
 
-    def is_slave_idle(self) -> bool:
+    def is_worker_idle(self) -> bool:
         """
-        :return: Whether slave is idle
+        :return: Whether worker is idle
         """
-        response_data = self.get_slave_status()
-        return response_data['slave']['current_build_id'] is None
+        response_data = self.get_worker_status()
+        return response_data['worker']['current_build_id'] is None
 
-    def get_slave_status(self):
+    def get_worker_status(self):
         """
-        Get the API status response for this slave.
+        Get the API status response for this worker.
         """
-        slave_status_url = self._api.url()
-        response_data = self._network.get(slave_status_url).json()
+        worker_status_url = self._api.url()
+        response_data = self._network.get(worker_status_url).json()
 
-        if 'slave' not in response_data:
-            raise ClusterAPIValidationError('Slave API response does not contain a "slave" object. URL: {}, Content:{}'
-                                            .format(slave_status_url, response_data))
+        if 'worker' not in response_data:
+            raise ClusterAPIValidationError('Worker API response does not contain a "worker" object. URL: {}, Content:{}'
+                                            .format(worker_status_url, response_data))
         return response_data
 
 

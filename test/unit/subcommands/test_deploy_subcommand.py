@@ -89,9 +89,9 @@ class TestDeploySubcommand(BaseUnitTestCase):
         self.assertEqual(expect_deploy_binary, mock_DeployTarget_instance.deploy_binary.called)
         self.assertEqual(expect_deploy_conf, mock_DeployTarget_instance.deploy_conf.called)
 
-    def test_non_registered_slaves_returns_empty_list_if_all_registered(self):
+    def test_non_registered_workers_returns_empty_list_if_all_registered(self):
         registered_hosts = ['host_1', 'host_2']
-        slaves_to_validate = ['host_1', 'host_2']
+        workers_to_validate = ['host_1', 'host_2']
 
         def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
@@ -104,13 +104,13 @@ class TestDeploySubcommand(BaseUnitTestCase):
         old_host_id = Network.get_host_id
         Network.get_host_id = get_host_id
         deploy_subcommand = DeploySubcommand()
-        non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
+        non_registered = deploy_subcommand._non_registered_workers(registered_hosts, workers_to_validate)
         Network.get_host_id = old_host_id
         self.assertEquals(0, len(non_registered))
 
-    def test_non_registered_slaves_returns_non_registered_slaves(self):
+    def test_non_registered_workers_returns_non_registered_workers(self):
         registered_hosts = ['host_1', 'host_3']
-        slaves_to_validate = ['host_1', 'host_2', 'host_3', 'host_4']
+        workers_to_validate = ['host_1', 'host_2', 'host_3', 'host_4']
 
         def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
@@ -126,14 +126,14 @@ class TestDeploySubcommand(BaseUnitTestCase):
 
         self.patch('app.util.network.Network.get_host_id', new=get_host_id)
         deploy_subcommand = DeploySubcommand()
-        non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
+        non_registered = deploy_subcommand._non_registered_workers(registered_hosts, workers_to_validate)
         self.assertEquals(len(non_registered), 2)
         self.assertTrue('host_2' in non_registered)
         self.assertTrue('host_4' in non_registered)
 
-    def test_non_registered_slaves_returns_empty_list_with_slaves_with_same_host_ids_but_different_names(self):
+    def test_non_registered_workers_returns_empty_list_with_workers_with_same_host_ids_but_different_names(self):
         registered_hosts = ['host_1_alias', 'host_2_alias']
-        slaves_to_validate = ['host_1', 'host_2']
+        workers_to_validate = ['host_1', 'host_2']
 
         def get_host_id(*args, **kwargs):
             if args[0] == 'host_1':
@@ -149,50 +149,50 @@ class TestDeploySubcommand(BaseUnitTestCase):
 
         self.patch('app.util.network.Network.get_host_id', new=get_host_id)
         deploy_subcommand = DeploySubcommand()
-        non_registered = deploy_subcommand._non_registered_slaves(registered_hosts, slaves_to_validate)
+        non_registered = deploy_subcommand._non_registered_workers(registered_hosts, workers_to_validate)
         self.assertEquals(0, len(non_registered))
 
     @genty_dataset(
         valid_deployment=genty_args(
-            slaves_to_validate=['slave_host_1', 'slave_host_2'],
-            connected_slaves=['slave_host_1', 'slave_host_2'],
+            workers_to_validate=['worker_host_1', 'worker_host_2'],
+            connected_workers=['worker_host_1', 'worker_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'host_1_id',
-                'slave_host_2': 'host_2_id',
+                'worker_host_1': 'host_1_id',
+                'worker_host_2': 'host_2_id',
             },
             is_valid=True,
         ),
         host_mismatch=genty_args(
-            slaves_to_validate=['slave_host_1', 'slave_host_2'],
-            connected_slaves=['slave_host_3', 'slave_host_2'],
+            workers_to_validate=['worker_host_1', 'worker_host_2'],
+            connected_workers=['worker_host_3', 'worker_host_2'],
             host_name_to_uid={
-                'slave_host_2': 'host_2_id',
+                'worker_host_2': 'host_2_id',
             },
             is_valid=False,
         ),
-        number_of_slaves_not_match=genty_args(
-            slaves_to_validate=['slave_host_1'],
-            connected_slaves=['slave_host_1', 'slave_host_2'],
+        number_of_workers_not_match=genty_args(
+            workers_to_validate=['worker_host_1'],
+            connected_workers=['worker_host_1', 'worker_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'host_1_id',
+                'worker_host_1': 'host_1_id',
             },
             is_valid=False,
         ),
         valid_deployment_different_host_names_with_same_host_id=genty_args(
-            slaves_to_validate=['slave_host_1', 'slave_host_2'],
-            connected_slaves=['slave_host_1_alias', 'slave_host_2'],
+            workers_to_validate=['worker_host_1', 'worker_host_2'],
+            connected_workers=['worker_host_1_alias', 'worker_host_2'],
             host_name_to_uid={
-                'slave_host_1': 'host_1_id',
-                'slave_host_1_alias': 'host_1_id',
-                'slave_host_2': 'host_2_id',
+                'worker_host_1': 'host_1_id',
+                'worker_host_1_alias': 'host_1_id',
+                'worker_host_2': 'host_2_id',
             },
             is_valid=True,
         ),
     )
-    def test_validate_deployment_checks_each_slave_is_connected(
+    def test_validate_deployment_checks_each_worker_is_connected(
             self,
-            slaves_to_validate,
-            connected_slaves,
+            workers_to_validate,
+            connected_workers,
             host_name_to_uid,
             is_valid,
     ):
@@ -205,10 +205,10 @@ class TestDeploySubcommand(BaseUnitTestCase):
         self.patch('app.util.network.Network.get_host_id', new=get_host_id)
 
         deploy_subcommand = DeploySubcommand()
-        deploy_subcommand._registered_slave_hostnames = MagicMock(return_value=connected_slaves)
+        deploy_subcommand._registered_worker_hostnames = MagicMock(return_value=connected_workers)
         deploy_subcommand._SLAVE_REGISTRY_TIMEOUT_SEC = 1
-        deploy_subcommand._non_registered_slaves = MagicMock()
-        validate = partial(deploy_subcommand._validate_successful_deployment, 'master_host_url', slaves_to_validate)
+        deploy_subcommand._non_registered_workers = MagicMock()
+        validate = partial(deploy_subcommand._validate_successful_deployment, 'manager_host_url', workers_to_validate)
         if not is_valid:
             with self.assertRaises(SystemExit):
                 validate()

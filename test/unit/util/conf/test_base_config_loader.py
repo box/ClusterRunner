@@ -60,7 +60,7 @@ class TestBaseConfigLoader(BaseUnitTestCase):
     def test_list_type_conf_file_values_are_correctly_converted_to_lists(self):
         conf = Configuration.singleton()
         conf.set('some_list', ['localhost'])  # The previous conf value determines the expected type: a list.
-        conf_file_value = 'my-lonely-slave'  # ConfigObj parses value to a string type if only one element is specified.
+        conf_file_value = 'my-lonely-worker'  # ConfigObj parses value to a string type if only one element is specified.
 
         config_loader = BaseConfigLoader()
         config_loader._cast_and_set('some_list', conf_file_value, conf)

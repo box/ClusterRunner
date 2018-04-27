@@ -33,7 +33,7 @@ class TestGit(BaseUnitTestCase):
         expected_timing_file_sys_path = join(
             Configuration['base_directory'],
             'timings',
-            'master',
+            'manager',
             'scm.dev.box.net',
             'box',
             'www',
@@ -123,11 +123,11 @@ class TestGit(BaseUnitTestCase):
         Configuration['repo_directory'] = join(expanduser('~'), 'tmp', 'repos')
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
 
-        actual_repo_directory = git.get_full_repo_directory('ssh://source_control.cr.com:1234/master')
+        actual_repo_directory = git.get_full_repo_directory('ssh://source_control.cr.com:1234/manager')
         expected_repo_directory = join(
             Configuration['repo_directory'],
             'source_control.cr.com1234',
-            'master'
+            'manager'
         )
 
         self.assertEqual(expected_repo_directory, actual_repo_directory)
@@ -136,11 +136,11 @@ class TestGit(BaseUnitTestCase):
         Configuration['timings_directory'] = join(expanduser('~'), 'tmp', 'timings')
         git = Git("some_remote_value", 'origin', 'ref/to/some/branch')
 
-        actual_timing_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/master')
+        actual_timing_directory = git.get_timing_file_directory('ssh://source_control.cr.com:1234/manager')
         expected_timing_directory = join(
             Configuration['timings_directory'],
             'source_control.cr.com1234',
-            'master',
+            'manager',
         )
 
         self.assertEqual(expected_timing_directory, actual_timing_directory)
@@ -236,9 +236,9 @@ class TestGit(BaseUnitTestCase):
         self.assertIn(expected_call, popen_mock.call_args_list, 'Executed git command should include the correct '
                                                                 'option for StrictHostKeyChecking.')
 
-    @skipIf(is_windows(), 'Skipping test for cloning repo from master on Windows')
-    def test_slave_param_overrides_returns_expected(self):
-        Configuration['get_project_from_master'] = True
+    @skipIf(is_windows(), 'Skipping test for cloning repo from manager on Windows')
+    def test_worker_param_overrides_returns_expected(self):
+        Configuration['get_project_from_manager'] = True
         Configuration['repo_directory'] = '/repo-directory'
         self._patch_popen({
             'git rev-parse FETCH_HEAD': _FakePopenResult(stdout='deadbee123\n')
@@ -246,28 +246,28 @@ class TestGit(BaseUnitTestCase):
 
         git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
         git.fetch_project()
-        actual_overrides = git.slave_param_overrides()
+        actual_overrides = git.worker_param_overrides()
 
         expected_overrides = {
             'url': 'ssh://fake_hostname/repodirectory/originaluserspecifiedurl.test/repopath/reponame',
             'branch': 'refs/clusterrunner/deadbee123',
         }
-        self.assertEqual(expected_overrides, actual_overrides, 'Slave param overrides from Git object should match'
+        self.assertEqual(expected_overrides, actual_overrides, 'Worker param overrides from Git object should match'
                                                                'expected.')
 
-    def test_slave_param_overrides_when_get_project_from_master_is_disabled(self):
-        Configuration['get_project_from_master'] = False
+    def test_worker_param_overrides_when_get_project_from_manager_is_disabled(self):
+        Configuration['get_project_from_manager'] = False
 
         git = Git(url='http://original-user-specified-url.test/repo-path/repo-name')
-        actual_overrides = git.slave_param_overrides()
+        actual_overrides = git.worker_param_overrides()
 
         self.assertFalse(
             'url' in actual_overrides,
-            '"url" should not be in the params to override when "get_project_from_master" is False',
+            '"url" should not be in the params to override when "get_project_from_manager" is False',
         )
         self.assertFalse(
             'branch' in actual_overrides,
-            '"branch" should not be in the params to override when "get_project_from_master" is False',
+            '"branch" should not be in the params to override when "get_project_from_manager" is False',
         )
 
     def _patch_popen(self, command_to_result_map=None):

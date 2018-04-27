@@ -21,7 +21,7 @@ Ansible requires Windows machines to meet certain requirements to work. Two thin
 
 - Override files/clusterrunner.conf with your conf file that you want to deploy to all the Windows cluster nodes.
 - Edit group\_vars/clusterrunner\_nodes.yml with proper username/password for your Windows nodes.
-- Edit hosts file with more the information about the cluster (which node will be the master, which nodes will be the slaves, etc.)
+- Edit hosts file with more the information about the cluster (which node will be the manager, which nodes will be the workers, etc.)
 
 ## Deploy!
 

@@ -61,8 +61,8 @@ class BaseFunctionalTestCase(TestCase):
                     ),
                 )
         # Remove the temp dir. This will delete the log files, so should be run after cluster shuts down.
-        self.cluster.master_app_base_dir.cleanup()
-        [slave_app_base_dir.cleanup() for slave_app_base_dir in self.cluster.slaves_app_base_dirs]
+        self.cluster.manager_app_base_dir.cleanup()
+        [worker_app_base_dir.cleanup() for worker_app_base_dir in self.cluster.workers_app_base_dirs]
 
     def _get_test_verbosity(self):
         """
@@ -79,14 +79,14 @@ class BaseFunctionalTestCase(TestCase):
     def assert_build_status_contains_expected_data(self, build_id, expected_data):
         """
         Assert that the build status endpoint contains the expected fields and values. This assertion does an API
-        request to the master service of self.cluster.
+        request to the manager service of self.cluster.
 
         :param build_id: The id of the build whose status to check
         :type build_id: int
         :param expected_data: A dict of expected keys and values in the build status response
         :type expected_data: dict
         """
-        build_status = self.cluster.master_api_client.get_build_status(build_id).get('build')
+        build_status = self.cluster.manager_api_client.get_build_status(build_id).get('build')
         self.assertIsInstance(build_status, dict, 'Build status API request should return a dict.')
         self.assertDictContainsSubset(expected_data, build_status,
                                       'Build status API response should contain the expected status data.')
@@ -94,7 +94,7 @@ class BaseFunctionalTestCase(TestCase):
     def assert_build_has_successful_status(self, build_id):
         """
         Assert that the build status endpoint contains fields signifying the build was successful (had no failures).
-        This assertion does an API request to the master service of self.cluster.
+        This assertion does an API request to the manager service of self.cluster.
 
         :param build_id: The id of the build whose status to check
         :type build_id: int
@@ -108,7 +108,7 @@ class BaseFunctionalTestCase(TestCase):
     def assert_build_has_failure_status(self, build_id):
         """
         Assert that the build status endpoint contains fields signifying the build was failed. This assertion does an
-        API request to the master service of self.cluster.
+        API request to the manager service of self.cluster.
 
         :param build_id: The id of the build whose status to check
         :type build_id: int
@@ -122,7 +122,7 @@ class BaseFunctionalTestCase(TestCase):
     def assert_build_has_canceled_status(self, build_id):
         """
         Assert that the build status endpoint contains fields signifying the build was failed. This assertion does an
-        API request to the master service of self.cluster.
+        API request to the manager service of self.cluster.
 
         :param build_id: The id of the build whose status to check
         :type build_id: int
@@ -133,23 +133,23 @@ class BaseFunctionalTestCase(TestCase):
             }
         self.assert_build_status_contains_expected_data(build_id, expected_failure_build_params)
 
-    def assert_build_artifact_contents_match_expected(self, master_api, build_id, expected_build_artifact_contents):
+    def assert_build_artifact_contents_match_expected(self, manager_api, build_id, expected_build_artifact_contents):
         """
         Assert that artifact files for this build have the expected contents.
 
-        :type master_api: app.util.url_builder.UrlBuilder
+        :type manager_api: app.util.url_builder.UrlBuilder
         :param build_id: The id of the build whose artifacts to check
         :type build_id: int
         :param expected_build_artifact_contents: A list of FSItems corresponding to the expected artifact dir contents
         :type expected_build_artifact_contents: list[FSItem]
         """
         with tempfile.TemporaryDirectory() as build_artifacts_dir_path:
-            self._download_and_extract_zip_results(master_api, build_id, build_artifacts_dir_path)
+            self._download_and_extract_zip_results(manager_api, build_id, build_artifacts_dir_path)
             self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
 
         # Also check the tar archive even though it is deprecated.
         with tempfile.TemporaryDirectory() as build_artifacts_dir_path:
-            self._download_and_extract_tar_results(master_api, build_id, build_artifacts_dir_path)
+            self._download_and_extract_tar_results(manager_api, build_id, build_artifacts_dir_path)
             self.assert_directory_contents_match_expected(build_artifacts_dir_path, expected_build_artifact_contents)
 
     def assert_directory_contents_match_expected(self, dir_path, expected_dir_contents):
@@ -167,13 +167,13 @@ class BaseFunctionalTestCase(TestCase):
             expected_build_artifacts = Directory(expected_dir_name, expected_dir_contents)
             expected_build_artifacts.assert_matches_path(dir_path, allow_extra_items=False)
 
-    def _download_and_extract_tar_results(self, master_api, build_id, download_dir):
+    def _download_and_extract_tar_results(self, manager_api, build_id, download_dir):
         """
-        :type master_api: app.util.url_builder.UrlBuilder
+        :type manager_api: app.util.url_builder.UrlBuilder
         :type build_id: int
         :type download_dir: str
         """
-        download_artifacts_url = master_api.url('build', build_id, 'result')
+        download_artifacts_url = manager_api.url('build', build_id, 'result')
         download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_TARFILE_NAME)
         response = self._network.get(download_artifacts_url)
 
@@ -186,9 +186,9 @@ class BaseFunctionalTestCase(TestCase):
 
             fs.extract_tar(download_filepath, delete=True)
 
-    def _download_and_extract_zip_results(self, master_api: UrlBuilder, build_id: int, download_dir: str):
-        """Download the artifacts.zip from the master and extract it."""
-        download_artifacts_url = master_api.url('build', build_id, 'artifacts.zip')
+    def _download_and_extract_zip_results(self, manager_api: UrlBuilder, build_id: int, download_dir: str):
+        """Download the artifacts.zip from the manager and extract it."""
+        download_artifacts_url = manager_api.url('build', build_id, 'artifacts.zip')
         download_filepath = os.path.join(download_dir, BuildArtifact.ARTIFACT_ZIPFILE_NAME)
         response = self._network.get(download_artifacts_url)
 

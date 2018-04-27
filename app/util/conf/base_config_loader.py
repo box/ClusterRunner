@@ -46,10 +46,10 @@ class BaseConfigLoader(object):
         conf.set('config_file', join(base_directory, 'clusterrunner.conf'))
 
         # Where the clusterrunner service will save the process id to. These settings are set in base_config_loader
-        # and not in master_config_loader and slave_config_loader because CLI tools such as "clusterrunner stop"
+        # and not in manager_config_loader and worker_config_loader because CLI tools such as "clusterrunner stop"
         # needs to read in these settings.
-        conf.set('master_pid_file', join(base_directory, '.clusterrunner_master.pid'))
-        conf.set('slave_pid_file', join(base_directory, '.clusterrunner_slave.pid'))
+        conf.set('manager_pid_file', join(base_directory, '.clusterrunner_manager.pid'))
+        conf.set('worker_pid_file', join(base_directory, '.clusterrunner_worker.pid'))
 
         # contains symlinks to build-specific repos
         conf.set('build_symlink_directory', join('/tmp', 'clusterrunner_build_symlinks'))
@@ -70,9 +70,9 @@ class BaseConfigLoader(object):
         conf.set('max_eventlog_file_size', 1024 * 1024 * 50)  # 50mb
         conf.set('max_eventlog_file_backups', 5)
         conf.set('hostname', platform.node())
-        conf.set('master_hostname', 'localhost')
-        conf.set('master_port', '43000')
-        conf.set('slaves', ['localhost'])
+        conf.set('manager_hostname', 'localhost')
+        conf.set('manager_port', '43000')
+        conf.set('workers', ['localhost'])
 
         conf.set('default_http_timeout', 30)
 
@@ -87,13 +87,13 @@ class BaseConfigLoader(object):
         conf.set('git_askpass_exe', join(bin_dir, 'git_askpass.sh'))
         conf.set('git_ssh_exe', join(bin_dir, 'git_ssh.sh'))
 
-        # How slaves get the project
-        # Slaves would get the project from master if set to True. Otherwise it would just get the project in
-        # the same way how the master gets the project.
-        conf.set('get_project_from_master', True)
+        # How workers get the project
+        # Workers would get the project from manager if set to True. Otherwise it would just get the project in
+        # the same way how the manager gets the project.
+        conf.set('get_project_from_manager', True)
 
         # Should we have shallow or full clones of the repository?
-        # The master must have full clones, as slaves fetch from the master, and one cannot fetch from a shallow clone.
+        # The manager must have full clones, as workers fetch from the manager, and one cannot fetch from a shallow clone.
         conf.set('shallow_clones', False)
 
         # Set the default protocol scheme to 'http'
@@ -145,23 +145,23 @@ class BaseConfigLoader(object):
             'log_level',
             'build_symlink_directory',
             'hostname',
-            'slaves',
+            'workers',
             'port',
             'num_executors',
-            'master_hostname',
-            'master_port',
+            'manager_hostname',
+            'manager_port',
             'log_filename',
             'max_log_file_size',
             'eventlog_filename',
             'git_strict_host_key_checking',
             'cors_allowed_origins_regex',
-            'get_project_from_master',
+            'get_project_from_manager',
             'default_http_timeout',
             'https_cert_file',
             'https_key_file',
             'heartbeat_interval',
             'heartbeat_failure_threshold',
-            'unresponsive_slaves_cleanup_interval',
+            'unresponsive_workers_cleanup_interval',
         ]
 
     def _load_section_from_config_file(self, config, config_filename, section):

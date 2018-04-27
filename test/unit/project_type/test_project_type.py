@@ -2,7 +2,7 @@ from genty import genty, genty_dataset
 from subprocess import TimeoutExpired
 from unittest.mock import ANY, MagicMock
 
-from app.master.job_config import JobConfig
+from app.manager.job_config import JobConfig
 from app.project_type.project_type import ProjectType
 from app.util.safe_thread import SafeThread
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
@@ -246,7 +246,7 @@ class TestProjectType(BaseUnitTestCase):
             'commands': ['shell command 1', 'shell command 2;'],
             'atomizers': [{'TESTPATH': 'atomizer command'}],
             'max_executors': 100,
-            'max_executors_per_slave': 2,
+            'max_executors_per_worker': 2,
         }
         project_type = ProjectType(config=config_dict, job_name='some_job_name')
 
@@ -255,7 +255,7 @@ class TestProjectType(BaseUnitTestCase):
         self.assertEquals(job_config.name, 'some_job_name')
         self.assertEquals(job_config.command, 'shell command 1 && shell command 2')
         self.assertEquals(job_config.max_executors, 100)
-        self.assertEquals(job_config.max_executors_per_slave, 2)
+        self.assertEquals(job_config.max_executors_per_worker, 2)
 
 
 class _FakeEnvWithoutDefaultArgs(ProjectType):

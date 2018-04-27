@@ -4,13 +4,13 @@ import shutil
 import sys
 import time
 
-from app.master.build import BuildStatus, BuildResult
+from app.manager.build import BuildStatus, BuildResult
 import app.util.fs
 from app.util.log import get_logger
 from app.util.network import Network
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 from app.util.url_builder import UrlBuilder
-from app.client.cluster_api_client import ClusterMasterAPIClient
+from app.client.cluster_api_client import ClusterManagerAPIClient
 
 
 class BuildRunner(object):
@@ -20,33 +20,33 @@ class BuildRunner(object):
     build results.
 
     Example usage pattern:
-    >>> runner = BuildRunner('https://mymaster.net:123', {'type':'git', 'url':'https://github.com/box/StatusWolf.git'})
+    >>> runner = BuildRunner('https://mymanager.net:123', {'type':'git', 'url':'https://github.com/box/StatusWolf.git'})
     >>> runner.run()
     """
 
     API_VERSION = 'v1'
 
-    def __init__(self, master_url, request_params, secret):
+    def __init__(self, manager_url, request_params, secret):
         """
-        :param master_url: The url of the master which the build will be executed on
-        :type master_url: str
+        :param manager_url: The url of the manager which the build will be executed on
+        :type manager_url: str
         :param request_params: A dict of request params that will be json-encoded and sent in the build request
         :type request_params: dict
         :type secret: str
         """
-        self._master_url = master_url
+        self._manager_url = manager_url
         self._request_params = request_params
         self._secret = secret
         self._build_id = None
         self._network = Network()
         self._logger = get_logger(__name__)
         self._last_build_status_details = None
-        self._master_api = UrlBuilder(master_url, self.API_VERSION)
-        self._cluster_master_api_client = ClusterMasterAPIClient(master_url)
+        self._manager_api = UrlBuilder(manager_url, self.API_VERSION)
+        self._cluster_manager_api_client = ClusterManagerAPIClient(manager_url)
 
     def run(self):
         """
-        Send the build request to the master, wait for the build to finish, then download the build artifacts.
+        Send the build request to the manager, wait for the build to finish, then download the build artifacts.
 
         :return: Whether or not we were successful in running the build. (Note this does *not* indicate the success or
             faulure of the build itself; that is determined by the contents of the build artifacts which should be
@@ -67,17 +67,17 @@ class BuildRunner(object):
 
     def _cancel_build(self):
         """
-        Request the master cancels the build.
+        Request the manager cancels the build.
         """
         if self._build_id is not None:
             self._logger.warning('Cancelling build {}'.format(self._build_id))
-            self._cluster_master_api_client.cancel_build(self._build_id)
+            self._cluster_manager_api_client.cancel_build(self._build_id)
 
     def _start_build(self):
         """
-        Send the build request to the master for execution.
+        Send the build request to the manager for execution.
         """
-        build_url = self._master_api.url('build')
+        build_url = self._manager_api.url('build')
         # todo: catch connection error
         response = self._network.post_with_digest(build_url, self._request_params, self._secret, error_on_failure=True)
         response_data = response.json()
@@ -99,7 +99,7 @@ class BuildRunner(object):
         :type timeout: int|None
         """
         timeout_time = time.time() + timeout if timeout else sys.maxsize
-        build_status_url = self._master_api.url('build', self._build_id)
+        build_status_url = self._manager_api.url('build', self._build_id)
         self._logger.debug('Polling build status url: {}', build_status_url)
 
         while time.time() <= timeout_time:
@@ -146,7 +146,7 @@ class BuildRunner(object):
         """
         timeout_time = time.time() + timeout if timeout else sys.maxsize
 
-        download_artifacts_url = self._master_api.url('build', self._build_id, 'artifacts.zip')
+        download_artifacts_url = self._manager_api.url('build', self._build_id, 'artifacts.zip')
         download_filepath = 'build_results/artifacts.zip'
         download_dir, _ = os.path.split(download_filepath)
 

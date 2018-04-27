@@ -55,7 +55,7 @@ class TestAutoversioning(BaseUnitTestCase):
         status_side_effect = 'M app/util/autoversioning.py'.encode() if index_has_changed_files else b''
         current_head_commit = b'commit1\n' if commit_is_on_trunk else b'commit2\n'
 
-        current_origin_master_commit = b'commit3\n'
+        current_origin_manager_commit = b'commit3\n'
         all_commits = b'commit0\ncommit1\ncommit2\ncommit3\n'  # list of all 4 commit hashes in the repo
         check_output_side_effects_map = {
             ('rev-list', 'HEAD'): all_commits,
@@ -63,7 +63,7 @@ class TestAutoversioning(BaseUnitTestCase):
             ('rev-list', '--first-parent', 'commit2^..commit3'): b'commit1\n',
             ('status', '--porcelain'): status_side_effect,
             ('rev-parse', '--verify', 'HEAD'): current_head_commit,
-            ('rev-parse', '--verify', 'origin/master'): current_origin_master_commit,
+            ('rev-parse', '--verify', 'origin/manager'): current_origin_manager_commit,
         }
 
         def fake_check_output(cmd_args, *args, **kwargs):

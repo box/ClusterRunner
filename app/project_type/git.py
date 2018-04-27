@@ -24,8 +24,8 @@ class Git(ProjectType):
         Generate a sys path based on the base_sys_path and the git repo url. It also removes some invalid
         characters from the final generated sys path.
 
-        e.g. _generate_path_from_repo_url('/tmp', 'ssh://source_control.cr.com:1234/master-repo') returns
-        /tmp/source_control.cr.com1234/masterrepo
+        e.g. _generate_path_from_repo_url('/tmp', 'ssh://source_control.cr.com:1234/manager-repo') returns
+        /tmp/source_control.cr.com1234/managerrepo
 
         :param base_sys_path: The base sys path of the generated sys path
         :type base_sys_path: str
@@ -115,8 +115,8 @@ class Git(ProjectType):
         fs.create_dir(os.path.dirname(build_project_directory))
 
         # Create a symlink from the generated build project directory to the actual project directory.
-        # This is done in order to switch between the master's and the slave's copies of the repo while not
-        # having to do something hacky in order to user the master's generated atoms on the slaves.
+        # This is done in order to switch between the manager's and the worker's copies of the repo while not
+        # having to do something hacky in order to user the manager's generated atoms on the workers.
         actual_project_directory = os.path.join(self._repo_directory, project_directory)
         try:
             os.unlink(build_project_directory)
@@ -126,23 +126,23 @@ class Git(ProjectType):
         os.symlink(actual_project_directory, build_project_directory)
         self.project_directory = build_project_directory
 
-    def slave_param_overrides(self):
+    def worker_param_overrides(self):
         """
-        Produce a set of values to override original project type params for use on a slave machine.
+        Produce a set of values to override original project type params for use on a worker machine.
 
         :return: A set of values to override original project type params
         :rtype: dict[str, str]
         """
-        param_overrides = super().slave_param_overrides()
+        param_overrides = super().worker_param_overrides()
 
-        if Configuration['get_project_from_master']:
-            # We modify the repo url so the slave clones or fetches from the master directly. This should be faster than
+        if Configuration['get_project_from_manager']:
+            # We modify the repo url so the worker clones or fetches from the manager directly. This should be faster than
             # cloning/fetching from the original git remote.
-            master_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], self._repo_directory)
-            param_overrides['url'] = master_repo_url  # This causes the slave to clone directly from the master.
+            manager_repo_url = 'ssh://{}{}'.format(Configuration['hostname'], self._repo_directory)
+            param_overrides['url'] = manager_repo_url  # This causes the worker to clone directly from the manager.
 
-            # The user-specified branch is overwritten with a locally created ref so that slaves working on a job can
-            # continue to fetch the same HEAD, even if the master resets the user-specified branch for another build.
+            # The user-specified branch is overwritten with a locally created ref so that workers working on a job can
+            # continue to fetch the same HEAD, even if the manager resets the user-specified branch for another build.
             param_overrides['branch'] = self._local_ref
 
         return param_overrides
@@ -187,8 +187,8 @@ class Git(ProjectType):
             error_msg='Could not rev-parse FETCH_HEAD of {} to a commit hash.'.format(self._branch)
         ).strip()
 
-        # Save this hash as a local ref. Named local refs are necessary for slaves to fetch correctly from the master.
-        # The local ref will be passed on to slaves instead of the user-specified branch.
+        # Save this hash as a local ref. Named local refs are necessary for workers to fetch correctly from the manager.
+        # The local ref will be passed on to workers instead of the user-specified branch.
         self._local_ref = 'refs/clusterrunner/{}'.format(fetch_head_hash)
         self._execute_git_command_in_repo_and_raise_on_failure(
             git_command='update-ref {} {}'.format(self._local_ref, fetch_head_hash),

@@ -11,13 +11,13 @@ from app.util.conf.configuration import Configuration
 class StopSubcommand(Subcommand):
 
     # The commands that can be used to identify a clusterrunner process (for accurate killing).
-    _command_whitelist_keywords = ['clusterrunner', 'app master', 'app slave']
+    _command_whitelist_keywords = ['clusterrunner', 'app manager', 'app worker']
     # The number of seconds to wait between performing a SIGTERM and a SIGKILL
     SIGTERM_SIGKILL_GRACE_PERIOD_SEC = 2
 
     def run(self, log_level):
         """
-        Stop/kill all ClusterRunner processes that are running on this host (both master and slave services).
+        Stop/kill all ClusterRunner processes that are running on this host (both manager and worker services).
         This is implemented via the pid file that gets written to upon service startup.
 
         :param log_level: the log level at which to do application logging (or None for default log level)
@@ -28,8 +28,8 @@ class StopSubcommand(Subcommand):
             log_file=Configuration['log_file'],
             simplified_console_logs=True,
         )
-        self._kill_pid_in_file_if_exists(Configuration['slave_pid_file'])
-        self._kill_pid_in_file_if_exists(Configuration['master_pid_file'])
+        self._kill_pid_in_file_if_exists(Configuration['worker_pid_file'])
+        self._kill_pid_in_file_if_exists(Configuration['manager_pid_file'])
 
     def _kill_pid_in_file_if_exists(self, pid_file_path):
         """

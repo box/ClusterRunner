@@ -34,8 +34,8 @@ class ClusterRunnerArgumentParser(argparse.ArgumentParser):
         default behavior as it creates the potential for unintended breaking changes just by adding a new command-line
         argument.
 
-        For example, if a user uses the argument "--master" to specify a value for "--master-url", and later we add a
-        new argument named "--master-port", that change will break the user script that used "--master".
+        For example, if a user uses the argument "--manager" to specify a value for "--manager-url", and later we add a
+        new argument named "--manager-port", that change will break the user script that used "--manager".
 
         See: https://docs.python.org/3.4/library/argparse.html#argument-abbreviations-prefix-matching
         """

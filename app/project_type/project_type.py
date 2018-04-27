@@ -8,8 +8,8 @@ from tempfile import TemporaryFile
 from threading import Event
 import time
 
-from app.master.cluster_runner_config import ClusterRunnerConfig
-from app.master.job_config import JobConfig
+from app.manager.cluster_runner_config import ClusterRunnerConfig
+from app.manager.job_config import JobConfig
 from app.util import log
 from app.util.conf.configuration import Configuration
 from app.util.process_utils import Popen_with_delayed_expansion, get_environment_variable_setter_command
@@ -52,10 +52,10 @@ class ProjectType(object):
     def job_name(self):
         return self._job_name
 
-    def slave_param_overrides(self):
+    def worker_param_overrides(self):
         """
-        Produce a set of values to override original project type params for use on a slave machine. Override in
-        subclasses to enable slave-specific behavior.
+        Produce a set of values to override original project type params for use on a worker machine. Override in
+        subclasses to enable worker-specific behavior.
 
         :return: A set of values to override original project type params
         :rtype: dict[str, str]
@@ -129,7 +129,7 @@ class ProjectType(object):
 
     def teardown_build(self, timeout=None):
         """
-        Teardown the build on the local machine. This should run once per slave per build.
+        Teardown the build on the local machine. This should run once per worker per build.
 
         :param timeout: A maximum number of seconds before the teardown command is terminated, or None for no timeout
         :type timeout: int | None

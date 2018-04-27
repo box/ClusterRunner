@@ -18,17 +18,17 @@ class TestStopSubcommand(BaseUnitTestCase):
         self._mock_psutil_pid_exists = self.patch('psutil.pid_exists')
         self._mock_psutil_process = self.patch('psutil.Process')
 
-        self._fake_slave_pid_file_sys_path = join(os.getcwd(), 'slave_pid_file')
-        self._fake_master_pid_file_sys_path = join(os.getcwd(), 'master_pid_file')
-        Configuration['slave_pid_file'] = self._fake_slave_pid_file_sys_path
-        Configuration['master_pid_file'] = self._fake_master_pid_file_sys_path
+        self._fake_worker_pid_file_sys_path = join(os.getcwd(), 'worker_pid_file')
+        self._fake_manager_pid_file_sys_path = join(os.getcwd(), 'manager_pid_file')
+        Configuration['worker_pid_file'] = self._fake_worker_pid_file_sys_path
+        Configuration['manager_pid_file'] = self._fake_manager_pid_file_sys_path
 
-        self._fake_slave_pid = 1111
-        self._fake_master_pid = 2222
+        self._fake_worker_pid = 1111
+        self._fake_manager_pid = 2222
         self._mock_open = mock_open()
         self._mock_open.side_effect = [
-            StringIO(str(self._fake_slave_pid)),     # pretend to be fhe slave pid file object
-            StringIO(str(self._fake_master_pid)),    # pretend to be the master pid file object
+            StringIO(str(self._fake_worker_pid)),     # pretend to be fhe worker pid file object
+            StringIO(str(self._fake_manager_pid)),    # pretend to be the manager pid file object
         ]
 
         self.patch('app.subcommands.stop_subcommand.open', new=self._mock_open, create=True)
@@ -63,8 +63,8 @@ class TestStopSubcommand(BaseUnitTestCase):
         self.assertFalse(self._mock_psutil_process.terminate.called)
         self.assertEqual(
             [
-                call(self._fake_slave_pid_file_sys_path),
-                call(self._fake_master_pid_file_sys_path),
+                call(self._fake_worker_pid_file_sys_path),
+                call(self._fake_manager_pid_file_sys_path),
             ],
             self._mock_os_path_exists.call_args_list,
         )
@@ -80,8 +80,8 @@ class TestStopSubcommand(BaseUnitTestCase):
         self.assertFalse(self._mock_psutil_process.terminate.called)
         self.assertEqual(
             [
-                call(self._fake_slave_pid_file_sys_path),
-                call(self._fake_master_pid_file_sys_path),
+                call(self._fake_worker_pid_file_sys_path),
+                call(self._fake_manager_pid_file_sys_path),
             ],
             self._mock_os_remove.call_args_list,
         )
@@ -90,8 +90,8 @@ class TestStopSubcommand(BaseUnitTestCase):
         # Arrange
         self._setup_both_pid_file_and_pids_exist()
         self._setup_processes(
-            master_cmdline=['python', './foo.py'],
-            slave_cmdline=['python', './bar.py'],
+            manager_cmdline=['python', './foo.py'],
+            worker_cmdline=['python', './bar.py'],
         )
 
         # Act
@@ -109,25 +109,25 @@ class TestStopSubcommand(BaseUnitTestCase):
         proc.children.return_value = child_processes if child_processes else []
         return proc
 
-    def _setup_processes(self, master_cmdline=None, slave_cmdline=None):
-        master_process = self._create_mock_process(
-            self._fake_master_pid,
-            cmdline=master_cmdline if master_cmdline else ['python', '-m', 'app', 'master'],
+    def _setup_processes(self, manager_cmdline=None, worker_cmdline=None):
+        manager_process = self._create_mock_process(
+            self._fake_manager_pid,
+            cmdline=manager_cmdline if manager_cmdline else ['python', '-m', 'app', 'manager'],
         )
 
-        slave_child_process = self._create_mock_process(3333)
-        slave_process = self._create_mock_process(
-            self._fake_slave_pid,
-            child_processes=[slave_child_process],
-            cmdline=slave_cmdline if slave_cmdline else ['python', '-m', 'app', 'slave'],
+        worker_child_process = self._create_mock_process(3333)
+        worker_process = self._create_mock_process(
+            self._fake_worker_pid,
+            child_processes=[worker_child_process],
+            cmdline=worker_cmdline if worker_cmdline else ['python', '-m', 'app', 'worker'],
         )
 
         self._mock_psutil_process.side_effect = [
-            slave_process,
-            master_process,
+            worker_process,
+            manager_process,
         ]
 
-        return master_process, slave_process, slave_child_process
+        return manager_process, worker_process, worker_child_process
 
     def _assert_called_terminate(self, process_list):
         for proc in process_list:
@@ -140,32 +140,32 @@ class TestStopSubcommand(BaseUnitTestCase):
     def test_stop_subcommand_kills_pid_with_sigterm_if_pid_file_and_pid_exist_and_command_is_whitelisted(self):
         # Arrange
         self._setup_both_pid_file_and_pids_exist()
-        master_process, slave_process, slave_child_process = self._setup_processes()
+        manager_process, worker_process, worker_child_process = self._setup_processes()
 
-        master_process.terminate.side_effect = partial(self._successful_terminate_or_kill, master_process)
-        slave_process.terminate.side_effect = partial(self._successful_terminate_or_kill, slave_process)
-        slave_child_process.terminate.side_effect = partial(self._successful_terminate_or_kill, slave_child_process)
+        manager_process.terminate.side_effect = partial(self._successful_terminate_or_kill, manager_process)
+        worker_process.terminate.side_effect = partial(self._successful_terminate_or_kill, worker_process)
+        worker_child_process.terminate.side_effect = partial(self._successful_terminate_or_kill, worker_child_process)
 
         # Act
         self._stop_subcommand.run(None)
 
         # Assert
-        self._assert_called_terminate([master_process, slave_process, slave_child_process])
-        self.assertFalse(master_process.kill.called)
-        self.assertFalse(slave_process.kill.called)
-        self.assertFalse(slave_child_process.kill.called)
+        self._assert_called_terminate([manager_process, worker_process, worker_child_process])
+        self.assertFalse(manager_process.kill.called)
+        self.assertFalse(worker_process.kill.called)
+        self.assertFalse(worker_child_process.kill.called)
 
     def test_stop_subcommand_kills_proc_with_sigkill_if_still_running_after_sigterm(self):
         # Arrange
         self._setup_both_pid_file_and_pids_exist()
-        master_process, slave_process, slave_child_process = self._setup_processes()
-        master_process.terminate.side_effect = partial(self._successful_terminate_or_kill, master_process)
+        manager_process, worker_process, worker_child_process = self._setup_processes()
+        manager_process.terminate.side_effect = partial(self._successful_terminate_or_kill, manager_process)
 
         # Act
         self._stop_subcommand.run(None)
 
         # Assert
-        self._assert_called_terminate([master_process, slave_process, slave_child_process])
-        self.assertFalse(master_process.kill.called)
-        self.assertTrue(slave_process.kill.called)
-        self.assertTrue(slave_child_process.kill.called)
+        self._assert_called_terminate([manager_process, worker_process, worker_child_process])
+        self.assertFalse(manager_process.kill.called)
+        self.assertTrue(worker_process.kill.called)
+        self.assertTrue(worker_child_process.kill.called)

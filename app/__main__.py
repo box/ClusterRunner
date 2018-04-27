@@ -10,9 +10,9 @@ import time
 
 from app.subcommands.build_subcommand import BuildSubcommand
 from app.subcommands.deploy_subcommand import DeploySubcommand
-from app.subcommands.master_subcommand import MasterSubcommand
+from app.subcommands.manager_subcommand import ManagerSubcommand
 from app.subcommands.shutdown_subcommand import ShutdownSubcommand
-from app.subcommands.slave_subcommand import SlaveSubcommand
+from app.subcommands.worker_subcommand import WorkerSubcommand
 from app.subcommands.stop_subcommand import StopSubcommand
 from app.util import app_info, autoversioning, log, util
 from app.util.argument_parsing import ClusterRunnerArgumentParser, ClusterRunnerHelpFormatter
@@ -20,8 +20,8 @@ from app.util.conf.base_config_loader import BASE_CONFIG_FILE_SECTION, BaseConfi
 from app.util.conf.config_file import ConfigFile
 from app.util.conf.configuration import Configuration
 from app.util.conf.deploy_config_loader import DeployConfigLoader
-from app.util.conf.master_config_loader import MasterConfigLoader
-from app.util.conf.slave_config_loader import SlaveConfigLoader
+from app.util.conf.manager_config_loader import ManagerConfigLoader
+from app.util.conf.worker_config_loader import WorkerConfigLoader
 from app.util.conf.stop_config_loader import StopConfigLoader
 from app.util.secret import Secret
 from app.util.unhandled_exception_handler import UnhandledExceptionHandler
@@ -40,36 +40,36 @@ def _parse_args(args):
     )
     subparsers.required = True
 
-    # arguments specific to master
-    master_parser = subparsers.add_parser(
-        'master',
-        help='Run a ClusterRunner master service.', formatter_class=ClusterRunnerHelpFormatter)
-    master_parser.add_argument(
+    # arguments specific to manager
+    manager_parser = subparsers.add_parser(
+        'manager',
+        help='Run a ClusterRunner manager service.', formatter_class=ClusterRunnerHelpFormatter)
+    manager_parser.add_argument(
         '-p', '--port',
         type=int,
-        help='the port on which to run the master service. '
+        help='the port on which to run the manager service. '
              'This will be read from conf if unspecified, and defaults to 43000')
-    master_parser.set_defaults(subcommand_class=MasterSubcommand)
+    manager_parser.set_defaults(subcommand_class=ManagerSubcommand)
 
-    # arguments specific to slave
-    slave_parser = subparsers.add_parser(
-        'slave',
-        help='Run a ClusterRunner slave service.', formatter_class=ClusterRunnerHelpFormatter)
-    slave_parser.add_argument(
+    # arguments specific to worker
+    worker_parser = subparsers.add_parser(
+        'worker',
+        help='Run a ClusterRunner worker service.', formatter_class=ClusterRunnerHelpFormatter)
+    worker_parser.add_argument(
         '-p', '--port',
         type=int,
-        help='the port on which to run the slave service. '
+        help='the port on which to run the worker service. '
              'This will be read from conf if unspecified, and defaults to 43001')
-    slave_parser.add_argument(
-        '-m', '--master-url',
-        help='the url of the master service with which the slave should communicate')
-    slave_parser.add_argument(
+    worker_parser.add_argument(
+        '-m', '--manager-url',
+        help='the url of the manager service with which the worker should communicate')
+    worker_parser.add_argument(
         '-e', '--num-executors',
         type=int, help='the number of executors to use, defaults to 1')
-    slave_parser.set_defaults(subcommand_class=SlaveSubcommand)
+    worker_parser.set_defaults(subcommand_class=WorkerSubcommand)
 
-    # arguments specific to both master and slave
-    for subparser in (master_parser, slave_parser):
+    # arguments specific to both manager and worker
+    for subparser in (manager_parser, worker_parser):
         subparser.add_argument(
             '--eventlog-file',
             help='change the file that eventlogs are written to, or "STDOUT" to log to stdout')
@@ -82,24 +82,24 @@ def _parse_args(args):
 
     # arguments specific to the 'deploy' subcommand
     deploy_parser = subparsers.add_parser(
-        'deploy', help='Deploy clusterrunner to master and slaves.', formatter_class=ClusterRunnerHelpFormatter)
+        'deploy', help='Deploy clusterrunner to manager and workers.', formatter_class=ClusterRunnerHelpFormatter)
     deploy_parser.add_argument(
-        '-m', '--master', type=str,
-        help=('The master host url (no port) to deploy the master on. This will be read from conf '
+        '-m', '--manager', type=str,
+        help=('The manager host url (no port) to deploy the manager on. This will be read from conf '
               'if unspecified, and defaults to localhost.'))
     deploy_parser.add_argument(
-        '--master-port', type=int,
-        help=('The port on which the master service will run. '
+        '--manager-port', type=int,
+        help=('The port on which the manager service will run. '
               'This will be read from conf if unspecified, and defaults to 43000.'))
     deploy_parser.add_argument(
-        '-s', '--slaves', type=str, nargs='+',
-        help='The space separated list of host urls (without ports) to be deployed as slaves.')
+        '-s', '--workers', type=str, nargs='+',
+        help='The space separated list of host urls (without ports) to be deployed as workers.')
     deploy_parser.add_argument(
-        '--slave-port', type=int,
-        help=('The port on which all of the slave services will run. '
+        '--worker-port', type=int,
+        help=('The port on which all of the worker services will run. '
               'This will be read from conf if unspecified, and defaults to 43001.'))
     deploy_parser.add_argument(
-        '-n', '--num-executors', type=int, help='The number of executors to use per slave, defaults to 30.')
+        '-n', '--num-executors', type=int, help='The number of executors to use per worker, defaults to 30.')
     deploy_parser.set_defaults(subcommand_class=DeploySubcommand)
 
     # arguments specific to execute-build mode
@@ -108,8 +108,8 @@ def _parse_args(args):
         help='Execute a build and wait for it to complete.', formatter_class=ClusterRunnerHelpFormatter)
 
     build_parser.add_argument(
-        '--master-url',
-        help='the url of the ClusterRunner master that will execute this build.')
+        '--manager-url',
+        help='the url of the ClusterRunner manager that will execute this build.')
     build_parser.add_argument(
         '-j', '--job-name',
         help='the name of the job to run')
@@ -125,29 +125,29 @@ def _parse_args(args):
 
     shutdown_parser = subparsers.add_parser(
         'shutdown',
-        help=('Put slaves in shutdown mode so they can be terminated safely. Slaves in shutdown '
+        help=('Put workers in shutdown mode so they can be terminated safely. Workers in shutdown '
               'mode will finish any subjobs they are currently executing, then die.'),
         formatter_class=ClusterRunnerHelpFormatter
     )
     shutdown_parser.add_argument(
-        '-m', '--master-url',
-        help='The url of the master, including the port'
+        '-m', '--manager-url',
+        help='The url of the manager, including the port'
     )
     shutdown_parser.add_argument(
-        '-a', '--all-slaves',
+        '-a', '--all-workers',
         action='store_true',
-        help='Shutdown all slaves'
+        help='Shutdown all workers'
     )
     shutdown_parser.add_argument(
-        '-s', '--slave-id',
+        '-s', '--worker-id',
         action='append',
-        dest='slave_ids',
-        help='A slave id to shut down.'
+        dest='worker_ids',
+        help='A worker id to shut down.'
     )
 
     shutdown_parser.set_defaults(subcommand_class=ShutdownSubcommand)
 
-    for subparser in (master_parser, slave_parser, build_parser, stop_parser, deploy_parser, shutdown_parser):
+    for subparser in (manager_parser, worker_parser, build_parser, stop_parser, deploy_parser, shutdown_parser):
         subparser.add_argument(
             '-v', '--verbose',
             action='store_const', const='DEBUG', dest='log_level', help='set the log level to "debug"')
@@ -218,14 +218,14 @@ def _initialize_configuration(app_subcommand, config_filename):
     """
     Load the default conf values (including subcommand-specific values), then find the conf file and read overrides.
 
-    :param app_subcommand: The application subcommand (e.g., master, slave, build)
+    :param app_subcommand: The application subcommand (e.g., manager, worker, build)
     :type app_subcommand: str
     :type config_filename: str
     """
     app_subcommand_conf_loaders = {
-        'master': MasterConfigLoader(),
-        'slave': SlaveConfigLoader(),
-        'build': MasterConfigLoader(),
+        'manager': ManagerConfigLoader(),
+        'worker': WorkerConfigLoader(),
+        'build': ManagerConfigLoader(),
         'deploy': DeployConfigLoader(),
         'stop': StopConfigLoader(),
     }
@@ -280,7 +280,7 @@ def main(args=None):
     This is the single entry point of the ClusterRunner application. This function feeds the command line parameters as
     keyword args directly into the run() method of the appropriate Subcommand subclass.
 
-    Note that for the master and slave subcommands, we execute all major application logic (including the web server)
+    Note that for the manager and worker subcommands, we execute all major application logic (including the web server)
     on a separate thread (not the main thread). This frees up the main thread to be responsible for facilitating
     graceful application shutdown by intercepting external signals and executing teardown handlers.
     """

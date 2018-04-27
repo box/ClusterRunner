@@ -1,19 +1,19 @@
-[master]
-# put the ClusterRunner master host here
-# your.windows.master.host.com
+[manager]
+# put the ClusterRunner manager host here
+# your.windows.manager.host.com
 
-[slaves]
-# list out all the ClusterRunner slave hosts here
-# your.windows.slave.01.com
-# your.windows.slave.02.com
+[workers]
+# list out all the ClusterRunner worker hosts here
+# your.windows.worker.01.com
+# your.windows.worker.02.com
 
 [clusterrunner_nodes:children]
-master
-slaves
+manager
+workers
 
 [clusterrunner_nodes:vars]
 # path of HOME directory on all the VMs
 # home=c:\users\your-windows-user
 
-# ClusterRunner master host, this should be the same as the one under 'master' inventory group
-# master=your.windows.master.host.com
+# ClusterRunner manager host, this should be the same as the one under 'manager' inventory group
+# manager=your.windows.manager.host.com

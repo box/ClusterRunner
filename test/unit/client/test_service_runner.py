@@ -12,24 +12,24 @@ class TestServiceRunner(BaseUnitTestCase):
         self.mock_Network = self.patch('app.client.service_runner.Network')
         self.mock_time = self.patch('app.client.service_runner.time')
 
-    def test_run_master_invokes_popen(self):
+    def test_run_manager_invokes_popen(self):
         self.mock_time.time.side_effect = range(1000)
         mock_network = self.mock_Network.return_value
         mock_network.get.return_value = Mock(ok=False)
         try:
             service_runner = ServiceRunner('frodo:1')
-            service_runner.run_master()
+            service_runner.run_manager()
         except ServiceRunError:
             pass
 
-        self.assertEqual(call([ANY, ANY, 'master', '--port', '1'], stdout=ANY), self.mock_Popen.call_args)
+        self.assertEqual(call([ANY, ANY, 'manager', '--port', '1'], stdout=ANY), self.mock_Popen.call_args)
 
-    def test_run_master_does_not_invoke_popen_if_resp_is_ok(self):
+    def test_run_manager_does_not_invoke_popen_if_resp_is_ok(self):
         mock_network = self.mock_Network.return_value
         mock_network.get.return_value = Mock(ok=True)
         try:
             service_runner = ServiceRunner('frodo:1')
-            service_runner.run_master()
+            service_runner.run_manager()
         except ServiceRunError:
             pass
 

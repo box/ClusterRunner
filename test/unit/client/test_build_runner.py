@@ -71,7 +71,7 @@ class TestBuildRunner(BaseUnitTestCase):
 
     def test_runner_should_abort_when_status_is_invalid(self):
         runner, logger, build_id = self._create_build_runner_instance({'build': 'x'})
-        runner._cluster_master_api_client.cancel_build = Mock()
+        runner._cluster_manager_api_client.cancel_build = Mock()
 
         runner.run()
 

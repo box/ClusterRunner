@@ -22,22 +22,22 @@ class ServiceRunner(object):
     An object that runs the service from the client side according to business rules.
     """
 
-    def __init__(self, master_url, main_executable=None):
-        self._master_url = master_url
+    def __init__(self, manager_url, main_executable=None):
+        self._manager_url = manager_url
         self._main_executable = main_executable or Configuration['main_executable_path']
         self._logger = get_logger(__name__)
 
-    def run_master(self):
+    def run_manager(self):
         """
-        Runs the master service if it is not running
+        Runs the manager service if it is not running
         :return:
         """
-        self._logger.info('Running master on {}'.format(self._master_url))
-        if self.is_master_up():
+        self._logger.info('Running manager on {}'.format(self._manager_url))
+        if self.is_manager_up():
             return
-        cmd = self._main_executable + ['master', '--port', self._port(self._master_url)]
+        cmd = self._main_executable + ['manager', '--port', self._port(self._manager_url)]
 
-        self._run_service(cmd, self._master_url)
+        self._run_service(cmd, self._manager_url)
 
     def _port(self, service_url):
         """
@@ -48,14 +48,14 @@ class ServiceRunner(object):
         """
         return service_url.split(':')[-1]
 
-    def run_slave(self, port=None):
+    def run_worker(self, port=None):
         """
-        Runs the slave if it is not running
+        Runs the worker if it is not running
         :type port: int | None
         :return:
         """
-        self._logger.info('Running slave')
-        cmd = self._main_executable + ['slave', '--master-url', self._master_url]
+        self._logger.info('Running worker')
+        cmd = self._main_executable + ['worker', '--manager-url', self._manager_url]
         if port is not None:
             cmd.extend(['--port', str(port)])
 
@@ -63,15 +63,15 @@ class ServiceRunner(object):
 
     def block_until_build_queue_empty(self, timeout=60):
         """
-        This blocks until the master's build queue is empty. This data is exposed via the /queue endpoint and contains
+        This blocks until the manager's build queue is empty. This data is exposed via the /queue endpoint and contains
         any jobs that are currently building or not yet started. If the queue is not empty before the timeout, this
         method raises an exception.
 
         :param timeout: The maximum number of seconds to block before raising an exception.
         :type timeout: int
         """
-        master_api = UrlBuilder(self._master_url)
-        queue_url = master_api.url('queue')
+        manager_api = UrlBuilder(self._manager_url)
+        queue_url = manager_api.url('queue')
 
         def is_queue_empty():
             queue_resp = requests.get(queue_url)
@@ -82,7 +82,7 @@ class ServiceRunner(object):
             return False
 
         if not poll.wait_for(is_queue_empty, timeout, 0.5):
-            raise Exception('Master service did not become idle before timeout.')
+            raise Exception('Manager service did not become idle before timeout.')
 
     def kill(self):
         self._run_service(self._main_executable + ['stop'])
@@ -101,12 +101,12 @@ class ServiceRunner(object):
         if service_url is not None and not self.is_up(service_url, timeout=10):
             raise ServiceRunError("Failed to run service on {}.".format(service_url))
 
-    def is_master_up(self):
+    def is_manager_up(self):
         """
-        Checks if the master is up
+        Checks if the manager is up
         :rtype: bool
         """
-        return self.is_up(self._master_url)
+        return self.is_up(self._manager_url)
 
     def is_up(self, service_url, timeout=0.1):
         """

@@ -13,7 +13,7 @@ install:
   - make init-dev
 
 script:
-  - export CR_VERBOSE=1  # turns on stdout logging for master and slave services during functional tests
+  - export CR_VERBOSE=1  # turns on stdout logging for manager and worker services during functional tests
   - make $TARGETS
 
 after_success:

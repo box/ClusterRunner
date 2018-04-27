@@ -26,16 +26,16 @@ class TestMain(BaseUnitTestCase):
         super().setUp()
         self.patch('app.util.fs.write_file')
         self.mock_tornado = self.patch('app.subcommands.service_subcommand.tornado')
-        self.mock_ClusterMaster = self.patch('app.subcommands.master_subcommand.ClusterMaster')
-        self.mock_ClusterSlave = self.patch('app.subcommands.slave_subcommand.ClusterSlave')
-        self.mock_ClusterMasterApplication = self.patch('app.subcommands.master_subcommand.ClusterMasterApplication')
-        self.mock_ClusterSlaveApplication = self.patch('app.subcommands.slave_subcommand.ClusterSlaveApplication')
+        self.mock_ClusterManager = self.patch('app.subcommands.manager_subcommand.ClusterManager')
+        self.mock_ClusterWorker = self.patch('app.subcommands.worker_subcommand.ClusterWorker')
+        self.mock_ClusterManagerApplication = self.patch('app.subcommands.manager_subcommand.ClusterManagerApplication')
+        self.mock_ClusterWorkerApplication = self.patch('app.subcommands.worker_subcommand.ClusterWorkerApplication')
         self.mock_BuildRunner = self.patch('app.subcommands.build_subcommand.BuildRunner')
         self.mock_ServiceRunner = self.patch('app.subcommands.build_subcommand.ServiceRunner')
         self.mock_ConfigFile = self.patch('app.__main__.ConfigFile')
-        self.patch('app.__main__.SlaveConfigLoader')
+        self.patch('app.__main__.WorkerConfigLoader')
         self.patch('app.util.conf.base_config_loader.platform').node.return_value = self._HOSTNAME
-        self.patch('app.subcommands.master_subcommand.analytics.initialize')
+        self.patch('app.subcommands.manager_subcommand.analytics.initialize')
         self.patch('argparse._sys.stderr')  # Hack to prevent argparse from printing output during tests.
         self.patch('app.subcommands.service_subcommand.HTTPServer')
 
@@ -44,40 +44,40 @@ class TestMain(BaseUnitTestCase):
         self.start_force_kill_countdown_patcher = patch('app.__main__._start_app_force_kill_countdown')
         self.start_force_kill_countdown_mock = self.start_force_kill_countdown_patcher.start()
 
-    def test_master_args_correctly_create_cluster_master(self):
-        mock_cluster_master = self.mock_ClusterMaster.return_value  # get the mock for the ClusterMaster instance
+    def test_manager_args_correctly_create_cluster_manager(self):
+        mock_cluster_manager = self.mock_ClusterManager.return_value  # get the mock for the ClusterManager instance
 
-        main.main(['master'])
+        main.main(['manager'])
 
-        self.mock_ClusterMaster.assert_called_once_with()  # assert on constructor params
-        self.mock_ClusterMasterApplication.assert_called_once_with(mock_cluster_master)  # assert on constructor params
+        self.mock_ClusterManager.assert_called_once_with()  # assert on constructor params
+        self.mock_ClusterManagerApplication.assert_called_once_with(mock_cluster_manager)  # assert on constructor params
 
-    def test_default_slave_args_correctly_create_cluster_slave(self):
+    def test_default_worker_args_correctly_create_cluster_worker(self):
         self.mock_configuration_values({'num_executors': 1}, default_value='default_value')
-        mock_cluster_slave = self.mock_ClusterSlave.return_value
+        mock_cluster_worker = self.mock_ClusterWorker.return_value
 
-        main.main(['slave'])
+        main.main(['worker'])
 
-        expected_cluster_slave_constructor_args = {
+        expected_cluster_worker_constructor_args = {
             'num_executors': 1,
             'port': Configuration['port'],
             'host': Configuration['hostname'],
         }
-        self.mock_ClusterSlave.assert_called_once_with(**expected_cluster_slave_constructor_args)
-        self.mock_ClusterSlaveApplication.assert_called_once_with(mock_cluster_slave)
+        self.mock_ClusterWorker.assert_called_once_with(**expected_cluster_worker_constructor_args)
+        self.mock_ClusterWorkerApplication.assert_called_once_with(mock_cluster_worker)
 
-    def test_explicit_slave_args_correctly_create_cluster_slave(self):
-        mock_cluster_slave = self.mock_ClusterSlave.return_value
+    def test_explicit_worker_args_correctly_create_cluster_worker(self):
+        mock_cluster_worker = self.mock_ClusterWorker.return_value
 
-        main.main(['slave', '--num-executors', '5', '--port', '98765'])
+        main.main(['worker', '--num-executors', '5', '--port', '98765'])
 
-        expected_cluster_slave_constructor_args = {
+        expected_cluster_worker_constructor_args = {
             'num_executors': 5,
             'port': 98765,
             'host': Configuration['hostname'],
         }
-        self.mock_ClusterSlave.assert_called_once_with(**expected_cluster_slave_constructor_args)
-        self.mock_ClusterSlaveApplication.assert_called_once_with(mock_cluster_slave)
+        self.mock_ClusterWorker.assert_called_once_with(**expected_cluster_worker_constructor_args)
+        self.mock_ClusterWorkerApplication.assert_called_once_with(mock_cluster_worker)
 
     @genty_dataset(
         only_required_args_passed=(
@@ -101,14 +101,14 @@ class TestMain(BaseUnitTestCase):
         def secret_setter(*args):
             Secret.set('mellon1234')
         main._set_secret = Mock(side_effect=secret_setter)
-        build_args = ['build', '--master-url', 'smaug:1'] + extra_args
+        build_args = ['build', '--manager-url', 'smaug:1'] + extra_args
         expected_request_params['job_name'] = None
         self.patch('app.__main__.util.project_type_subclasses_by_name').return_value = {  # mock out project_type subclasses
             'imaginary': _ImaginaryProjectType,
         }
 
         main.main(build_args)
-        self.mock_BuildRunner.assert_called_once_with(master_url='smaug:1',
+        self.mock_BuildRunner.assert_called_once_with(manager_url='smaug:1',
                                                       request_params=expected_request_params, secret='mellon1234')
 
     def test_main_exits_with_nonzero_exit_code_if_build_runner_fails(self):
@@ -118,30 +118,30 @@ class TestMain(BaseUnitTestCase):
         mock_build_runner.run.return_value = False  # run() method returns false when build fails
         build_subcommand = BuildSubcommand()
         with self.assertRaisesRegex(SystemExit, '1'):  # asserts that sys.exit(1) is called
-            build_subcommand.run(log_level=None, master_url='smaug:1', build_type='middleearth',
+            build_subcommand.run(log_level=None, manager_url='smaug:1', build_type='middleearth',
                                  some_other_param='999')
 
         self.mock_BuildRunner.assert_called_once_with(
-            master_url='smaug:1',
+            manager_url='smaug:1',
             secret='mellon1234',
             request_params={'type': 'middleearth', 'some_other_param': '999'}
         )
 
-    def test_single_machine_case_runs_master_and_slave(self):
+    def test_single_machine_case_runs_manager_and_worker(self):
         mock_service_runner = self.mock_ServiceRunner.return_value
-        mock_service_runner.is_master_up.return_value = False
+        mock_service_runner.is_manager_up.return_value = False
         build_args = ['build']
 
         main.main(build_args)
 
-        self.assertTrue(mock_service_runner.run_master.called)
-        self.assertTrue(mock_service_runner.run_slave.called)
+        self.assertTrue(mock_service_runner.run_manager.called)
+        self.assertTrue(mock_service_runner.run_worker.called)
 
     def test_build_subcommand_no_args_sets_cwd_in_request_params_to_build_runner(self):
         expected_project_directory = 'mordor'
         self.mock_cwd(expected_project_directory)
         bs = BuildSubcommand()
-        bs.run(log_level='whatever', master_url=None)
+        bs.run(log_level='whatever', manager_url=None)
         # the second member of call args are the keyword arguments
         # so this checks the kw args to the constructor for BuildRunner
         actual = self.mock_build_runner_constructor_kw_args()['request_params']['project_directory']
@@ -161,7 +161,7 @@ class TestMain(BaseUnitTestCase):
                             'All arguments (including "{}") should have help text specified.'.format(argument_name))
 
     @genty_dataset(
-        ['-V'], ['--version'], ['master'], ['slave', '-p', '12345'], ['build', '--master-url', 'shire.middle-earth.org']
+        ['-V'], ['--version'], ['manager'], ['worker', '-p', '12345'], ['build', '--manager-url', 'shire.middle-earth.org']
     )
     def test_parse_args_accepts_valid_arguments(self, valid_arg_set):
         try:
@@ -172,7 +172,7 @@ class TestMain(BaseUnitTestCase):
 
     @genty_dataset(
         no_args=([],),
-        prefix_of_valid_arg=(['slave', '--master', 'shire.middle-earth.org'],),
+        prefix_of_valid_arg=(['worker', '--manager', 'shire.middle-earth.org'],),
         nonexistent_arg=(['hobbitses'],),
     )
     def test_parse_args_rejects_invalid_arguments(self, invalid_arg_set):
@@ -184,18 +184,18 @@ class TestMain(BaseUnitTestCase):
             main._parse_args(invalid_arg_set)
 
     def test_start_app_force_kill_countdown_is_called_when_app_exits_normally(self):
-        self.patch('app.__main__.MasterSubcommand')  # causes subcommand run() method to return immediately
+        self.patch('app.__main__.ManagerSubcommand')  # causes subcommand run() method to return immediately
 
-        main.main(['master'])
+        main.main(['manager'])
 
         self.start_force_kill_countdown_mock.assert_called_once_with(seconds=AnythingOfType(int))
 
     def test_start_app_force_kill_countdown_is_called_when_app_exits_via_unhandled_exception(self):
-        run_mock = self.patch('app.__main__.MasterSubcommand').return_value.run
+        run_mock = self.patch('app.__main__.ManagerSubcommand').return_value.run
         run_mock.side_effect = Exception('I am here to trigger teardown handlers!')
 
         with self.assertRaises(SystemExit, msg='UnhandledExceptionHandler should convert Exception to SystemExit.'):
-            main.main(['master'])
+            main.main(['manager'])
 
         self.start_force_kill_countdown_mock.assert_called_once_with(seconds=AnythingOfType(int))
 

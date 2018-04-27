@@ -45,7 +45,7 @@ build_results/
 clusterrunner.zip
 repos/
 results/
-slave_results/
+worker_results/
 .hypothesis/
 
 # virtualenv

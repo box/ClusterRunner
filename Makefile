@@ -172,8 +172,8 @@ rpm: $(CR_BIN) $(PY_PKG_INFO)
 		$(CR_BIN)=/usr/bin/ \
 		$(CR_CONF)=$(RPM_CR_CONF) \
 		bin/=$(RPM_BASE_DIR)/bin/ \
-		conf/clusterrunner-master=/etc/init.d/ \
-		conf/clusterrunner-slave=/etc/init.d/
+		conf/clusterrunner-manager=/etc/init.d/ \
+		conf/clusterrunner-worker=/etc/init.d/
 
 .PHONY: docker-rpm
 docker-rpm:

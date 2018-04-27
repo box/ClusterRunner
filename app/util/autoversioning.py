@@ -45,7 +45,7 @@ def _calculate_source_version():
     """
     try:
         head_commit_hash = _get_commit_hash_from_revision_param('HEAD')
-        head_commit_is_on_trunk = _is_commit_hash_in_masters_first_parent_chain(head_commit_hash)
+        head_commit_is_on_trunk = _is_commit_hash_in_managers_first_parent_chain(head_commit_hash)
 
         commit_count = _get_repo_commit_count()
         hash_extension = '' if head_commit_is_on_trunk else '-{}'.format(head_commit_hash[:7])
@@ -75,10 +75,10 @@ def _repo_has_uncommited_changes():
     return bool(_execute_local_git_command('status', '--porcelain'))
 
 
-def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
+def _is_commit_hash_in_managers_first_parent_chain(commit_hash):
     """
-    Check if the current HEAD is in the first-parent chain of origin/master. The first-parent chain
-    of origin/master consists of all the "trunk" commits. All other commits are either on merged
+    Check if the current HEAD is in the first-parent chain of origin/manager. The first-parent chain
+    of origin/manager consists of all the "trunk" commits. All other commits are either on merged
     branches or haven't been merged at all.
 
     :type commit_hash: str
@@ -86,11 +86,11 @@ def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
     :raises CalledProcessError: if there is no local git repo or is a shallow clone
     :raises FileNotFoundError: if git command is not available.
     """
-    master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
+    manager_commit_hash = _get_commit_hash_from_revision_param('origin/manager')
     first_parent_chain = _execute_local_git_command(
         'rev-list',
         '--first-parent',
-        '{}^..{}'.format(commit_hash, master_commit_hash)).split()
+        '{}^..{}'.format(commit_hash, manager_commit_hash)).split()
     return commit_hash in first_parent_chain
 
 

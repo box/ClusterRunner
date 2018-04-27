@@ -13,7 +13,7 @@ from app.util.unhandled_exception_handler import UnhandledExceptionHandler
 
 class ServiceSubcommand(Subcommand):
     """
-    Base class for Master and Slave subcommands.
+    Base class for Manager and Worker subcommands.
     """
     _THREAD_NAME = None
 
