@@ -75,7 +75,7 @@ class ClusterManager(ClusterService):
 
     def _disconnect_non_heartbeating_workers(self):
         workers_to_disconnect = [worker for worker in self._worker_registry.get_all_workers_by_url().values()
-                                if worker.is_alive() and not self._is_worker_responsive(worker)]
+                                 if worker.is_alive() and not self._is_worker_responsive(worker)]
 
         for worker in workers_to_disconnect:
             self._disconnect_worker(worker)
@@ -103,7 +103,7 @@ class ClusterManager(ClusterService):
         :rtype: dict [str, mixed]
         """
         workers_representation = [worker.api_representation() for worker in
-                                 self._worker_registry.get_all_workers_by_id().values()]
+                                  self._worker_registry.get_all_workers_by_id().values()]
         return {
             'status': self._get_status(),
             'workers': workers_representation,
