@@ -175,11 +175,14 @@ rpm: $(CR_BIN) $(PY_PKG_INFO)
 		conf/clusterrunner-master=/etc/init.d/ \
 		conf/clusterrunner-slave=/etc/init.d/
 
+# Use a docker container to build the clusterrunnner RPM and copy it to the local directory.
+# Additionally extract the PKG-INFO file so the final "release-signed" target can run without a
+# local Python environment.
 .PHONY: docker-rpm
 docker-rpm:
 	$(call print_msg, Running ClusterRunner Docker RPM builder... )
 	docker build -t $(DOCKER_TAG) -f Dockerfile .
-	mkdir -p $(DIST_DIR)
+	mkdir -p $(DIST_DIR) $(PY_EGG_INFO_DIR)
 	@# Docker cp does not support globing, so the path to the RPM file must be
 	@# detected with a query. The order of the commands are important and they
 	@# must all be run in the same "shell" for the variables to be available to
@@ -187,6 +190,7 @@ docker-rpm:
 	DOCKER_RPM_PATH=$$(docker run $(DOCKER_TAG) sh -c "ls /root/$(DIST_DIR)/*.rpm") && \
 	CONTAINER_ID=$$(docker ps -alq) && \
 	docker cp $$CONTAINER_ID:$$DOCKER_RPM_PATH $(DIST_DIR) && \
+	docker cp $$CONTAINER_ID:/root/$(PY_PKG_INFO) $(PY_EGG_INFO_DIR) && \
 	docker rm $$CONTAINER_ID
 
 # RPM_PATH is set as a target dependency to potentially warn users in the event
@@ -207,6 +211,16 @@ release: $(PY_PKG_INFO) $$($$RPM_PATH)
 .PHONY: docker-release
 docker-release: docker-rpm
 	docker run --rm -e ARTIFACTORY=$(ARTIFACTORY) $(DOCKER_TAG) /usr/bin/make release
+
+# See "release" target. The major difference is that this target uses the Box custom
+# rpm-to-artifactory tooling that is made available for signing and uploading rpms.
+.PHONY: release-signed
+release-signed: $(PY_PKG_INFO) $$($$RPM_PATH)
+	REPO_NAME="$(ARTIFACTORY_REPO)" \
+	REPO_PATH="com/box" \
+	SERVICE_KIND="clusterrunner" \
+	SERVICE_VERSION="$(RPM_VERSION)-$(RPM_RELEASE)" \
+	rpm-to-artifactory $(RPM_PATH)
 
 clean:
 	$(call print_msg, Removing intermediate build files... )
