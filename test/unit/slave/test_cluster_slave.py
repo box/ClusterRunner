@@ -280,6 +280,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         mock_response = MagicMock(spec=requests.models.Response, create=True)
         mock_response.ok = False
+        mock_response.status_code = http.client.NOT_FOUND
         self.mock_network.post_with_digest.return_value = mock_response
 
         slave._run_heartbeat()

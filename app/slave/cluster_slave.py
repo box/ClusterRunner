@@ -78,15 +78,19 @@ class ClusterSlave(ClusterService):
 
             # A non HTTP 200 response indicates that the master is up, but does not recognize the slave.
             if not response.ok:
-                self._logger.error('Master did not respond with HTTP 200')
+                self._logger.error('Received HTTP {} from master.'.format(response.status_code))
+                self._logger.error('The slave process is shutting down.')
                 self.kill()
             else:
                 self._heartbeat_failure_count = 0
         except (requests.ConnectionError, requests.Timeout):
             self._heartbeat_failure_count += 1
+            self._logger.warning('Master has not responded to last {} heartbeats.'.format(
+                self._heartbeat_failure_count))
             if self._heartbeat_failure_count >= self._heartbeat_failure_threshold:
-                self._logger.error('Master has not responded to last {} heartbeats.'.format(
+                self._logger.error('Heartbeat failure threshold of {} reached.'.format(
                     self._heartbeat_failure_threshold))
+                self._logger.error('The slave process is shutting down.')
                 self.kill()
 
         self._hb_scheduler.enter(self._heartbeat_interval, 0, self._run_heartbeat)
