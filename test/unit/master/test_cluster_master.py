@@ -69,6 +69,19 @@ class TestClusterMaster(BaseUnitTestCase):
         self.assertIsNotNone(slave_registry.get_slave(slave_id=None, slave_url='never-before-seen.turtles.gov'),
                              'Registered slave does not have the expected url.')
 
+    def test_connect_slave_with_existing_dead_slave_removes_old_slave_entry_from_registry(self):
+        master = ClusterMaster()
+        slave_registry = SlaveRegistry.singleton()
+
+        master.connect_slave('existing-slave.turtles.gov', 10)
+        old_existing_slave = slave_registry.get_slave(slave_id=None, slave_url='existing-slave.turtles.gov')
+        old_existing_slave_id = old_existing_slave.id
+
+        connect_response = master.connect_slave('existing-slave.turtles.gov', 10)
+
+        with self.assertRaises(ItemNotFoundError):
+            slave_registry.get_slave(slave_id=old_existing_slave_id)
+
     def test_connect_slave_with_existing_dead_slave_creates_new_alive_instance(self):
         master = ClusterMaster()
         slave_registry = SlaveRegistry.singleton()
