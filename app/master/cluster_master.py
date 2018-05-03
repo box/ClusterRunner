@@ -160,6 +160,9 @@ class ClusterMaster(ClusterService):
                     self._logger.info('Failed to find build {} that was running on {}', old_slave.current_build_id,
                                       old_slave)
 
+            # Remove old slave from registry
+            self._slave_registry.remove_slave(slave=old_slave)
+
         slave = Slave(slave_url, num_executors, slave_session_id)
         self._slave_registry.add_slave(slave)
         self._slave_allocator.add_idle_slave(slave)
