@@ -150,6 +150,7 @@ class TestClusterSlave(BaseUnitTestCase):
         def _get_success_mock_response():
             mock_response = MagicMock(spec=requests.models.Response, create=True)
             mock_response.status_code = http.client.OK
+            mock_response.ok = True
             return mock_response
 
         def fake_network_post(url, *args, **kwargs):
@@ -256,6 +257,7 @@ class TestClusterSlave(BaseUnitTestCase):
 
         slave = self._create_cluster_slave()
         slave.connect_to_master(self._FAKE_MASTER_URL)
+
         if not is_master_responsive:
             self.mock_network.post_with_digest.side_effect = requests.ConnectionError
 
@@ -271,6 +273,22 @@ class TestClusterSlave(BaseUnitTestCase):
             else:
                 self.assertEqual(self._mock_sys.exit.call_count, 0,
                                  'slave keeps running when heartbeat failure threshold is not reached')
+
+    def test_slave_dies_on_http_404_from_master(self):
+        slave = self._create_cluster_slave()
+        slave.connect_to_master(self._FAKE_MASTER_URL)
+
+        mock_response = MagicMock(spec=requests.models.Response, create=True)
+        mock_response.ok = False
+        mock_response.status_code = http.client.NOT_FOUND
+        self.mock_network.post_with_digest.return_value = mock_response
+
+        slave._run_heartbeat()
+
+        self.mock_network.post_with_digest.assert_called_once_with(
+                        ANY,request_params={'slave': {'heartbeat': True}}, secret=ANY)
+        self.assertEqual(self._mock_sys.exit.call_count, 1,
+                         'slave dies when it receives HTTP 404 from master')
 
     def _create_cluster_slave(self, **kwargs):
         """
