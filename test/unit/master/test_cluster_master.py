@@ -209,13 +209,18 @@ class TestClusterMaster(BaseUnitTestCase):
         with self.assertRaises(BadRequestError):
             master.handle_slave_state_update(slave, 'NONEXISTENT_STATE')
 
-    def test_update_slave_last_heartbeat_time_calls_update_last_heartbeat_time_on_slave(self):
+    @genty_dataset (
+        slave_alive=(True,1,),
+        slave_dead=(False,0,),
+    )
+    def test_update_slave_last_heartbeat_time_calls_correspondig_slave_method(self, slave_alive, method_call_count):
         master = ClusterMaster()
 
         mock_slave = self.patch('app.master.cluster_master.Slave').return_value
+        mock_slave.is_alive.return_value = slave_alive
         master.update_slave_last_heartbeat_time(mock_slave)
 
-        self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, 1,
+        self.assertEqual(mock_slave.update_last_heartbeat_time.call_count, method_call_count,
                          'last heartbeat time is updated for the target slave')
 
     @genty_dataset (

@@ -290,6 +290,21 @@ class TestClusterSlave(BaseUnitTestCase):
         self.assertEqual(self._mock_sys.exit.call_count, 1,
                          'slave dies when it receives HTTP 404 from master')
 
+    def test_slave_dies_if_master_reponds_with_is_alive_false(self):
+            slave = self._create_cluster_slave()
+            slave.connect_to_master(self._FAKE_MASTER_URL)
+
+            mock_response = MagicMock(spec=requests.models.Response, create=True)
+            mock_response.json.return_value = {'is_alive': False}
+            self.mock_network.post_with_digest.return_value = mock_response
+
+            slave._run_heartbeat()
+
+            self.mock_network.post_with_digest.assert_called_once_with(
+                            ANY,request_params={'slave': {'heartbeat': True}}, secret=ANY)
+            self.assertEqual(self._mock_sys.exit.call_count, 1,
+                             'slave dies when master responds with is_alive = False')
+
     def _create_cluster_slave(self, **kwargs):
         """
         Create a ClusterSlave for testing.

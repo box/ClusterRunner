@@ -431,4 +431,15 @@ class _SlavesHeartbeatHandler(_ClusterMasterBaseAPIHandler):
     @authenticated
     def post(self, slave_id):
         slave = SlaveRegistry.singleton().get_slave(slave_id=int(slave_id))
-        self._cluster_master.update_slave_last_heartbeat_time(slave)
+
+        # If the slave has been marked dead, but still sends heartbeat, the master does not update the last
+        # heartbeat time and the method returns false. Additionally, master responds to the slave with slave
+        # status. The slave will treat a is_alive=false response as a heartbeat failure, and die.
+        #
+        # The reason master returns the status to the slave instead of simply marking the slave as alive is
+        # because the master or slave do not maintain an explicit state about when and why the slave was marked
+        # dead. It is a lot cleaner for the heartbeat functionality to indicate an heartbeat failure and let the
+        # slave make a decision based on that.
+
+        is_alive = self._cluster_master.update_slave_last_heartbeat_time(slave)
+        self.write({'is_alive': is_alive})
