@@ -192,8 +192,16 @@ class ClusterMaster(ClusterService):
         do_transition = slave_transition_functions.get(new_slave_state)
         do_transition(slave)
 
-    def update_slave_last_heartbeat_time(self, slave):
-        slave.update_last_heartbeat_time()
+    def update_slave_last_heartbeat_time(self, slave) -> bool:
+        """
+        Updates last heartbeat time for the slave if it is alive.
+        :type slave: Slave
+        :return: True when the slave is alive.
+        """
+        if slave.is_alive():
+            slave.update_last_heartbeat_time()
+            return True
+        return False
 
     def set_shutdown_mode_on_slaves(self, slave_ids):
         """
