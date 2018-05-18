@@ -81,6 +81,11 @@ class ClusterSlave(ClusterService):
                 self._logger.error('Received HTTP {} from master.'.format(response.status_code))
                 self._logger.error('The slave process is shutting down.')
                 self.kill()
+            # is_alive = False indicates slave is marked offline in master
+            elif not response.json().get('is_alive'):
+                self._logger.error('The slave is marked dead by master.')
+                self._logger.error('The slave process is shutting down.')
+                self.kill()
             else:
                 self._heartbeat_failure_count = 0
         except (requests.ConnectionError, requests.Timeout):
