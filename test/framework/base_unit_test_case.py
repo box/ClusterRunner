@@ -6,7 +6,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, NonCallableMock, patch
 
 from app.master.build import Build
-from app.master.slave import Slave
+from app.master.slave import Slave, SlaveRegistry
 from app.util import analytics, log
 from app.util.conf.configuration import Configuration
 from app.util.conf.master_config_loader import MasterConfigLoader
@@ -46,6 +46,7 @@ class BaseUnitTestCase(TestCase):
         # Reset singletons so that they get recreated for every test that uses them.
         Configuration.reset_singleton()
         UnhandledExceptionHandler.reset_singleton()
+        SlaveRegistry.reset_singleton()
 
         # Explicitly initialize UnhandledExceptionHandler singleton here (on the main thread) since it sets up signal
         # handlers that must execute on the main thread.

@@ -258,7 +258,6 @@ class TestSlave(BaseUnitTestCase):
 class TestSlaveRegistry(BaseUnitTestCase):
     def setUp(self):
         super().setUp()
-        SlaveRegistry.reset_singleton()
 
     @genty_dataset(
         slave_id_specified=({'slave_id': 400},),

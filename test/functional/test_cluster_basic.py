@@ -73,7 +73,6 @@ class TestClusterBasic(BaseFunctionalTestCase):
             build_id=build_id, expected_build_artifact_contents=expected_artifact_contents)
 
     def test_slave_reconnection_does_not_take_down_master(self):
-        SlaveRegistry.reset_singleton()
         test_config = JOB_WITH_SETUP_AND_TEARDOWN
         job_config = yaml.safe_load(test_config.config[os.name])['JobWithSetupAndTeardown']
         master = self.cluster.start_master()
