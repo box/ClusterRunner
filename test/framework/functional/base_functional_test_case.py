@@ -5,6 +5,7 @@ import tempfile
 from unittest import TestCase
 
 from app.common.build_artifact import BuildArtifact
+from app.master.slave import SlaveRegistry
 from app.util import fs, log
 from app.util.conf.base_config_loader import BaseConfigLoader
 from app.util.conf.configuration import Configuration
@@ -28,6 +29,7 @@ class BaseFunctionalTestCase(TestCase):
 
         self._reset_config()
         Secret.set('testsecret')
+        SlaveRegistry.reset_singleton()
 
         self.cluster = FunctionalTestCluster(verbose=self._get_test_verbosity())
         self._network = Network()

@@ -48,8 +48,6 @@ class TestClusterMaster(BaseUnitTestCase):
         self._thread_pool_executor_cls.return_value.submit.side_effect = \
             self.thread_pool_executor.submit
 
-        SlaveRegistry.reset_singleton()
-
         Configuration['pagination_offset'] = self._PAGINATION_OFFSET
         Configuration['pagination_limit'] = self._PAGINATION_LIMIT
         Configuration['pagination_max_limit'] = self._PAGINATION_MAX_LIMIT
