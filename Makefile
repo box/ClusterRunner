@@ -90,14 +90,23 @@ test: test-unit test-integration test-functional
 	pip install --upgrade pip
 	@# Constrain setuptools because pylint is not compatible with newer versions.
 	pip install setuptools==33.1.1
+	pip install --upgrade pip-tools
 
 init: .pre-init
 	$(call print_msg, Installing requirements... )
-	pip install --upgrade -r requirements.txt
+	pip-sync requirements.txt
 
 init-dev: .pre-init
 	$(call print_msg, Installing dev requirements... )
-	pip install --upgrade -r dev-requirements.txt
+	pip-sync requirements.txt dev-requirements.txt
+
+deps:
+	pip-compile requirements.in
+	pip-compile dev-requirements.in
+
+deps-upgrade:
+	pip-compile -U requirements.in
+	pip-compile -U dev-requirements.in
 
 pylint:
 	$(call print_msg, Running pylint... )
