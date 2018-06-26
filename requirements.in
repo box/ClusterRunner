@@ -1,0 +1,10 @@
+configobj
+fysom
+logbook
+prometheus_client
+psutil
+pyyaml
+requests
+termcolor
+tornado
+typing

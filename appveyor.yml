@@ -1,5 +1,6 @@
 install:
   - "SET PATH=C:\\Python34;C:\\Python34\\Scripts\\;%PATH%"
+  - pip install -r requirements.txt
   - pip install -r dev-requirements.txt
 
 environment:
