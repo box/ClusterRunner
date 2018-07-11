@@ -69,7 +69,7 @@ class ClusterSlave(ClusterService):
         SafeThread(target=self._start_heartbeat, name='HeartbeatThread', daemon=True).start()
 
     def _start_heartbeat(self):
-        self._hb_scheduler.enter(0, 0, self._run_heartbeat)
+        self._run_heartbeat()
         self._hb_scheduler.run()
 
     def _run_heartbeat(self):

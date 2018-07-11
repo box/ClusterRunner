@@ -70,7 +70,7 @@ class ClusterMaster(ClusterService):
         Thread(target=self._start_heartbeat_tracker, name='HeartbeatTrackerThread', daemon=True).start()
 
     def _start_heartbeat_tracker(self):
-        self._hb_scheduler.enter(0, 0, self._disconnect_non_heartbeating_slaves)
+        self._disconnect_non_heartbeating_slaves()
         self._hb_scheduler.run()
 
     def _disconnect_non_heartbeating_slaves(self):
