@@ -64,6 +64,7 @@ class TestAutoversioning(BaseUnitTestCase):
             ('status', '--porcelain'): status_side_effect,
             ('rev-parse', '--verify', 'HEAD'): current_head_commit,
             ('rev-parse', '--verify', 'origin/master'): current_origin_master_commit,
+            ('fetch', 'origin', 'refs/heads/master:refs/remotes/origin/master'): b'',
         }
 
         def fake_check_output(cmd_args, *args, **kwargs):

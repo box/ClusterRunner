@@ -86,12 +86,24 @@ def _is_commit_hash_in_masters_first_parent_chain(commit_hash):
     :raises CalledProcessError: if there is no local git repo or is a shallow clone
     :raises FileNotFoundError: if git command is not available.
     """
+    _fetch_remote_branch_from_refspec('origin', 'master')
     master_commit_hash = _get_commit_hash_from_revision_param('origin/master')
     first_parent_chain = _execute_local_git_command(
         'rev-list',
         '--first-parent',
         '{}^..{}'.format(commit_hash, master_commit_hash)).split()
     return commit_hash in first_parent_chain
+
+
+def _fetch_remote_branch_from_refspec(remote: str, branch: str) -> None:
+    """
+    Fetch/update the remote ref from a given remote and branch name. This is used when the working
+    repo does not have the local origin/master ref (e.g. during a Jenkins PR build).
+
+    :raises FileNotFoundError: if git command is not available.
+    """
+    _execute_local_git_command(
+        'fetch', remote, "refs/heads/{1}:refs/remotes/{0}/{1}".format(remote, branch))
 
 
 def _get_commit_hash_from_revision_param(revision_param):
