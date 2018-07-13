@@ -1,6 +1,7 @@
 import functools
 import os
 import subprocess
+from subprocess import CalledProcessError
 
 _MAJOR_MINOR_VERSION = '0.5'
 
@@ -102,8 +103,12 @@ def _fetch_remote_branch_from_refspec(remote: str, branch: str) -> None:
 
     :raises FileNotFoundError: if git command is not available.
     """
-    _execute_local_git_command(
-        'fetch', remote, "refs/heads/{1}:refs/remotes/{0}/{1}".format(remote, branch))
+    try:
+        _execute_local_git_command('fetch', remote,
+                                   "refs/heads/{1}:refs/remotes/{0}/{1}".format(remote, branch))
+    except CalledProcessError:
+        # "git fetch" may fail during the docker build so it must be ignored.
+        pass
 
 
 def _get_commit_hash_from_revision_param(revision_param):
@@ -119,14 +124,16 @@ def _get_commit_hash_from_revision_param(revision_param):
 
 def _execute_local_git_command(*args):
     """
-    Execute a git command in the ClusterRunner git repo that we are currently executing from. subprocess.check_output()
-    raises a CalledProcessError exception if the command exits with a nonzero exit code.
+    Execute a git command in the ClusterRunner git repo that we are currently executing from.
+    subprocess.check_output() raises a CalledProcessError exception if the command exits with a
+    nonzero exit code.
 
     :param args: The command arguments to provide to git
     :type args: tuple
     :return: The output of the git command
     :rtype: str
     :raises FileNotFoundError: if git command is not available.
+    :raises CalledProcessError: if command exists non-zero.
     """
     command_output = subprocess.check_output(
         ['git'] + list(args),
