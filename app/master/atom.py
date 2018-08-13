@@ -5,6 +5,7 @@ class AtomState(str, Enum):
     NOT_STARTED = 'NOT_STARTED'
     IN_PROGRESS = 'IN_PROGRESS'
     COMPLETED = 'COMPLETED'
+    CANCELED = 'CANCELED'
 
 
 class Atom(object):

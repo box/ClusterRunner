@@ -2,6 +2,7 @@ from queue import Queue
 from threading import Lock
 
 from app.master.build_scheduler import BuildScheduler
+from app.master.build import Build
 
 
 class BuildSchedulerPool(object):
@@ -20,12 +21,16 @@ class BuildSchedulerPool(object):
         :type build: Build
         :rtype: BuildScheduler
         """
+        if isinstance(build, Build):
+            build_id = build.build_id()
+        else:
+            build_id = int(build)
         with self._scheduler_creation_lock:
-            scheduler = self._schedulers_by_build_id.get(build.build_id())
+            scheduler = self._schedulers_by_build_id.get(build_id)
             if scheduler is None:
                 # WIP(joey): clean up old schedulers (search through list and remove any with finished builds)
                 scheduler = BuildScheduler(build, self)
-                self._schedulers_by_build_id[build.build_id()] = scheduler
+                self._schedulers_by_build_id[build_id] = scheduler
 
         return scheduler
 

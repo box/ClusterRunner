@@ -110,6 +110,21 @@ class Slave:
             self._logger.warning('Teardown request to slave failed because slave is unresponsive.')
             self.mark_dead()
 
+    def cancel(self):
+        """
+        Tell the slave to run the build cancel
+        """
+        if not self.is_alive():
+            self._logger.notice('Cancel request to slave {} was not sent since slave is disconnected.', self.url)
+            return
+
+        cancel_url = self._slave_api.url('build', self.current_build_id, 'cancel')
+        try:
+            self._network.post(cancel_url)
+        except (requests.ConnectionError, requests.Timeout):
+            self._logger.warning('Cancel request to slave failed because slave is unresponsive.')
+            self.mark_dead()
+
     def start_subjob(self, subjob: Subjob):
         """
         Send a subjob of a build to this slave. The slave must have already run setup for the corresponding build.

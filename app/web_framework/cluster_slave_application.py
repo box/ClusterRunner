@@ -23,6 +23,7 @@ class ClusterSlaveApplication(ClusterApplication):
                 RouteNode(r'version', _VersionHandler),
                 RouteNode(r'build', _BuildsHandler, 'builds').add_children([
                     RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                        RouteNode(r'cancel', _CancelHandler),
                         RouteNode(r'setup', _BuildSetupHandler),
                         RouteNode(r'teardown', _TeardownHandler),
                         RouteNode(r'subjob', _SubjobsHandler, 'subjobs').add_children([
@@ -47,6 +48,7 @@ class ClusterSlaveApplication(ClusterApplication):
             RouteNode(r'version', _VersionHandler),
             RouteNode(r'builds', _BuildsHandler, 'builds').add_children([
                 RouteNode(r'(\d+)', _BuildHandler, 'build').add_children([
+                    RouteNode(r'cancel', _CancelHandler),
                     RouteNode(r'setup', _BuildSetupHandler),
                     RouteNode(r'teardown', _TeardownHandler),
                     RouteNode(r'subjobs', _SubjobsHandler, 'subjobs').add_children([
@@ -127,6 +129,10 @@ class _TeardownHandler(_ClusterSlaveBaseAPIHandler):
         self._cluster_slave.teardown_build(int(build_id))
         self._write_status()
 
+class _CancelHandler(_ClusterSlaveBaseAPIHandler):
+    def post(self, build_id):
+        self._cluster_slave.cancel_build(int(build_id))
+        self._write_status()
 
 class _SubjobsHandler(_ClusterSlaveBaseAPIHandler):
     pass
