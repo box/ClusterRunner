@@ -21,7 +21,7 @@ The change can be visualized in the following way:
 
 <img src="/img/cr-arch-high-level2.png" width="100%">
 
-## Prerequisites 
+## Prerequisites
 
 Before you can set up a distributed cluster, there are a few things you need to take care of first:
 
@@ -34,12 +34,12 @@ Before you can set up a distributed cluster, there are a few things you need to 
 
 The first step when building out a Cluster is to know what machines you have available.
 
-Take a bit of time to review your hosts, catalog their Operating Systems, and choose which one will be a 
+Take a bit of time to review your hosts, catalog their Operating Systems, and choose which one will be a
 ClusterMaster and which will be ClusterSlaves.
 
 <div class="note unreleased">
   <h5>Master & Slave Operating Systems</h5>
-  <p>At this time the master and slaves must all use the same type of operating system. We plan to add support 
+  <p>At this time the master and slaves must all use the same type of operating system. We plan to add support
   for heterogeneous environments in the future.</p>
 </div>
 
@@ -47,7 +47,7 @@ ClusterMaster and which will be ClusterSlaves.
 
 #### OS X setup
 
-To enable SSH on OS X, use these [instructions](http://support.apple.com/kb/PH13759).
+To enable SSH on OS X, use these [instructions](https://support.apple.com/kb/PH13759).
 
 #### Linux Setup
 
@@ -55,12 +55,12 @@ SSH access is enabled out-of-the-box for most Linux installs. If you find that i
 
 ### 3. Exchange master/slave SSH keys
 
-ClusterRunner relies on SSH to dynamically deploy and configure slaves. Password prompts will halt the 
+ClusterRunner relies on SSH to dynamically deploy and configure slaves. Password prompts will halt the
 process.
 
 #### OS X and Linux
 
-Set up <a target="_blank" href="http://www.linuxproblem.org/art_9.html">passwordless SSH</a> between your 
+Set up <a target="_blank" href="https://www.linuxproblem.org/art_9.html">passwordless SSH</a> between your
 master and slaves.
 
 <div class="note info">
@@ -93,12 +93,12 @@ To start your first distributed cluster, SSH to your ClusterMaster and run the c
 
 {% highlight bash %}
 # Make sure you've done the "installation instructions" above
-	
+
 # Start the ClusterMaster process and specify the hostnames of your ClusterSlaves
 ~ $ clusterrunner deploy --slaves hostname1 hostname2 hostname3
-	
+
 # Run the tests for our "Simple job"
-~ $ clusterrunner build git --url git@github.com:boxengservices/ClusterRunnerDemo.git --branch master --job-name Simple 
+~ $ clusterrunner build git --url git@github.com:boxengservices/ClusterRunnerDemo.git --branch master --job-name Simple
 
 # The exit code indicates success/failure!
 {% endhighlight %}
@@ -106,8 +106,8 @@ To start your first distributed cluster, SSH to your ClusterMaster and run the c
 <!--
 <div class="note">
   <h5>Using CI to start up ClusterRunner</h5>
-  <p>We recommend that you eventually have an automated process setup to start/keep-running your Cluster. This can 
-  be as easy as a CI job that executes the commands on your CR Master, or as thorough as a config rule (such as in 
+  <p>We recommend that you eventually have an automated process setup to start/keep-running your Cluster. This can
+  be as easy as a CI job that executes the commands on your CR Master, or as thorough as a config rule (such as in
   Chef/Puppet) to keep the service alive.
   </p>
 </div>
@@ -144,7 +144,7 @@ The "hash" is optional.
 
 <div class="note">
   <h5>Performance Hint</h5>
-  <p>If you use the "--url" argument, your CI system does not need to check out your repo's code into the build workspace. (The ClusterMaster will do this automatically.) 
+  <p>If you use the "--url" argument, your CI system does not need to check out your repo's code into the build workspace. (The ClusterMaster will do this automatically.)
   This can save you seconds of execution time!</p>
 </div>
 
@@ -152,32 +152,32 @@ The "hash" is optional.
     <p>Don't forget to restrict this job to run only on CI nodes with the "cluster-master" label!</p>
 </div>
 
- 
+
 
 
 #### 4.2 Publish build results in CI
 
-Build results for any invocation of <code>clusterrunner build</code> are aggregated into the 
+Build results for any invocation of <code>clusterrunner build</code> are aggregated into the
 <code>./build_results/</code> directory.
 
-To consume these results, simply configure your CI system to publish the appropriate pattern of results in that 
+To consume these results, simply configure your CI system to publish the appropriate pattern of results in that
 directory. In Jenkins, this looks like:
 
 <center><img src="/img/ci-build-results.png" height="150"></center>
 
 ### 5. [optional] Unmount ClusterSlaves from your CI system
- 
+
 We recommend that you disconnect ClusterSlaves from your CI Master.
 
-Since ClusterRunner wil be using these hosts to their full capacity, we recommend that you try to avoid running Jenkins 
+Since ClusterRunner wil be using these hosts to their full capacity, we recommend that you try to avoid running Jenkins
 jobs on them directly while they are operating as ClusterSlaves.
 
-<i>How we do it at Box: If you do choose to keep these mounted, we recommend adding a special label to them (such as 
+<i>How we do it at Box: If you do choose to keep these mounted, we recommend adding a special label to them (such as
 "clusterslave") so you can exclude them from other job definitions.</i>
 
 ### 6. Profit!
 
 Sit back and enjoy the effects of ClusterRunners' capabilities.
 
-As you increase your Cluster size and add more work to the system, you'll be amazed at how efficiently ClusterRunner 
+As you increase your Cluster size and add more work to the system, you'll be amazed at how efficiently ClusterRunner
 utilizes the resources you have available and provides faster test feedback.
