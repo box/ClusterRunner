@@ -180,9 +180,7 @@ rpm: $(CR_BIN) $(PY_PKG_INFO)
 		--rpm-attr -,$(RPM_USER),$(RPM_GROUP):$(RPM_BASE_DIR) \
 		$(CR_BIN)=/usr/bin/ \
 		$(CR_CONF)=$(RPM_CR_CONF) \
-		bin/=$(RPM_BASE_DIR)/bin/ \
-		conf/clusterrunner-master=/etc/init.d/ \
-		conf/clusterrunner-slave=/etc/init.d/
+		bin/=$(RPM_BASE_DIR)/bin/
 
 # Use a docker container to build the clusterrunnner RPM and copy it to the local directory.
 # Additionally extract the PKG-INFO file so the final "release-signed" target can run without a
