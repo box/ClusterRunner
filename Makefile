@@ -32,9 +32,6 @@ RPM_CR_CONF        := $(RPM_BASE_DIR)/clusterrunner.conf
 RPM_DEPENDS        := python34u git
 RPM_USER           := jenkins
 RPM_GROUP          := engineering
-RPM_PRE_INSTALL    := conf/pre-install.sh
-RPM_POST_INSTALL   := conf/post-install.sh
-RPM_PRE_UNINSTALL  := conf/pre-uninstall.sh
 # Auto-detect packaging info from PKG-INFO
 RPM_DESCRIPTION = $(call pkg_info,summary)
 RPM_LICENSE     = $(call pkg_info,license)
@@ -172,17 +169,12 @@ rpm: $(CR_BIN) $(PY_PKG_INFO)
 		--package $(DIST_DIR) \
 		--config-files $(RPM_CR_CONF) \
 		--rpm-tag "Requires(pre): shadow-utils" \
-		--before-install $(RPM_PRE_INSTALL) \
-		--after-install $(RPM_POST_INSTALL) \
-		--before-remove $(RPM_PRE_UNINSTALL) \
 		--directories $(RPM_BASE_DIR) \
 		--rpm-attr 0600,$(RPM_USER),$(RPM_GROUP):$(RPM_CR_CONF) \
 		--rpm-attr -,$(RPM_USER),$(RPM_GROUP):$(RPM_BASE_DIR) \
 		$(CR_BIN)=/usr/bin/ \
 		$(CR_CONF)=$(RPM_CR_CONF) \
-		bin/=$(RPM_BASE_DIR)/bin/ \
-		conf/clusterrunner-master=/etc/init.d/ \
-		conf/clusterrunner-slave=/etc/init.d/
+		bin/=$(RPM_BASE_DIR)/bin/
 
 # Use a docker container to build the clusterrunnner RPM and copy it to the local directory.
 # Additionally extract the PKG-INFO file so the final "release-signed" target can run without a
