@@ -121,6 +121,11 @@ def tar_directories(target_dirs_to_archive_paths, tarfile_path):
         for dir_path, archive_name in target_dirs_to_archive_paths.items():
             target_dir = os.path.normpath(dir_path)
             tar.add(target_dir, arcname=archive_name)
+    # Verify that the tarfile is readable
+    with tarfile.open(tarfile_path) as tar:
+        for member in tar.getmembers():
+            with tar.extractfile(member.name) as target:
+                data = target.read()
 
 
 def zip_directory(target_dir: str, archive_filename: str) -> str:
