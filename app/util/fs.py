@@ -83,6 +83,9 @@ def extract_tar(archive_file, target_dir=None, delete=False):
     if not target_dir:
         target_dir, _ = os.path.split(archive_file)  # default to same directory as tar file
 
+    if not tarfile.is_tarfile(archive_file):
+        raise Exception("Not a tarfile: {}".format(archive_file))
+
     try:
         with tarfile.open(archive_file, 'r:gz') as f:
             f.extractall(target_dir)
