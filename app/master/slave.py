@@ -57,7 +57,7 @@ class Slave:
         Do bookkeeping when this slave becomes idle.  Error if the slave cannot be idle.
         If the slave is in shutdown mode, clear the build_id, kill the slave, and raise an error.
         """
-        if self._num_executors_in_use.value() != 0:
+        if self._num_executors_in_use.value() > 0:
             raise Exception('Trying to mark slave idle while {} executors still in use.',
                             self._num_executors_in_use.value())
 
