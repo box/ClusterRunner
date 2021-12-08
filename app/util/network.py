@@ -51,7 +51,7 @@ class Network(object):
         return self._request('GET', *args, **kwargs)
 
     # todo: may be a bad idea to retry -- what if post was successful but just had a response error?
-    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,))
+    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,requests.Timeout), initial_delay=1.0)
     def post(self, *args, **kwargs):
         """
         Send a POST request to a url. Arguments to this method, unless otherwise documented below in _request(), are
@@ -75,7 +75,7 @@ class Network(object):
                          error_on_failure=error_on_failure)
 
     # todo: may be a bad idea to retry -- what if put was successful but just had a response error?
-    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,))
+    @retry_on_exception_exponential_backoff(exceptions=(requests.ConnectionError,requests.Timeout))
     def put(self, *args, **kwargs):
         """
         Send a PUT request to a url. Arguments to this method, unless otherwise documented below in _request(), are

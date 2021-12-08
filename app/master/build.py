@@ -190,8 +190,7 @@ class Build(object):
             self._mark_subjob_complete(subjob_id)
 
         except Exception:
-            self._logger.exception('Error while completing subjob; marking build as failed.')
-            self.mark_failed('Error occurred while completing subjob {}.'.format(subjob_id))
+            self._logger.exception('Error while processing subjob {} payload'.format(subjob_id))
             raise
 
     def _parse_payload_for_atom_exit_code(self, subjob_id):
