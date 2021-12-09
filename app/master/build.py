@@ -216,7 +216,7 @@ class Build(object):
 
         try:
             app.util.fs.write_file(payload['body'], result_file_path)
-            app.util.fs.extract_tar(result_file_path, delete=True)
+            app.util.fs.extract_tar(result_file_path, delete=False)
             self._parse_payload_for_atom_exit_code(subjob_id)
         except:
             internal_errors.labels(ErrorType.SubjobWriteFailure).inc()  # pylint: disable=no-member

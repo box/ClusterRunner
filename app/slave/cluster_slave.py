@@ -356,10 +356,10 @@ class ClusterSlave(ClusterService):
             'slave': '{}:{}'.format(self.host, self.port),
             'metric_data': {'executor_id': executor.id},
         }
-        files = {'file': ('payload', open(results_file, 'rb'), 'application/x-compressed')}
-
         self._idle_executors.put(executor)  # work is done; mark executor as idle
-        for attempt in range(3):
+
+        for attempt in range(5):
+            files = {'file': ('payload', open(results_file, 'rb'), 'application/x-compressed')}
             resp = self._network.post(results_url, data=data, files=files)
             if resp.status_code == 200:
                 self._logger.info('Build {}, Subjob {} completed and sent results to master.', build_id, subjob_id)
@@ -368,6 +368,7 @@ class ClusterSlave(ClusterService):
                 self._logger.error(
                     ('Build {}, Subjob {} encountered an error when sending results to master.'
                      '\n\tStatus Code {} attempt {}\n\t{}').format(build_id, subjob_id, resp.status_code, attempt+1, resp.text))
+                time.sleep(attempt+1)
 
     def _notify_master_of_state_change(self, new_state):
         """
