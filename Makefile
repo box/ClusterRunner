@@ -138,6 +138,13 @@ test-functional:
 	$(call print_msg, Running functional tests... )
 	nosetests -s -v test/functional
 
+# Build the clusterrunnner testing docker image from only the builder stage and run tests in it.
+.PHONY: docker-test
+docker-test:
+	$(call print_msg, Building ClusterRunner docker image to run tests in... )
+	docker build --target builder -t $(DOCKER_TAG)-tests -f Dockerfile .
+	docker run --rm $(DOCKER_TAG)-tests make test
+
 # INFO: The use of multiple targets (before the :) in the next sections enable
 #       a technique for setting some targets to "phony" so they will always
 #       run, while allowing other targets to remain conditional based on the
