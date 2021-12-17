@@ -26,9 +26,10 @@ export CR_VERBOSE=1
 nosetests -s -v test/functional/
 ```
 
-Run tests in docker (no need for any setup on local machine)
+Run lint & tests in docker (no need for any setup on local machine)
 --------------
 ```bash
+make docker-lint
 make docker-test
 # or...
 docker build --target builder -t productivity/clusterrunner-tests -f Dockerfile .

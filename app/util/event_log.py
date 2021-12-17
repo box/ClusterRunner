@@ -2,7 +2,6 @@ import collections
 import json
 import os
 import sys
-sys.modules["cgi.parse_qsl"] = None
 import time
 
 from logbook import RotatingFileHandler, StreamHandler

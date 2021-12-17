@@ -91,7 +91,7 @@ class BuildScheduler(object):
         """
         analytics.record_event(analytics.BUILD_SETUP_FINISH, build_id=self._build.build_id(), slave_id=slave.id)
         for slave_executor_count in range(slave.num_executors):
-            if (self._num_executors_in_use >= self._max_executors or slave_executor_count >= self._max_executors_per_slave):
+            if self._num_executors_in_use >= self._max_executors or slave_executor_count >= self._max_executors_per_slave:
                 break
             slave.claim_executor()
             self._num_executors_in_use += 1
