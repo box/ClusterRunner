@@ -42,7 +42,7 @@ class TestHttpTimeout(BaseFunctionalTestCase):
         })
         build_id = build_resp['build_id']
 
-        self.assertTrue(master.block_until_slave_offline(unresponsive_slave_id, timeout=10),
+        self.assertTrue(master.block_until_slave_offline(unresponsive_slave_id, timeout=40),
                         'Unresponsive slave should be marked offline.')
 
         # First slave should now be marked offline. Connect a real slave to finish the build.
