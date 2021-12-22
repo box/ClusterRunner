@@ -59,6 +59,7 @@ FPM_DEPEND_ARGS = $(addprefix --depends , $(RPM_DEPENDS))
 
 # ## Docker defines
 DOCKER_TAG := productivity/clusterrunner
+DOCKER_TEST_TAG := productivity/clusterrunner-test
 
 # ## Artifactory defines
 # Select the release repo based on if version string is an "official" release
@@ -76,6 +77,9 @@ print_msg = @printf "\n\033[1;34m***%s***\033[0m\n" "$(1)"
 # Macro for extracting key values from PKG-INFO.
 # IMPORTANT: $(PY_PKG_INFO) must be a dependency of any targets that use this macro.
 pkg_info = $(strip $(shell egrep -i "^$(1): " $(PY_PKG_INFO) | sed 's/[^:]*://'))
+
+# Macro for building docker image for testing
+build_test_docker_img = docker build --target builder -t $(DOCKER_TEST_TAG) -f Dockerfile .
 
 
 all: lint test
@@ -137,6 +141,20 @@ test-unit-via-clusterrunner: $(CR_BIN)
 test-functional:
 	$(call print_msg, Running functional tests... )
 	nosetests -s -v test/functional
+
+# Build the clusterrunnner testing docker image from only the builder stage and run lint in it.
+.PHONY: docker-lint
+docker-lint:
+	$(call print_msg, Building ClusterRunner docker image to run lint in... )
+	$(call build_test_docker_img)
+	docker run --rm $(DOCKER_TEST_TAG) make lint
+
+# Build the clusterrunnner testing docker image from only the builder stage and run tests in it.
+.PHONY: docker-test
+docker-test:
+	$(call print_msg, Building ClusterRunner docker image to run tests in... )
+	$(call build_test_docker_img)
+	docker run --rm $(DOCKER_TEST_TAG) make test
 
 # INFO: The use of multiple targets (before the :) in the next sections enable
 #       a technique for setting some targets to "phony" so they will always

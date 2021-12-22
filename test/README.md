@@ -26,6 +26,23 @@ export CR_VERBOSE=1
 nosetests -s -v test/functional/
 ```
 
+Run lint & tests in docker (no need for any setup on local machine)
+--------------
+```bash
+make docker-lint
+make docker-test
+# or...
+docker build --target builder -t productivity/clusterrunner-tests -f Dockerfile .
+docker run --rm productivity/clusterrunner-tests make lint
+docker run --rm productivity/clusterrunner-tests make test-unit
+docker run --rm productivity/clusterrunner-tests test-integration
+docker run --rm productivity/clusterrunner-tests test-functional
+
+# or run the functional tests with verbose logging
+docker build --target builder -t productivity/clusterrunner-tests -f Dockerfile .
+docker run -e CR_VERBOSE=1 --rm productivity/clusterrunner-tests nosetests -s -v test/functional/
+```
+
 
 Set up Python 3.4 using Pyenv
 ---------------
