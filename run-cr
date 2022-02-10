@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# This script automates the workflow around packaging CR using Docker.
+
+# yamaszone should be replaced with official user
+DR_USR=yamaszone
+CR_BIN=$DR_USR/clusterrunner:bin
+CR_SRC=$DR_USR/clusterrunner:src
+
+build_images(){
+	# *-src.yml only overrides 'dockerfile:' flavor and corresponding 'image:' name
+	docker-compose -f docker-compose-bin.yml -f docker-compose-src.yml build
+}
+
+push_images(){
+	# Uses Docker Hub as default
+	docker push $CR_BIN
+	docker push $CR_SRC
+}
+
+help(){
+	echo "Usage:"
+	printf "\t bin\t\t: Run ClusterRunner from binary.\n"
+	printf "\t build\t\t: Build ClusterRunner Docker images.\n"
+	printf "\t help\t\t: Show this help.\n"
+	printf "\t push\t\t: Push ClusterRunner images to Docker Hub.\n"
+	printf "\t src\t\t: Run ClusterRunner from source.\n"
+	printf "\t test-bats\t: Run BATS tests to validate image builds.\n"
+	exit 0
+}
+
+install_bats(){
+	# Install BATS framework if not installed already
+	type bats >/dev/null 2>&1
+	if [[ "$?" -ne "0" ]]; then
+		git clone -b v0.4.0 https://github.com/sstephenson/bats.git /tmp/bats
+		OS_NAME=$(uname -a)
+		echo $OS_NAME
+		if [[ $OS_NAME == *"coreos"* ]]; then
+			cd /tmp/bats && sudo ./install.sh /opt
+		else
+			cd /tmp/bats && sudo ./install.sh /usr/local
+		fi
+		cd -
+		rm -rf /tmp/bats
+	fi
+}
+
+if [[ -z $1 ]];then
+	help
+	exit 0
+fi
+# Inputs to pass on to CR via this script; exclude $1
+INPUTS=`echo "${@:2}"`
+
+case $1 in
+	bin)
+		docker run --rm $CR_BIN $INPUTS
+		;;
+	build)
+		build_images
+		;;
+	push)
+		push_images
+		;;
+	src)
+		docker run --rm $CR_SRC $INPUTS
+		;;
+	# TechDebt: Could be a target in Makefile
+	# CoreOS doesn't come with Make; so staying within it's limits
+	test-bats)
+		install_bats
+		bats test/bats/
+		;;
+	* | help)
+		help
+		;;
+esac

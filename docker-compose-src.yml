@@ -1,0 +1,7 @@
+version: "2.1"
+services:
+    cluserrunner:
+      build:
+        dockerfile: Dockerfile.src
+      image: yamaszone/clusterrunner:src
+
